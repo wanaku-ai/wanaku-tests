@@ -7,13 +7,21 @@ The job is to develop an automated JUnit-based test framework for the Wanaku MCP
 ## Objectives
 
 The framework must:
-- Clone and build required projects automatically
-- Start and configure Keycloak authentication
-- Build and test different capability configurations
-- Execute CLI commands and validate responses
+- Start and configure Keycloak authentication via Testcontainers
+- Test different capability configurations with isolated state
+- Execute CLI commands and validate responses (optional - may use REST API instead)
 - Implement a minimal MCP client for tool/resource interaction
-- Clean up state between tests for isolation
+- Use dynamic port allocation to avoid conflicts
+- Clean up state between tests for complete isolation
 - Run the complete test suite with a single `mvn test` command
+
+## Prerequisites
+
+The framework assumes pre-built artifacts to optimize test execution speed:
+- Router JAR must exist: `wanaku-router/target/quarkus-app/quarkus-run.jar`
+- Capability JAR must exist: `camel-integration-capability/target/*-jar-with-dependencies.jar`
+- Tests will fail fast with clear error if JARs are not found
+- Users must build these once: `mvn clean package -DskipTests` in respective directories
 
 ## Architecture
 
@@ -22,31 +30,40 @@ The framework must:
 The job is to prepare the foundation infrastructure that is reused across all tests.
 
 **Required steps:**
-1. Clone 3 repositories:
-   - https://github.com/wanaku-ai/wanaku.git
-   - https://github.com/wanaku-ai/wanaku-capabilities-java-sdk.git
-   - https://github.com/wanaku-ai/camel-integration-capability.git
+1. Verify pre-built JARs exist (fail fast if missing)
 
-2. Start Keycloak container and configure authentication:
-   - Use podman/docker to start Keycloak
-   - Run auth configuration script
-   - Generate and export client secret
+2. Start Keycloak container via Testcontainers:
+   - Import wanaku realm configuration
+   - Generate client credentials
+   - Expose dynamic port for auth
 
-3. Build foundation projects:
-   - Build wanaku-capabilities-java-sdk (required dependency)
-   - Build wanaku-router
-   - Start wanaku-router instance
+3. Allocate dynamic ports for Router:
+   - HTTP port (for MCP and REST API)
+   - gRPC port (for capability communication)
+
+4. Start wanaku-router as local Java process:
+   - Inject dynamic Keycloak URL
+   - Inject dynamic HTTP/gRPC ports
+   - Configure isolated data directory (not ~/.wanaku)
+   - Wait for health check to pass
+
+5. Initialize MCP client with dynamic router URL
 
 ### Per-Test Setup (@BeforeEach)
 
-The job is to build test-specific capability configuration for each test scenario.
+The job is to prepare test-specific capability configuration for each test scenario.
 
 **Required steps:**
-1. Load test fixtures (routes, rules, dependencies) from fixtures/ directory
-2. Build camel-integration-capability with test-specific configuration
-3. Start test infrastructure (PostgreSQL container, SQLite database, data files)
-
-**Rationale:** Each test validates a unique capability configuration. Isolation ensures tests don't interfere with each other.
+1. Start test infrastructure via Testcontainers (PostgreSQL, etc.)
+2. Allocate dynamic gRPC port for capability
+3. Load test fixtures (routes, rules, dependencies) from src/test/resources/
+4. Start camel-integration-capability as local Java process with:
+   - Dynamic gRPC port
+   - Dynamic router URL
+   - Dynamic Keycloak URL
+   - Dynamic database connection URLs
+   - Test fixture file paths
+5. Wait for capability registration in router
 
 ### Test Execution (@Test)
 
@@ -74,22 +91,20 @@ Test: PostgresToolTest
 The job is to reset all test-specific state before the next test runs.
 
 **Required steps:**
-1. Stop capability process
-2. Remove tools/resources from Wanaku
-3. Stop test containers (PostgreSQL, etc.)
-4. Delete test data files
-5. Clean ~/.wanaku data store if modified
-
-**Rationale:** Next test must start with clean state to avoid port conflicts and data pollution.
+1. Stop capability process gracefully (SIGTERM, then SIGKILL if needed)
+2. Remove tools/resources from Wanaku via REST API or CLI
+3. Stop and remove test containers (Testcontainers handles this automatically)
+4. Delete test data files from temp directories
+5. Verify router is still healthy for next test
 
 ### Global Cleanup (@AfterAll)
 
 The job is to teardown the foundation infrastructure.
 
 **Required steps:**
-1. Stop wanaku-router
-2. Stop Keycloak container
-3. Remove all test containers
+1. Stop wanaku-router process gracefully
+2. Clean isolated test data directory
+3. Testcontainers automatically stops and removes all containers (Keycloak, PostgreSQL, etc.)
 
 ## Project Structure
 
@@ -182,81 +197,93 @@ Each test module focuses on specific capability type. Integration tests are sepa
 
 ## MCP Client Implementation
 
-The job is to implement a basic MCP client in Java for automated testing.
-
 **TODO:** Define transport protocol, authentication flow, and required API methods.
 
 ## CLI Integration
 
-The job is to execute Wanaku CLI commands from Java tests and validate output.
-
-**Approach:**
+Execute Wanaku CLI commands from Java tests and validate output:
 - Spawn `wanaku` CLI process using ProcessBuilder
 - Capture stdout and stderr streams
 - Parse output for JUnit assertions
 - Check exit codes for success/failure validation
 
-This approach tests the real CLI user experience.
-
 ## Test Examples
 
 ### HttpToolsTest
-The job is to validate HTTP tool capability without Camel integration.
 - Uses wanaku-tool-service-http
 - Tests: add tool, list tools, invoke tool, parameter validation
 
 ### PostgresToolTest
-The job is to validate Camel integration with PostgreSQL database.
 - Uses camel-integration-capability + PostgreSQL container
 - Tests: database connection, query execution, data retrieval
 
 ### FileResourceTest
-The job is to validate file-based resources using Camel.
 - Uses camel-integration-capability + local files
 - Tests: resource registration, reading, content validation
 
 ### DataStoreTest
-The job is to validate Wanaku data store functionality.
 - Uses camel-integration-capability with datastore:// references
 - Tests: store routes/rules, load from data store, capability startup
 
 ## Design Decisions
 
-### 1. Container Management
-- **Keycloak:** Manual podman/docker commands
-  - Complex configuration with custom realm (wanaku-config.json)
-  - Fixed client UUID and secret generation via API
-  - Reuse existing configure-auth.sh scripts
-  - Starts once in Pre-Phase, shared across all tests
+### 1. Hybrid Execution Model
 
-- **PostgreSQL:** Testcontainers library
-  - Simple configuration
-  - Per-test lifecycle (create/destroy for each test)
-  - Automatic cleanup and port management
+**Infrastructure (Testcontainers):**
+- Keycloak, PostgreSQL, and other external dependencies run in containers
+- Dynamic ports managed by Testcontainers
+- Containers communicate with local processes via localhost:mappedPort
 
-### 2. Test Execution Model
+**System Under Test (Local Processes):**
+- Wanaku Router and capabilities run as local Java processes via ProcessBuilder
+- Dynamic ports allocated via PortUtils
+- Configuration injected via system properties
 
-The job is to run tests sequentially, not in parallel.
-- Tests run one after another within each module
-- All tests use fixed ports (8080 for router, 9190+ for capabilities)
-- Maven can parallelize test modules using `-T` flag if needed
+### 2. Port Allocation
 
-### 3. Build Strategy
+- All ports allocated dynamically
+- PortUtils finds available ports using ServerSocket(0) pattern
+- Retry logic handles race conditions when starting processes
+- Router: HTTP port, gRPC port
+- Capabilities: gRPC port per test
+- Containers: dynamic ports via Testcontainers
 
-The job is to build all projects during Pre-Phase (@BeforeAll).
-- Clone repositories during Pre-Phase
-- Build wanaku-capabilities-java-sdk during Pre-Phase
-- Build wanaku-router during Pre-Phase
-- Build camel-integration-capability during Per-Test Setup
-- Execute with single `mvn test` command without manual preparation
+### 3. Data Isolation
 
-### 4. Wanaku Router Lifecycle
+- Each test run uses isolated temporary directory
+- Not `~/.wanaku` to avoid conflicts with development environment
+- Directory path passed via system property to router and capabilities
+- Cleanup after all tests complete
 
-The job is to start a single shared router instance for all tests.
-- Start router once in Pre-Phase (@BeforeAll)
-- Reuse the same instance across all tests
-- Clean up tools/resources in Per-Test Cleanup (@AfterEach)
-- Stop router in Global Cleanup (@AfterAll)
+### 4. Prerequisites
+
+- Assume pre-built JARs exist before tests
+- Router JAR: `wanaku-router/target/quarkus-app/quarkus-run.jar`
+- Capability JAR: `camel-integration-capability/target/*-jar-with-dependencies.jar`
+- Tests verify existence in @BeforeAll and fail fast if missing
+
+### 5. Router Lifecycle
+
+- Single shared instance per test suite
+- Start once in @BeforeAll
+- Reuse across all tests in module
+- Clean tools/resources between tests in @AfterEach
+- Health check before each test
+- Stop in @AfterAll
+
+### 6. Container Management
+
+All infrastructure via Testcontainers:
+- Keycloak: Start once in @BeforeAll with realm import
+- PostgreSQL: Per-test lifecycle
+- Automatic cleanup on shutdown
+
+### 7. Logging
+
+Process outputs redirected to log files in each module's `target/` directory:
+- Format: `{test-name}-{component}-{timestamp}.log`
+- Components: `wanaku-router`, `capability-{name}`, `keycloak`, `postgresql`
+- Logs preserved for debugging failed tests
 
 ## Success Criteria
 
