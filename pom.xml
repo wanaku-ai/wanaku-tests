@@ -32,7 +32,7 @@
         <jackson.version>2.17.0</jackson.version>
         <slf4j.version>2.0.12</slf4j.version>
         <logback.version>1.5.3</logback.version>
-        <assertj.version>3.25.3</assertj.version>
+        <assertj.version>3.27.7</assertj.version>
         <awaitility.version>4.2.0</awaitility.version>
 
         <!-- Plugin versions -->
