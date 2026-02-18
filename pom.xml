@@ -27,7 +27,7 @@
         <quarkus.version>3.27.2</quarkus.version>
         <quarkus-mcp.version>1.8.1</quarkus-mcp.version>
         <junit.version>5.10.2</junit.version>
-        <testcontainers.version>1.19.7</testcontainers.version>
+        <testcontainers.version>2.0.3</testcontainers.version>
         <keycloak-testcontainer.version>3.3.0</keycloak-testcontainer.version>
         <jackson.version>2.17.0</jackson.version>
         <slf4j.version>2.0.12</slf4j.version>
