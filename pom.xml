@@ -24,7 +24,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
         <!-- Dependency versions (aligned with Wanaku) -->
-        <quarkus.version>3.27.2</quarkus.version>
+        <quarkus.version>3.31.3</quarkus.version>
         <quarkus-mcp.version>1.8.1</quarkus-mcp.version>
         <junit.version>5.10.2</junit.version>
         <testcontainers.version>1.19.7</testcontainers.version>
