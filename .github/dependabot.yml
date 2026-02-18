@@ -10,6 +10,7 @@ updates:
       # Camel related
       - dependency-name: "org.apache.camel:*"
       - dependency-name: "org.apache.camel.quarkus:*"
+      - dependency-name: "io.quarkus:*"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
