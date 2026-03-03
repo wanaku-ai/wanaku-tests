@@ -2,6 +2,17 @@
 
 Integration tests for Wanaku file resource provider capability.
 
+## Prerequisites
+
+File provider JAR is required. Download via:
+
+```bash
+cd ..
+./artifacts/download.sh
+```
+
+This downloads `wanaku-provider-file` from [wanaku-examples releases](https://github.com/wanaku-ai/wanaku-examples/releases/tag/early-access).
+
 ## Run Tests
 
 ```bash

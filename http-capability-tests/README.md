@@ -2,6 +2,17 @@
 
 Integration tests for Wanaku HTTP Tool capability.
 
+## Prerequisites
+
+Required artifacts are downloaded via:
+
+```bash
+cd ..
+./artifacts/download.sh
+```
+
+This downloads Router, HTTP Tool Service, and CLI from [wanaku releases](https://github.com/wanaku-ai/wanaku/releases/tag/early-access).
+
 ## Run Tests
 
 ```bash

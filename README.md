@@ -19,39 +19,54 @@ This framework tests Wanaku capabilities:
 
 ## Setup
 
-### Step 1: Get Wanaku JARs
+### Step 1: Get Wanaku Artifacts
 
-Tests require Router and HTTP Capability JARs. Choose one option:
+Tests require Router, HTTP Capability, File Provider, and CLI JARs. Choose one option:
 
-**Option A: Copy from local Wanaku build**
-```bash
-WANAKU_DIR=/path/to/wanaku
-
-cp -r $WANAKU_DIR/wanaku/wanaku-router/target/quarkus-app artifacts/wanaku-router
-cp -r $WANAKU_DIR/wanaku/capabilities/tools/wanaku-tool-service-http/target/quarkus-app artifacts/wanaku-tool-service-http
-```
-
-**Option B: Download from GitHub releases**
+**Option A: Download from GitHub releases (recommended)**
 ```bash
 ./artifacts/download.sh
+```
+
+**Option B: Copy from local Wanaku build**
+```bash
+WANAKU_DIR=/path/to/wanaku
+EXAMPLES_DIR=/path/to/wanaku-examples
+
+cp -r $WANAKU_DIR/wanaku/wanaku-router/target/quarkus-app artifacts/wanaku-router-backend-0.1.0-SNAPSHOT
+cp -r $WANAKU_DIR/wanaku/capabilities/tools/wanaku-tool-service-http/target/quarkus-app artifacts/wanaku-tool-service-http-0.1.0-SNAPSHOT
+cp -r $EXAMPLES_DIR/providers/wanaku-provider-file/target/quarkus-app artifacts/wanaku-provider-file
+cp -r $WANAKU_DIR/wanaku/cli/target/quarkus-app artifacts/cli-0.1.0-SNAPSHOT
 ```
 
 After setup:
 ```
 artifacts/
-├── wanaku-router/
+├── wanaku-router-backend-0.1.0-SNAPSHOT/
 │   ├── quarkus-run.jar
 │   └── lib/
-└── wanaku-tool-service-http/
+├── wanaku-tool-service-http-0.1.0-SNAPSHOT/
+│   ├── quarkus-run.jar
+│   └── lib/
+├── wanaku-provider-file/
+│   ├── quarkus-run.jar
+│   └── lib/
+└── cli-0.1.0-SNAPSHOT/
     ├── quarkus-run.jar
     └── lib/
 ```
 
-### Step 2: Install CLI (for CLI tests)
+### Step 2: (Optional) Configure CLI for CLI tests
 
-CLI tests require `wanaku` command. Choose one option:
+CLI tests require `wanaku` CLI. Choose one option:
 
-**Option A: Install via jbang (recommended)**
+**Option A: Use CLI JAR from artifacts**
+```bash
+# Set system property to point to CLI JAR
+mvn test -Dwanaku.test.cli.path=artifacts/cli-0.1.0-SNAPSHOT/quarkus-run.jar
+```
+
+**Option B: Install globally via jbang**
 ```bash
 jbang app install wanaku@wanaku-ai/wanaku
 
@@ -59,12 +74,7 @@ jbang app install wanaku@wanaku-ai/wanaku
 wanaku --version
 ```
 
-**Option B: Use CLI JAR from build**
-```bash
-cp -r $WANAKU_DIR/wanaku/cli/target/quarkus-app artifacts/cli-0.1.0-SNAPSHOT
-```
-
-> **Note:** CLI tests will fail if CLI is not available.
+> **Note:** CLI tests will be skipped if `wanaku` command is not found in PATH and `-Dwanaku.test.cli.path` is not set.
 
 ## Run Tests
 
