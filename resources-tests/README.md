@@ -32,9 +32,9 @@ mvn clean install -pl resources-tests -Dtest=McpResourceITCase#shouldReadTextFil
 |-------|-------|-------------|
 | `RestApiResourceITCase` | 6 | Expose, list, remove resources via REST API |
 | `McpResourceITCase` | 3 | List and read resources via MCP protocol |
-| `CliResourceITCase` | 2 | Expose and remove resources via CLI |
+| `CliResourceITCase` | 3 | Expose, list, and remove resources via CLI |
 
-**Total: 11 tests**
+**Total: 12 tests**
 
 ## Architecture
 

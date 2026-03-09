@@ -1,0 +1,15 @@
+- route:
+    id: route-${RESOURCE_NAME}
+    autoStartup: false
+    from:
+      id: from-${RESOURCE_NAME}
+      uri: file
+      parameters:
+        directoryName: ${FILE_DIR}
+        fileName: ${FILE_NAME}
+        idempotent: false
+        noop: true
+      steps:
+        - convertBodyTo:
+            id: convertBodyTo-${RESOURCE_NAME}
+            type: java.lang.String

@@ -1,0 +1,6 @@
+mcp:
+  tools:
+    - multi-tool:
+        route:
+          id: "multi-tool-route"
+        description: "Tool for multi-instance testing"

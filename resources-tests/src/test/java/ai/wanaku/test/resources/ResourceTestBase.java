@@ -52,7 +52,7 @@ public abstract class ResourceTestBase extends BaseIntegrationTest {
         resourceProviderManager = new ResourceProviderManager(config);
         resourceProviderManager.prepare(
                 "localhost", routerManager.getHttpPort(), routerManager.getGrpcPort(), oidcCredentials);
-        resourceProviderManager.setLogContext("file-provider", testClassName, "suite");
+        resourceProviderManager.setLogContext("file-provider", testClassName, "file-provider");
         resourceProviderManager.start(testClassName);
 
         LOG.debug("Waiting for file provider registration...");

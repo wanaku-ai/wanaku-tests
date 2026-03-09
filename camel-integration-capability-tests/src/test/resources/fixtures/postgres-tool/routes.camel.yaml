@@ -1,0 +1,18 @@
+- beans:
+    - name: testDS
+      type: org.postgresql.ds.PGSimpleDataSource
+      properties:
+        url: "${JDBC_URL}"
+        user: "${DB_USER}"
+        password: "${DB_PASSWORD}"
+
+- route:
+    id: query-db
+    from:
+      uri: direct:query-db
+      steps:
+        - setBody:
+            simple: "${header.Wanaku.query}"
+        - to: "jdbc:testDS"
+        - convertBodyTo:
+            type: java.lang.String

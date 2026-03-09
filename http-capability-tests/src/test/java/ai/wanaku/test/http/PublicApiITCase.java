@@ -51,6 +51,7 @@ class PublicApiITCase extends HttpCapabilityTestBase {
         mcpClient
                 .when()
                 .toolsList(page -> {
+                    LOG.debug("=== MCP toolsList response [mcp-list-tool]: {}", page.tools());
                     assertThat(page.tools()).hasSize(2);
                     assertThat(page.tools())
                             .extracting(tool -> tool.name())
@@ -76,7 +77,7 @@ class PublicApiITCase extends HttpCapabilityTestBase {
         mcpClient
                 .when()
                 .toolsCall("jsonplaceholder-users-tool", Map.of(), response -> {
-                    LOG.debug("=== jsonplaceholder-users response: {}", response.content());
+                    LOG.debug("=== MCP toolsCall response [jsonplaceholder-users]: {}", response.content());
                     assertThat(response.isError()).isFalse();
                     assertThat(response.content()).isNotEmpty();
                     // JSONPlaceholder returns array of users with name, email, etc.
@@ -107,7 +108,7 @@ class PublicApiITCase extends HttpCapabilityTestBase {
         mcpClient
                 .when()
                 .toolsCall("httpbin-post-tool", Map.of("wanaku_body", jsonBody), response -> {
-                    LOG.debug("=== httpbin-post response: {}", response.content());
+                    LOG.debug("=== MCP toolsCall response [httpbin-post-tool]: {}", response.content());
                     assertThat(response.isError()).isFalse();
                     assertThat(response.content()).isNotEmpty();
                     // httpbin echoes back the JSON body in "json" field
@@ -139,7 +140,7 @@ class PublicApiITCase extends HttpCapabilityTestBase {
         mcpClient
                 .when()
                 .toolsCall("meow-facts", Map.of("count", 2), response -> {
-                    LOG.debug("=== meow-facts response: {}", response.content());
+                    LOG.debug("=== MCP toolsCall response [meow-facts]: {}", response.content());
                     assertThat(response.isError()).isFalse();
                     assertThat(response.content()).isNotEmpty();
                     // MeowFacts API returns {"data": ["fact1", "fact2"]} - verify we got 2 facts
@@ -176,7 +177,7 @@ class PublicApiITCase extends HttpCapabilityTestBase {
         mcpClient
                 .when()
                 .toolsCall("httpbin-headers-tool", Map.of(), response -> {
-                    LOG.debug("=== httpbin-headers response: {}", response.content());
+                    LOG.debug("=== MCP toolsCall response [httpbin-headers-tool]: {}", response.content());
                     assertThat(response.isError()).isFalse();
                     assertThat(response.content()).isNotEmpty();
 
@@ -210,7 +211,7 @@ class PublicApiITCase extends HttpCapabilityTestBase {
         mcpClient
                 .when()
                 .toolsCall("echo-param", Map.of("value", "test-value"), response -> {
-                    LOG.debug("=== echo-param response: {}", response.content());
+                    LOG.debug("=== MCP toolsCall response [echo-param]: {}", response.content());
                     assertThat(response.isError()).isFalse();
                     assertThat(response.content()).isNotEmpty();
                     // httpbin /anything returns JSON with "url" field containing the full request URL

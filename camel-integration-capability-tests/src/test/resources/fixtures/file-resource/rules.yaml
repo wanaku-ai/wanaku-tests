@@ -1,0 +1,6 @@
+mcp:
+  resources:
+    - ${RESOURCE_NAME}:
+        route:
+          id: "route-${RESOURCE_NAME}"
+        description: "Test file resource for reading file contents"

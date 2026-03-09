@@ -492,6 +492,82 @@ public class RouterClient {
         }
     }
 
+    // ──────────────────────────────────────────────────────────────
+    // Capability discovery operations
+    // ──────────────────────────────────────────────────────────────
+
+    /**
+     * Deregisters a capability from the Router by service name.
+     * Looks up the capability's ServiceTarget (to get the ID), then calls the deregister endpoint.
+     *
+     * @param serviceName the service name to deregister
+     * @param accessToken Bearer token for the management API (required, management endpoints are authenticated)
+     * @return true if deregistered, false if capability was not found
+     */
+    public boolean deregisterCapability(String serviceName, String accessToken) {
+        LOG.debug("Deregistering capability: {}", serviceName);
+
+        try {
+            // Find the ServiceTarget by service name
+            HttpRequest listRequest = buildRequest(WanakuTestConstants.ROUTER_CAPABILITIES_PATH)
+                    .GET()
+                    .build();
+            HttpResponse<String> listResponse = httpClient.send(listRequest, HttpResponse.BodyHandlers.ofString());
+
+            if (listResponse.statusCode() != 200) {
+                LOG.warn("Failed to list capabilities for deregistration: {}", listResponse.statusCode());
+                return false;
+            }
+
+            JsonNode data = objectMapper.readTree(listResponse.body()).path("data");
+            JsonNode targetNode = null;
+            for (JsonNode capability : data) {
+                if (serviceName.equals(capability.path("serviceName").asText())) {
+                    targetNode = capability;
+                    break;
+                }
+            }
+
+            if (targetNode == null) {
+                LOG.debug("Capability '{}' not found, nothing to deregister", serviceName);
+                return false;
+            }
+
+            // Call deregister endpoint with the full ServiceTarget
+            String serviceTargetJson = objectMapper.writeValueAsString(targetNode);
+
+            HttpRequest.Builder deregBuilder = buildRequest(
+                            WanakuTestConstants.ROUTER_MANAGEMENT_DISCOVERY_PATH + "/deregister")
+                    .POST(HttpRequest.BodyPublishers.ofString(serviceTargetJson))
+                    .header("Content-Type", "application/json");
+
+            if (accessToken != null) {
+                deregBuilder.header("Authorization", "Bearer " + accessToken);
+            }
+
+            HttpResponse<String> deregResponse =
+                    httpClient.send(deregBuilder.build(), HttpResponse.BodyHandlers.ofString());
+
+            if (deregResponse.statusCode() == 200) {
+                LOG.debug("Capability '{}' deregistered successfully", serviceName);
+                return true;
+            } else {
+                LOG.warn(
+                        "Failed to deregister capability '{}': {} - {}",
+                        serviceName,
+                        deregResponse.statusCode(),
+                        deregResponse.body());
+                return false;
+            }
+        } catch (IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            LOG.warn("Failed to deregister capability '{}': {}", serviceName, e.getMessage());
+            return false;
+        }
+    }
+
     private HttpRequest.Builder buildRequest(String path) {
         return HttpRequest.newBuilder().uri(URI.create(baseUrl + path)).timeout(Duration.ofSeconds(30));
     }

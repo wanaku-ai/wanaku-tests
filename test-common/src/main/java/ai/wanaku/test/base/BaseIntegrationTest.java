@@ -63,6 +63,7 @@ public abstract class BaseIntegrationTest {
                 .routerJarPath(baseConfig.getRouterJarPath())
                 .httpToolServiceJarPath(baseConfig.getHttpToolServiceJarPath())
                 .fileProviderJarPath(baseConfig.getFileProviderJarPath())
+                .camelCapabilityJarPath(baseConfig.getCamelCapabilityJarPath())
                 .tempDataDir(tempDataDir)
                 .defaultTimeout(baseConfig.getDefaultTimeout())
                 .build();

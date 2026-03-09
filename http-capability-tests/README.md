@@ -30,11 +30,11 @@ mvn clean install -pl http-capability-tests -Dtest=HttpToolCliITCase#shouldRegis
 
 | Class | Tests | Description |
 |-------|-------|-------------|
-| `HttpToolCliITCase` | 2 | CLI tool registration and listing |
+| `HttpToolCliITCase` | 3 | CLI tool registration, listing, and removal |
 | `HttpToolRegistrationITCase` | 9 | REST API tool CRUD operations |
 | `PublicApiITCase` | 6 | External API invocations (httpbin, jsonplaceholder, meowfacts) |
 
-**Total: 17 tests**
+**Total: 18 tests**
 
 ## Architecture
 

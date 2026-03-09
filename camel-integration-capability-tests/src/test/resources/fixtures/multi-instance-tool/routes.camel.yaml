@@ -1,0 +1,9 @@
+- route:
+    id: multi-tool-route
+    from:
+      uri: direct:multi-tool-route
+      steps:
+        - setBody:
+            constant: "Response from tool instance"
+        - convertBodyTo:
+            type: java.lang.String

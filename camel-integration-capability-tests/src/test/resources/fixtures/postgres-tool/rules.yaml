@@ -1,0 +1,14 @@
+mcp:
+  tools:
+    - query-db:
+        route:
+          id: "query-db"
+        description: "Execute a SQL query against the database"
+        properties:
+          - name: query
+            type: string
+            description: "SQL query to execute"
+            required: true
+            mapping:
+              type: header
+              name: Wanaku.query

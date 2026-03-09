@@ -1,0 +1,32 @@
+mcp:
+  tools:
+    - simple-greeting:
+        route:
+          id: "simple-greeting"
+        description: "Returns a simple greeting message"
+
+    - weather-lookup:
+        route:
+          id: "weather-lookup"
+        description: "Look up weather for a given city"
+        properties:
+          - name: city
+            type: string
+            description: "City name to look up weather for"
+            required: true
+            mapping:
+              type: header
+              name: Wanaku.city
+
+    - explicit-param-tool:
+        route:
+          id: "explicit-param-tool"
+        description: "Tool with explicit parameter mapping"
+        properties:
+          - name: myValue
+            type: string
+            description: "A value mapped to a custom header"
+            required: true
+            mapping:
+              type: header
+              name: CUSTOM_HEADER

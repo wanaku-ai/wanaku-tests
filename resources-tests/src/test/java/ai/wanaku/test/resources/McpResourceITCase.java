@@ -1,6 +1,8 @@
 package ai.wanaku.test.resources;
 
 import java.nio.file.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import io.quarkus.test.junit.QuarkusTest;
 import ai.wanaku.test.model.ResourceConfig;
 
@@ -15,6 +17,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @QuarkusTest
 class McpResourceITCase extends ResourceTestBase {
+
+    private static final Logger LOG = LoggerFactory.getLogger(McpResourceITCase.class);
 
     @BeforeEach
     void checkInfrastructureAvailable() {
@@ -43,10 +47,12 @@ class McpResourceITCase extends ResourceTestBase {
                 .when()
                 .resourcesList()
                 .withAssert(page -> {
+                    LOG.debug("=== MCP resourcesList response [mcp-list-resource]: {}", page.resources());
                     assertThat(page.resources()).isNotEmpty();
                     assertThat(page.resources()).anyMatch(r -> r.name().equals("mcp-list-resource"));
                 })
-                .send();
+                .send()
+                .thenAssertResults();
     }
 
     @DisplayName("Read a text file resource via MCP and verify content matches")
@@ -54,11 +60,13 @@ class McpResourceITCase extends ResourceTestBase {
     void shouldReadTextFileViaMcp() throws Exception {
         // Given
         Path testFile = createTestFile("read-test.txt", "Hello Wanaku Resources");
-        String fileUri = testFile.toUri().toString();
+        // Use absolute path, not file:// URI — FileResourceDelegate uses new File(location)
+        // which doesn't strip the file:// prefix, causing a broken Camel endpoint URI
+        String filePath = testFile.toAbsolutePath().toString();
 
         ResourceConfig config = ResourceConfig.builder()
                 .name("readable-text-resource")
-                .location(fileUri)
+                .location(filePath)
                 .mimeType("text/plain")
                 .build();
 
@@ -67,20 +75,23 @@ class McpResourceITCase extends ResourceTestBase {
         // When / Then
         mcpClient
                 .when()
-                .resourcesRead(fileUri)
+                .resourcesRead(filePath)
                 .withAssert(response -> {
+                    LOG.debug("=== MCP resourcesRead response [readable-text-resource]: {}", response.contents());
                     assertThat(response.contents()).isNotEmpty();
                     String text = response.contents().get(0).asText().text();
                     assertThat(text).contains("Hello Wanaku Resources");
                 })
-                .send();
+                .send()
+                .thenAssertResults();
     }
 
     @DisplayName("Read a resource pointing to a non-existent file and verify error is returned")
     @Test
     void shouldHandleNonExistentFile() throws Exception {
         // Given
-        String nonExistentUri = "file:///tmp/wanaku-does-not-exist-" + System.nanoTime() + ".txt";
+        // Use absolute path, not file:// URI — FileResourceDelegate uses new File(location)
+        String nonExistentUri = "/tmp/wanaku-does-not-exist-" + System.nanoTime() + ".txt";
 
         ResourceConfig config = ResourceConfig.builder()
                 .name("missing-file-resource")
@@ -90,14 +101,18 @@ class McpResourceITCase extends ResourceTestBase {
 
         routerClient.exposeResource(config);
 
-        // When / Then — reading a non-existent file should return empty or error content
+        // When / Then — reading a non-existent file should return an error
         mcpClient
                 .when()
                 .resourcesRead(nonExistentUri)
-                .withAssert(response -> {
-                    // Provider returns empty contents for non-existent files
-                    assertThat(response.contents()).isEmpty();
+                .withErrorAssert(error -> {
+                    LOG.debug(
+                            "=== MCP resourcesRead error [non-existent]: code={}, message={}",
+                            error.code(),
+                            error.message());
+                    assertThat(error.message()).isNotEmpty();
                 })
-                .send();
+                .send()
+                .thenAssertResults();
     }
 }

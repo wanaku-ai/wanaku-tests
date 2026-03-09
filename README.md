@@ -8,7 +8,7 @@ This framework tests Wanaku capabilities:
 
 - **HTTP Capability** — register HTTP endpoints as tools, invoke via MCP
 - **Resources** — expose, list, read, and remove file resources via REST API, MCP, and CLI
-- **Camel Integration** — Apache Camel-based capabilities *(planned)*
+- **Camel Integration** — Apache Camel-based tools, file resources, PostgreSQL, multi-instance
 - **Integration Tests** — cross-capability tests, e2e flows *(planned)*
 
 ## Prerequisites
@@ -97,21 +97,34 @@ mvn clean install -Dwanaku.test.cli.path=../artifacts/cli-0.1.0-SNAPSHOT/quarkus
 ```
 wanaku-tests/
 ├── artifacts/             # Wanaku JARs (not in git)
-├── http-capability-tests/ # HTTP capability tests (17 tests)
+├── http-capability-tests/ # HTTP capability tests (18 tests)
 │   └── src/test/java/ai/wanaku/test/http/
-│       ├── HttpToolCliITCase.java          # CLI tool management
-│       ├── HttpToolRegistrationITCase.java # Register, list, remove tools via REST API
-│       └── PublicApiITCase.java            # External API invocations
-├── resources-tests/       # Resource provider tests (11 tests)
+│       ├── HttpToolCliITCase.java          # CLI tool management (3)
+│       ├── HttpToolRegistrationITCase.java # Register, list, remove tools via REST API (9)
+│       └── PublicApiITCase.java            # External API invocations (6)
+├── resources-tests/       # Resource provider tests (12 tests)
 │   └── src/test/java/ai/wanaku/test/resources/
 │       ├── RestApiResourceITCase.java     # Expose, list, remove resources via REST API (6)
 │       ├── McpResourceITCase.java         # List and read resources via MCP (3)
-│       └── CliResourceITCase.java         # Expose and remove resources via CLI (2)
+│       └── CliResourceITCase.java         # Expose, list, remove resources via CLI (3)
+├── camel-integration-capability-tests/ # CIC tests (16 tests)
+│   ├── src/test/java/ai/wanaku/test/camel/
+│   │   ├── CamelBasicToolITCase.java      # Simple tools: register, invoke, params (6)
+│   │   ├── CamelFileResourceITCase.java   # File resources: list, read, error (5)
+│   │   ├── CamelPostgresToolITCase.java   # PostgreSQL JDBC tool via Testcontainers (3)
+│   │   └── CamelMultiInstanceITCase.java  # Multiple CIC instances simultaneously (2)
+│   └── src/test/resources/fixtures/       # Static YAML config per scenario
+│       ├── simple-tool/                   # direct: routes + tool rules
+│       ├── file-resource/                 # file route + resource rules
+│       ├── postgres-tool/                 # JDBC route + deps + seed.sql
+│       └── multi-instance-tool/           # tool for multi-instance test
 └── test-common/           # Shared infrastructure
     └── src/main/java/ai/wanaku/test/
         ├── base/      # BaseIntegrationTest
-        ├── client/    # RouterClient, McpTestClient, CLIExecutor
-        └── managers/  # KeycloakManager, RouterManager, HttpCapabilityManager
+        ├── client/    # RouterClient, McpTestClient, CLIExecutor, DataStoreClient
+        ├── fixtures/  # TestFixtures (load + ${VAR} substitution)
+        ├── managers/  # KeycloakManager, RouterManager, CamelCapabilityManager
+        └── services/  # PostgresServiceManager (Testcontainers)
 ```
 
 ## Logs
@@ -157,5 +170,5 @@ target/logs/
 
 - [HTTP Capability Tests](http-capability-tests/README.md) — HTTP tool registration and invocation
 - [Resources Tests](resources-tests/README.md) — file resource management via REST API, MCP, and CLI
-- *Camel Integration Capability Tests* — planned
+- [Camel Integration Capability Tests](camel-integration-capability-tests/README.md) — CIC tools, resources, PostgreSQL, multi-instance
 - *Integration Tests* — cross-capability tests, e2e flows (planned)

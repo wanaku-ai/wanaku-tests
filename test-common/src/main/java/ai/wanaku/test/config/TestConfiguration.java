@@ -15,6 +15,7 @@ public class TestConfiguration {
     private final Path routerJarPath;
     private final Path httpToolServiceJarPath;
     private final Path fileProviderJarPath;
+    private final Path camelCapabilityJarPath;
     private final Path artifactsDir;
     private final Path tempDataDir;
     private final Duration defaultTimeout;
@@ -23,6 +24,7 @@ public class TestConfiguration {
         this.routerJarPath = builder.routerJarPath;
         this.httpToolServiceJarPath = builder.httpToolServiceJarPath;
         this.fileProviderJarPath = builder.fileProviderJarPath;
+        this.camelCapabilityJarPath = builder.camelCapabilityJarPath;
         this.artifactsDir = builder.artifactsDir;
         this.tempDataDir = builder.tempDataDir;
         this.defaultTimeout = builder.defaultTimeout;
@@ -48,6 +50,7 @@ public class TestConfiguration {
                 .routerJarPath(findJar(artifactsDir, "wanaku-router"))
                 .httpToolServiceJarPath(findJar(artifactsDir, "wanaku-tool-service-http"))
                 .fileProviderJarPath(findJar(artifactsDir, "wanaku-provider-file"))
+                .camelCapabilityJarPath(findJar(artifactsDir, "camel-integration-capability"))
                 .defaultTimeout(timeout)
                 .build();
     }
@@ -59,6 +62,8 @@ public class TestConfiguration {
             propKey = WanakuTestConstants.PROP_ROUTER_JAR;
         } else if (prefix.contains("provider-file")) {
             propKey = WanakuTestConstants.PROP_FILE_PROVIDER_JAR;
+        } else if (prefix.contains("camel-integration-capability")) {
+            propKey = WanakuTestConstants.PROP_CAMEL_CAPABILITY_JAR;
         } else {
             propKey = WanakuTestConstants.PROP_HTTP_SERVICE_JAR;
         }
@@ -78,13 +83,23 @@ public class TestConfiguration {
                         .orElse(null);
 
                 if (quarkusAppDir != null) {
+                    // Try Quarkus fast-jar format (quarkus-run.jar)
                     Path quarkusRunJar = quarkusAppDir.resolve("quarkus-run.jar");
                     if (Files.exists(quarkusRunJar)) {
                         return quarkusRunJar;
                     }
+
+                    // Try standalone JAR inside the directory (fat JAR format, e.g., CIC)
+                    Path fatJar = Files.list(quarkusAppDir)
+                            .filter(p -> p.getFileName().toString().endsWith(".jar"))
+                            .findFirst()
+                            .orElse(null);
+                    if (fatJar != null) {
+                        return fatJar;
+                    }
                 }
 
-                // Second try: look for standalone JAR file
+                // Last try: look for standalone JAR file directly in artifacts/
                 return Files.list(artifactsDir)
                         .filter(p -> p.getFileName().toString().startsWith(prefix))
                         .filter(p -> p.getFileName().toString().endsWith(".jar"))
@@ -109,6 +124,10 @@ public class TestConfiguration {
         return fileProviderJarPath;
     }
 
+    public Path getCamelCapabilityJarPath() {
+        return camelCapabilityJarPath;
+    }
+
     public Path getArtifactsDir() {
         return artifactsDir;
     }
@@ -125,6 +144,7 @@ public class TestConfiguration {
         private Path routerJarPath;
         private Path httpToolServiceJarPath;
         private Path fileProviderJarPath;
+        private Path camelCapabilityJarPath;
         private Path artifactsDir;
         private Path tempDataDir;
         private Duration defaultTimeout = WanakuTestConstants.DEFAULT_TIMEOUT;
@@ -141,6 +161,11 @@ public class TestConfiguration {
 
         public Builder fileProviderJarPath(Path fileProviderJarPath) {
             this.fileProviderJarPath = fileProviderJarPath;
+            return this;
+        }
+
+        public Builder camelCapabilityJarPath(Path camelCapabilityJarPath) {
+            this.camelCapabilityJarPath = camelCapabilityJarPath;
             return this;
         }
 
