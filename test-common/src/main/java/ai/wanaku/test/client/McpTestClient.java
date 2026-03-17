@@ -5,6 +5,8 @@ import java.net.URISyntaxException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import io.quarkiverse.mcp.server.test.McpAssured;
+import io.quarkiverse.mcp.server.test.McpAssured.McpStreamableAssert;
+import io.quarkiverse.mcp.server.test.McpAssured.McpStreamableTestClient;
 import io.vertx.core.MultiMap;
 
 /**
@@ -40,7 +42,7 @@ public class McpTestClient {
 
     private static final Logger LOG = LoggerFactory.getLogger(McpTestClient.class);
 
-    private final McpAssured.McpStreamableTestClient client;
+    private final McpStreamableTestClient client;
     private final String baseUrl;
     private final String accessToken;
 
@@ -59,7 +61,7 @@ public class McpTestClient {
             // Use Streamable HTTP transport (/mcp/) instead of SSE (/mcp/sse)
             // Streamable HTTP properly applies additionalHeaders to ALL requests
             // including the initial connection, enabling Bearer token auth
-            McpAssured.McpStreamableTestClient.Builder builder = McpAssured.newStreamableClient()
+            McpStreamableTestClient.Builder builder = McpAssured.newStreamableClient()
                     .setBaseUri(new URI(normalizedUrl))
                     .setMcpPath("mcp/");
 
@@ -102,7 +104,7 @@ public class McpTestClient {
      *
      * @return the assert builder for chaining operations
      */
-    public McpAssured.McpStreamableAssert when() {
+    public McpStreamableAssert when() {
         return client.when();
     }
 }
