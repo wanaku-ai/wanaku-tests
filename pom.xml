@@ -87,11 +87,13 @@
                 <version>${keycloak-testcontainer.version}</version>
             </dependency>
 
-            <!-- Jackson JSON -->
+            <!-- Jackson JSON (all modules must use compatible versions) -->
             <dependency>
-                <groupId>com.fasterxml.jackson.core</groupId>
-                <artifactId>jackson-databind</artifactId>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
                 <version>${jackson.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
             </dependency>
 
             <!-- Quarkus Test -->
