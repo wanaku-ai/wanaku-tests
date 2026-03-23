@@ -9,6 +9,7 @@ import ai.wanaku.test.model.HttpToolConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assumptions.assumeThat;
 
@@ -17,8 +18,15 @@ import static org.assertj.core.api.Assumptions.assumeThat;
  *
  * These tests register HTTP tools pointing to real public APIs and invoke them
  * through the MCP client, verifying the full end-to-end flow.
+ *
+ * Skip condition: set system property wanaku.test.external-apis=false to disable.
  */
 @QuarkusTest
+@DisabledIfSystemProperty(
+        named = "wanaku.test.external-apis",
+        matches = "false",
+        disabledReason = "External API tests disabled via system property"
+)
 class PublicApiITCase extends HttpCapabilityTestBase {
 
     private static final Logger LOG = LoggerFactory.getLogger(PublicApiITCase.class);
