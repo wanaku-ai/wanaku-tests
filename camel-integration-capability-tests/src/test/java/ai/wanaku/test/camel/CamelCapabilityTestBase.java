@@ -173,6 +173,19 @@ public abstract class CamelCapabilityTestBase extends BaseIntegrationTest {
                 .until(() -> routerClient.isCapabilityRegistered(serviceName));
         LOG.info("CIC '{}' is registered with Router", serviceName);
 
+        // Wait for tools/resources to be registered
+        LOG.debug("Waiting for CIC '{}' tools/resources to appear in Router...", serviceName);
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofMillis(500))
+                .until(() -> {
+                    boolean hasTools = routerClient.listTools().stream().anyMatch(t -> serviceName.equals(t.getType()));
+                    boolean hasResources =
+                            routerClient.listResources().stream().anyMatch(r -> serviceName.equals(r.getType()));
+                    return hasTools || hasResources;
+                });
+        LOG.info("CIC '{}' tools/resources are available", serviceName);
+
         camelManagers.add(manager);
         return manager;
     }
@@ -216,6 +229,20 @@ public abstract class CamelCapabilityTestBase extends BaseIntegrationTest {
                 .pollInterval(Duration.ofMillis(500))
                 .until(() -> routerClient.isCapabilityRegistered(serviceName));
         LOG.info("CIC '{}' is registered with Router", serviceName);
+
+        // Wait for tools/resources to be registered (CIC registers them asynchronously
+        // after the capability service itself is registered)
+        LOG.debug("Waiting for CIC '{}' tools/resources to appear in Router...", serviceName);
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofMillis(500))
+                .until(() -> {
+                    boolean hasTools = routerClient.listTools().stream().anyMatch(t -> serviceName.equals(t.getType()));
+                    boolean hasResources =
+                            routerClient.listResources().stream().anyMatch(r -> serviceName.equals(r.getType()));
+                    return hasTools || hasResources;
+                });
+        LOG.info("CIC '{}' tools/resources are available", serviceName);
 
         camelManagers.add(manager);
         return manager;

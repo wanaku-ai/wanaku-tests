@@ -11,6 +11,7 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.awaitility.Awaitility;
 import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
@@ -68,9 +69,27 @@ public class KeycloakManager {
 
         keycloakClient = new KeycloakTestClient(container.getServerUrl());
         createRealm();
-
+        awaitOidcDiscovery();
         state = ManagerState.RUNNING;
         LOG.debug("Keycloak started at {}", container.getServerUrl());
+    }
+
+    private void awaitOidcDiscovery() {
+        String url = container.getServerUrl() + "/realms/" + REALM_NAME + "/.well-known/openid-configuration";
+        LOG.debug("Waiting for OIDC discovery: {}", url);
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofSeconds(1))
+                .ignoreExceptions()
+                .until(() -> {
+                    HttpRequest req =
+                            HttpRequest.newBuilder().uri(URI.create(url)).GET().build();
+                    return httpClient
+                                    .send(req, HttpResponse.BodyHandlers.ofString())
+                                    .statusCode()
+                            == 200;
+                });
+        LOG.debug("OIDC discovery endpoint ready");
     }
 
     private void createRealm() {

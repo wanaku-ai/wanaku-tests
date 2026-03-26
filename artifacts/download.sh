@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 ROUTER_URL="https://github.com/wanaku-ai/wanaku/releases/download/early-access/wanaku-router-backend-0.1.0-SNAPSHOT.zip"
 HTTP_URL="https://github.com/wanaku-ai/wanaku/releases/download/early-access/wanaku-tool-service-http-0.1.0-SNAPSHOT.zip"
-CLI_URL="https://github.com/wanaku-ai/wanaku/releases/download/early-access/cli-0.1.0-SNAPSHOT.zip"
+CLI_URL="https://github.com/wanaku-ai/wanaku/releases/download/early-access/wanaku-cli-0.1.0-SNAPSHOT.zip"
 FILE_PROVIDER_URL="https://github.com/wanaku-ai/wanaku-examples/releases/download/early-access/wanaku-provider-file-0.1.0-SNAPSHOT.zip"
 CIC_URL="https://github.com/wanaku-ai/camel-integration-capability/releases/download/early-access/camel-integration-capability-main-0.1.0-SNAPSHOT-jar-with-dependencies.jar"
 
@@ -31,7 +31,7 @@ download_and_extract() {
 
 download_and_extract "${ROUTER_URL}" "wanaku-router-backend"
 download_and_extract "${HTTP_URL}" "wanaku-tool-service-http"
-download_and_extract "${CLI_URL}" "cli"
+download_and_extract "${CLI_URL}" "wanaku-cli"
 download_and_extract "${FILE_PROVIDER_URL}" "wanaku-provider-file"
 
 # CIC is a single fat JAR (not a ZIP) — download directly
