@@ -82,7 +82,7 @@ public class DataStoreClient {
         try {
             String json = objectMapper.writeValueAsString(body);
 
-            HttpRequest request = buildRequest(WanakuTestConstants.ROUTER_DATA_STORE_PATH + "/add")
+            HttpRequest request = buildRequest(WanakuTestConstants.ROUTER_DATA_STORE_PATH)
                     .POST(HttpRequest.BodyPublishers.ofString(json))
                     .header("Content-Type", "application/json")
                     .build();
@@ -116,7 +116,7 @@ public class DataStoreClient {
 
         try {
             String encodedName = URLEncoder.encode(name, StandardCharsets.UTF_8);
-            HttpRequest request = buildRequest(WanakuTestConstants.ROUTER_DATA_STORE_PATH + "/get?name=" + encodedName)
+            HttpRequest request = buildRequest(WanakuTestConstants.ROUTER_DATA_STORE_PATH + "?name=" + encodedName)
                     .GET()
                     .build();
 
@@ -169,7 +169,7 @@ public class DataStoreClient {
         LOG.debug("Listing data store entries");
 
         try {
-            HttpRequest request = buildRequest(WanakuTestConstants.ROUTER_DATA_STORE_PATH + "/list")
+            HttpRequest request = buildRequest(WanakuTestConstants.ROUTER_DATA_STORE_PATH)
                     .GET()
                     .build();
 
@@ -215,8 +215,7 @@ public class DataStoreClient {
 
         try {
             String encodedName = URLEncoder.encode(name, StandardCharsets.UTF_8);
-            HttpRequest request = buildRequest(
-                            WanakuTestConstants.ROUTER_DATA_STORE_PATH + "/remove?name=" + encodedName)
+            HttpRequest request = buildRequest(WanakuTestConstants.ROUTER_DATA_STORE_PATH + "?name=" + encodedName)
                     .DELETE()
                     .build();
 
@@ -264,7 +263,7 @@ public class DataStoreClient {
      */
     public boolean isAvailable() {
         try {
-            HttpRequest request = buildRequest(WanakuTestConstants.ROUTER_DATA_STORE_PATH + "/list")
+            HttpRequest request = buildRequest(WanakuTestConstants.ROUTER_DATA_STORE_PATH)
                     .GET()
                     .build();
 

@@ -89,15 +89,21 @@ class CamelPostgresToolITCase extends CamelCapabilityTestBase {
 
         mcpClient
                 .when()
-                .toolsCall("query-db", Map.of("query", "SELECT * FROM nonexistent_table"), response -> {
+                .toolsCall("query-db")
+                .withArguments(Map.of("query", "SELECT * FROM nonexistent_table"))
+                .withErrorAssert(error -> {
                     LOG.debug(
-                            "=== MCP toolsCall response [query-db-error]: isError={}, content={}",
-                            response.isError(),
-                            response.content());
-                    assertThat(response.isError())
-                            .as("Invalid SQL should return error")
-                            .isTrue();
+                            "=== MCP toolsCall error [query-db-error]: code={}, message={}",
+                            error.code(),
+                            error.message());
+                    assertThat(error.code())
+                            .as("Invalid SQL should return internal error code")
+                            .isEqualTo(-32603);
+                    assertThat(error.message())
+                            .as("Error message should not be empty")
+                            .isNotEmpty();
                 })
+                .send()
                 .thenAssertResults();
     }
 
