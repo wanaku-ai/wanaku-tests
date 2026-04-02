@@ -80,6 +80,10 @@ public class CLIExecutor {
         try {
             ProcessBuilder pb = new ProcessBuilder(command);
             if (effectiveWorkingDir != null) {
+                if (!effectiveWorkingDir.toFile().exists()) {
+                    LOG.error("The effective working dir {} doesn't exist", effectiveWorkingDir);
+                }
+
                 pb.directory(effectiveWorkingDir.toFile());
             }
             Process process = pb.start();
