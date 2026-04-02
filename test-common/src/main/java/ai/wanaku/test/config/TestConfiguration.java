@@ -40,7 +40,7 @@ public class TestConfiguration {
     public static TestConfiguration fromSystemProperties() {
         String artifactsDirStr =
                 System.getProperty(WanakuTestConstants.PROP_ARTIFACTS_DIR, WanakuTestConstants.DEFAULT_ARTIFACTS_DIR);
-        Path artifactsDir = Path.of(artifactsDirStr);
+        Path artifactsDir = Path.of(artifactsDirStr).toAbsolutePath().normalize();
 
         String timeoutStr = System.getProperty(WanakuTestConstants.PROP_TIMEOUT, "60");
         Duration timeout = Duration.ofSeconds(Long.parseLong(timeoutStr.replaceAll("[^0-9]", "")));
@@ -69,7 +69,7 @@ public class TestConfiguration {
         }
         String explicitPath = System.getProperty(propKey);
         if (explicitPath != null) {
-            return Path.of(explicitPath);
+            return Path.of(explicitPath).toAbsolutePath().normalize();
         }
 
         // Search in artifacts directory

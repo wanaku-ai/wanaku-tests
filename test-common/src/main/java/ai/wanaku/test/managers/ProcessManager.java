@@ -118,8 +118,8 @@ public abstract class ProcessManager {
         command.add("-jar");
 
         // For Quarkus fast-jar format, we need to run from the directory containing quarkus-run.jar
-        // So we use relative path and set working directory
-        Path workingDir = jarPath.getParent();
+        // Resolve to absolute path so relative paths work correctly in CI
+        Path workingDir = jarPath.getParent().toAbsolutePath().normalize();
         String jarName = jarPath.getFileName().toString();
         command.add(jarName);
         command.addAll(getProcessArguments());

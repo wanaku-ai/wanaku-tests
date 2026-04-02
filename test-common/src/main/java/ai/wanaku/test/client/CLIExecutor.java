@@ -56,7 +56,7 @@ public class CLIExecutor {
 
             // Quarkus fast-jar format: need to run from the directory containing quarkus-run.jar
             if (cliPath.endsWith("quarkus-run.jar")) {
-                Path jarPath = Path.of(cliPath);
+                Path jarPath = Path.of(cliPath).toAbsolutePath().normalize();
                 effectiveWorkingDir = jarPath.getParent();
                 command.add(jarPath.getFileName().toString());
             } else {
