@@ -130,7 +130,11 @@ public abstract class ProcessManager {
         // Start process
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.directory(workingDir.toFile());
-        pb.environment().putAll(environment);
+
+        if (!environment.isEmpty()) {
+            pb.environment().putAll(environment);
+        }
+
         pb.redirectOutput(logFile);
         pb.redirectErrorStream(true);
 
