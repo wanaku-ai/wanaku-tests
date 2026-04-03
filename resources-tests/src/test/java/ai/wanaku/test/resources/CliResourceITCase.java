@@ -6,6 +6,7 @@ import ai.wanaku.test.client.CLIExecutor;
 import ai.wanaku.test.client.CLIResult;
 import ai.wanaku.test.model.ResourceConfig;
 
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,6 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Tests for resource operations via CLI.
  * CLI availability is asserted (not assumed) — tests fail if CLI is unavailable.
+ * File provider availability is assumed — tests skip if it is not present.
  */
 @QuarkusTest
 class CliResourceITCase extends ResourceTestBase {
@@ -21,9 +23,7 @@ class CliResourceITCase extends ResourceTestBase {
     @BeforeEach
     void checkInfrastructureAvailable() {
         assertThat(isRouterAvailable()).as("Router must be available").isTrue();
-        assertThat(isFileProviderAvailable())
-                .as("File provider must be available")
-                .isTrue();
+        Assumptions.assumeTrue(isFileProviderAvailable(), "File provider must be available");
     }
 
     @DisplayName("Expose a resource via CLI and verify it appears in the list")

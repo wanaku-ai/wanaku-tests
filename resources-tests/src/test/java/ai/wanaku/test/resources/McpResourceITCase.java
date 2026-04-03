@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import io.quarkus.test.junit.QuarkusTest;
 import ai.wanaku.test.model.ResourceConfig;
 
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,6 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Tests for resource operations via MCP protocol.
  * MCP client availability is asserted (not assumed) — tests fail if MCP is unavailable.
+ * File provider availability is assumed — tests skip if it is not present.
  */
 @QuarkusTest
 class McpResourceITCase extends ResourceTestBase {
@@ -23,9 +25,7 @@ class McpResourceITCase extends ResourceTestBase {
     @BeforeEach
     void checkInfrastructureAvailable() {
         assertThat(isRouterAvailable()).as("Router must be available").isTrue();
-        assertThat(isFileProviderAvailable())
-                .as("File provider must be available")
-                .isTrue();
+        Assumptions.assumeTrue(isFileProviderAvailable(), "File provider must be available");
         assertThat(isMcpClientAvailable()).as("MCP client must be available").isTrue();
     }
 

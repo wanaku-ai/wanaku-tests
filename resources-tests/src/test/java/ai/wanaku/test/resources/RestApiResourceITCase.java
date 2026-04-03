@@ -9,25 +9,24 @@ import ai.wanaku.test.client.RouterClient;
 import ai.wanaku.test.model.ResourceConfig;
 import ai.wanaku.test.model.ResourceReference;
 
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assumptions.assumeThat;
 
 /**
  * Tests for resource registration, listing, and removal via REST API.
+ * Infrastructure availability is assumed — tests skip if not present.
  */
 @QuarkusTest
 class RestApiResourceITCase extends ResourceTestBase {
 
     @BeforeEach
     void assumeInfrastructureAvailable() {
-        assumeThat(isRouterAvailable()).as("Router must be available").isTrue();
-        assumeThat(isFileProviderAvailable())
-                .as("File provider must be available")
-                .isTrue();
+        Assumptions.assumeTrue(isRouterAvailable(), "Router must be available");
+        Assumptions.assumeTrue(isFileProviderAvailable(), "File provider must be available");
     }
 
     @DisplayName("Expose a file resource and verify it appears in the resource list")
