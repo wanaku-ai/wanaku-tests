@@ -21,6 +21,11 @@ public class ResourceProviderManager extends ProcessManager {
     private final TestConfiguration config;
     private int grpcPort;
 
+    /**
+     * Creates a new ResourceProviderManager.
+     *
+     * @param config the test configuration
+     */
     public ResourceProviderManager(TestConfiguration config) {
         this.config = config;
     }

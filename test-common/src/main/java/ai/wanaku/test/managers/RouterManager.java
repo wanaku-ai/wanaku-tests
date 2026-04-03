@@ -25,6 +25,11 @@ public class RouterManager extends ProcessManager {
     private int httpPort;
     private int grpcPort;
 
+    /**
+     * Creates a new RouterManager.
+     *
+     * @param config the test configuration
+     */
     public RouterManager(TestConfiguration config) {
         this.config = config;
     }
