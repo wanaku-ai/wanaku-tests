@@ -97,4 +97,13 @@ public class HttpCapabilityManager extends ProcessManager {
         // Wait for the gRPC port to be listening
         return HealthCheckUtils.waitForPort("localhost", grpcPort, config.getDefaultTimeout());
     }
+
+    /**
+     * Gets the gRPC port allocated for this capability.
+     *
+     * @return the gRPC port
+     */
+    public int getGrpcPort() {
+        return grpcPort;
+    }
 }

@@ -54,6 +54,12 @@ public class KeycloakManager {
         STOPPING
     }
 
+    /**
+     * Starts the Keycloak container and initializes the test realm.
+     * Creates the wanaku realm with test users and clients.
+     *
+     * @throws IllegalStateException if Keycloak is already running
+     */
     public void start() {
         if (state != ManagerState.STOPPED) {
             throw new IllegalStateException("Keycloak is already running");
@@ -134,6 +140,9 @@ public class KeycloakManager {
         return user;
     }
 
+    /**
+     * Stops the Keycloak container.
+     */
     public void stop() {
         if (container == null) {
             state = ManagerState.STOPPED;
@@ -153,6 +162,11 @@ public class KeycloakManager {
         }
     }
 
+    /**
+     * Checks if the Keycloak container is running.
+     *
+     * @return true if the container is running
+     */
     public boolean isRunning() {
         return container != null && container.isRunning() && state == ManagerState.RUNNING;
     }
@@ -174,7 +188,10 @@ public class KeycloakManager {
     }
 
     /**
-     * Gets an MCP token using password grant with test user.
+     * Gets an MCP token using password grant with the default test user.
+     * The token includes the wanaku-mcp-client scope required for MCP operations.
+     *
+     * @return the access token
      */
     public String getMcpToken() {
         return getMcpTokenForUser(TEST_USER, TEST_USER_PASSWORD);
@@ -182,6 +199,11 @@ public class KeycloakManager {
 
     /**
      * Gets an MCP token for a specific user using password grant.
+     * The token includes the wanaku-mcp-client scope required for MCP operations.
+     *
+     * @param username the username
+     * @param password the password
+     * @return the access token
      */
     public String getMcpTokenForUser(String username, String password) {
         try {
@@ -213,6 +235,13 @@ public class KeycloakManager {
         }
     }
 
+    /**
+     * Gets OIDC credentials for service-to-service authentication.
+     * Used by capabilities to register with the Router.
+     *
+     * @return the OIDC credentials
+     * @throws IllegalStateException if Keycloak is not running
+     */
     public OidcCredentials getServiceCredentials() {
         if (!isRunning()) {
             throw new IllegalStateException("Keycloak is not running");
