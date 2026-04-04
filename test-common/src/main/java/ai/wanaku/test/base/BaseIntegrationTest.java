@@ -52,6 +52,9 @@ public abstract class BaseIntegrationTest {
         LOG = LoggerFactory.getLogger(testClass);
         LOG.info("=== Setting up suite infrastructure ===");
 
+        // Set default Awaitility timeout to handle MCP client timeout (10s) + buffer
+        Awaitility.setDefaultTimeout(Duration.ofSeconds(15));
+
         // Create isolated temp directory for this test suite
         tempDataDir = Files.createTempDirectory("wanaku-test-");
         LOG.debug("Created temp directory: {}", tempDataDir);
