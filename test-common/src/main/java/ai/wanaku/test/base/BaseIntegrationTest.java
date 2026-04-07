@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import ai.wanaku.test.client.McpTestClient;
 import ai.wanaku.test.client.RouterClient;
 import ai.wanaku.test.config.OidcCredentials;
+import ai.wanaku.test.config.TargetConfiguration;
 import ai.wanaku.test.config.TestConfiguration;
 import ai.wanaku.test.managers.HttpCapabilityManager;
 import ai.wanaku.test.managers.KeycloakManager;
@@ -138,8 +139,8 @@ public abstract class BaseIntegrationTest {
             }
 
             httpCapabilityManager = new HttpCapabilityManager(config);
-            httpCapabilityManager.prepare(
-                    "localhost", routerManager.getHttpPort(), routerManager.getGrpcPort(), oidcCredentials);
+            httpCapabilityManager.prepare(new TargetConfiguration(
+                    "localhost", routerManager.getHttpPort(), routerManager.getGrpcPort(), oidcCredentials));
 
             // Set log context for structured logging
             String profile = getLogProfile();

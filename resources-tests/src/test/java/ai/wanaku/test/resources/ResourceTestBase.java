@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import ai.wanaku.test.base.BaseIntegrationTest;
 import ai.wanaku.test.client.RouterClient;
 import ai.wanaku.test.config.OidcCredentials;
+import ai.wanaku.test.config.TargetConfiguration;
 import ai.wanaku.test.managers.ResourceProviderManager;
 
 import org.junit.jupiter.api.AfterAll;
@@ -50,8 +51,8 @@ public abstract class ResourceTestBase extends BaseIntegrationTest {
         String testClassName = testInfo.getTestClass().map(Class::getSimpleName).orElse("Unknown");
 
         resourceProviderManager = new ResourceProviderManager(config);
-        resourceProviderManager.prepare(
-                "localhost", routerManager.getHttpPort(), routerManager.getGrpcPort(), oidcCredentials);
+        resourceProviderManager.prepare(new TargetConfiguration(
+                "localhost", routerManager.getHttpPort(), routerManager.getGrpcPort(), oidcCredentials));
         resourceProviderManager.setLogContext("file-provider", testClassName, "file-provider");
         resourceProviderManager.start(testClassName);
 

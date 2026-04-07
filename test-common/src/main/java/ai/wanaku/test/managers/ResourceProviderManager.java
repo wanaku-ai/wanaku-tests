@@ -5,7 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import ai.wanaku.test.config.OidcCredentials;
+import ai.wanaku.test.config.TargetConfiguration;
 import ai.wanaku.test.config.TestConfiguration;
 import ai.wanaku.test.utils.HealthCheckUtils;
 import ai.wanaku.test.utils.PortUtils;
@@ -33,34 +33,36 @@ public class ResourceProviderManager extends ProcessManager {
     /**
      * Prepares the File Resource Provider with the router connection info.
      *
-     * @param routerHost the Router host
-     * @param routerHttpPort the Router HTTP port (for registration REST API)
-     * @param routerGrpcPort the Router gRPC port (for provider communication)
-     * @param oidcCredentials OIDC credentials for provider registration (can be null if auth disabled)
+     * @param target the target/router connection configuration
      */
-    public void prepare(String routerHost, int routerHttpPort, int routerGrpcPort, OidcCredentials oidcCredentials) {
+    public void prepare(TargetConfiguration target) {
         this.grpcPort = PortUtils.findAvailablePort();
 
         LOG.debug(
                 "File Provider prepared with gRPC port {}, connecting to Router HTTP:{} gRPC:{}",
                 grpcPort,
-                routerHttpPort,
-                routerGrpcPort);
+                target.routerHttpPort(),
+                target.routerGrpcPort());
 
         addSystemProperty("quarkus.http.port", "0");
         addSystemProperty("quarkus.grpc.server.port", String.valueOf(grpcPort));
 
-        String registrationUri = String.format("http://%s:%d", routerHost, routerHttpPort);
+        String registrationUri = target.registrationUri();
         addSystemProperty("wanaku.service.registration.uri", registrationUri);
         LOG.debug("File Provider will register at {}", registrationUri);
 
-        addSystemProperty("wanaku.router.host", routerHost);
-        addSystemProperty("wanaku.router.port", String.valueOf(routerGrpcPort));
+        addSystemProperty("wanaku.router.host", target.routerHost());
+        addSystemProperty("wanaku.router.port", String.valueOf(target.routerGrpcPort()));
 
-        if (oidcCredentials != null) {
-            addSystemProperty("quarkus.oidc-client.auth-server-url", oidcCredentials.getAuthServerUrl());
-            addSystemProperty("quarkus.oidc-client.client-id", oidcCredentials.clientId());
-            addSystemProperty("quarkus.oidc-client.credentials.secret", oidcCredentials.clientSecret());
+        if (target.oidcCredentials() != null) {
+            addSystemProperty(
+                    "quarkus.oidc-client.auth-server-url",
+                    target.oidcCredentials().getAuthServerUrl());
+            addSystemProperty(
+                    "quarkus.oidc-client.client-id", target.oidcCredentials().clientId());
+            addSystemProperty(
+                    "quarkus.oidc-client.credentials.secret",
+                    target.oidcCredentials().clientSecret());
             LOG.debug("File Provider configured with OIDC credentials");
         }
 

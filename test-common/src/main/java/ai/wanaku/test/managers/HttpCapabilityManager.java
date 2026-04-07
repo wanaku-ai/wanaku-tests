@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import ai.wanaku.test.config.TargetConfiguration;
 import ai.wanaku.test.config.TestConfiguration;
 import ai.wanaku.test.utils.HealthCheckUtils;
 import ai.wanaku.test.utils.PortUtils;
@@ -33,43 +34,41 @@ public class HttpCapabilityManager extends ProcessManager {
     /**
      * Prepares the HTTP Capability Service with the router connection info.
      *
-     * @param routerHost the Router host
-     * @param routerHttpPort the Router HTTP port (for registration REST API)
-     * @param routerGrpcPort the Router gRPC port (for capability communication)
-     * @param oidcCredentials OIDC credentials for capability registration (can be null if auth disabled)
+     * @param target the target/router connection configuration
      */
-    public void prepare(
-            String routerHost,
-            int routerHttpPort,
-            int routerGrpcPort,
-            ai.wanaku.test.config.OidcCredentials oidcCredentials) {
+    public void prepare(TargetConfiguration target) {
         this.grpcPort = PortUtils.findAvailablePort();
 
         LOG.debug(
                 "HTTP Capability prepared with gRPC port {}, connecting to Router HTTP:{} gRPC:{}",
                 grpcPort,
-                routerHttpPort,
-                routerGrpcPort);
+                target.routerHttpPort(),
+                target.routerGrpcPort());
 
         // Configure Quarkus properties
         addSystemProperty("quarkus.http.port", "0"); // Disable HTTP, only gRPC
         addSystemProperty("quarkus.grpc.server.port", String.valueOf(grpcPort));
 
         // Configure Router connection for capability registration (HTTP REST API)
-        String registrationUri = String.format("http://%s:%d", routerHost, routerHttpPort);
+        String registrationUri = target.registrationUri();
         addSystemProperty("wanaku.service.registration.uri", registrationUri);
         LOG.debug("HTTP Capability will register at {}", registrationUri);
 
         // Configure Router gRPC connection (for tool invocation)
-        addSystemProperty("wanaku.router.host", routerHost);
-        addSystemProperty("wanaku.router.port", String.valueOf(routerGrpcPort));
+        addSystemProperty("wanaku.router.host", target.routerHost());
+        addSystemProperty("wanaku.router.port", String.valueOf(target.routerGrpcPort()));
 
         // Configure OIDC client for capability registration
         // Capabilities use quarkus.oidc-client.* (not quarkus.oidc.*) to obtain tokens
-        if (oidcCredentials != null) {
-            addSystemProperty("quarkus.oidc-client.auth-server-url", oidcCredentials.getAuthServerUrl());
-            addSystemProperty("quarkus.oidc-client.client-id", oidcCredentials.clientId());
-            addSystemProperty("quarkus.oidc-client.credentials.secret", oidcCredentials.clientSecret());
+        if (target.oidcCredentials() != null) {
+            addSystemProperty(
+                    "quarkus.oidc-client.auth-server-url",
+                    target.oidcCredentials().getAuthServerUrl());
+            addSystemProperty(
+                    "quarkus.oidc-client.client-id", target.oidcCredentials().clientId());
+            addSystemProperty(
+                    "quarkus.oidc-client.credentials.secret",
+                    target.oidcCredentials().clientSecret());
             LOG.debug("HTTP Capability configured with OIDC credentials");
         }
 
