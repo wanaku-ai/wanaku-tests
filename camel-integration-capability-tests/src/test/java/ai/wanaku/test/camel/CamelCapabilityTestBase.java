@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import ai.wanaku.test.base.BaseIntegrationTest;
 import ai.wanaku.test.client.DataStoreClient;
 import ai.wanaku.test.config.OidcCredentials;
+import ai.wanaku.test.config.TargetConfiguration;
 import ai.wanaku.test.fixtures.TestFixtures;
 import ai.wanaku.test.managers.CamelCapabilityManager;
 
@@ -155,10 +156,8 @@ public abstract class CamelCapabilityTestBase extends BaseIntegrationTest {
         CamelCapabilityManager manager = new CamelCapabilityManager(config);
         manager.prepare(
                 serviceName,
-                "localhost",
-                routerManager.getHttpPort(),
-                routerManager.getGrpcPort(),
-                oidcCredentials,
+                new TargetConfiguration(
+                        "localhost", routerManager.getHttpPort(), routerManager.getGrpcPort(), oidcCredentials),
                 routesRef,
                 rulesRef,
                 depsRef);
@@ -211,10 +210,8 @@ public abstract class CamelCapabilityTestBase extends BaseIntegrationTest {
         CamelCapabilityManager manager = new CamelCapabilityManager(config);
         manager.prepare(
                 serviceName,
-                "localhost",
-                routerManager.getHttpPort(),
-                routerManager.getGrpcPort(),
-                oidcCredentials,
+                new TargetConfiguration(
+                        "localhost", routerManager.getHttpPort(), routerManager.getGrpcPort(), oidcCredentials),
                 "file://" + routesRef.toAbsolutePath(),
                 rulesRef.toFile().exists() ? "file://" + rulesRef.toAbsolutePath() : null,
                 depsRef.toFile().exists() ? "file://" + depsRef.toAbsolutePath() : null);

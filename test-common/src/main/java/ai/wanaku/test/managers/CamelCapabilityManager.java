@@ -7,6 +7,7 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ai.wanaku.test.config.OidcCredentials;
+import ai.wanaku.test.config.TargetConfiguration;
 import ai.wanaku.test.config.TestConfiguration;
 import ai.wanaku.test.utils.HealthCheckUtils;
 import ai.wanaku.test.utils.PortUtils;
@@ -47,28 +48,18 @@ public class CamelCapabilityManager extends ProcessManager {
     /**
      * Prepares the Camel Integration Capability with the router connection info.
      *
-     * @param serviceName     the service name for Router registration (used as --name)
-     * @param routerHost      the Router host
-     * @param routerHttpPort  the Router HTTP port (for registration REST API)
-     * @param routerGrpcPort  the Router gRPC port (unused here, kept for API consistency)
-     * @param oidcCredentials OIDC credentials for capability registration (can be null if auth disabled)
-     * @param routesRef       routes reference (e.g., "file:///path/to/routes.yaml")
-     * @param rulesRef        rules reference (can be null)
+     * @param serviceName the service name for Router registration (used as --name)
+     * @param target the target/router connection configuration
+     * @param routesRef routes reference (e.g., "file:///path/to/routes.yaml")
+     * @param rulesRef rules reference (can be null)
      * @param dependenciesRef dependencies reference (can be null)
      */
     public void prepare(
-            String serviceName,
-            String routerHost,
-            int routerHttpPort,
-            int routerGrpcPort,
-            OidcCredentials oidcCredentials,
-            String routesRef,
-            String rulesRef,
-            String dependenciesRef) {
+            String serviceName, TargetConfiguration target, String routesRef, String rulesRef, String dependenciesRef) {
         this.grpcPort = PortUtils.findAvailablePort();
         this.name = serviceName;
-        this.registrationUrl = String.format("http://%s:%d", routerHost, routerHttpPort);
-        this.registrationAnnounceAddress = routerHost;
+        this.registrationUrl = target.registrationUri();
+        this.registrationAnnounceAddress = target.routerHost();
         this.routesRef = routesRef;
         this.rulesRef = rulesRef;
         this.dependenciesRef = dependenciesRef;
@@ -76,10 +67,11 @@ public class CamelCapabilityManager extends ProcessManager {
         LOG.debug(
                 "Camel Capability prepared with gRPC port {}, connecting to Router HTTP:{} gRPC:{}",
                 grpcPort,
-                routerHttpPort,
-                routerGrpcPort);
+                target.routerHttpPort(),
+                target.routerGrpcPort());
         LOG.debug("Camel Capability will register at {}", registrationUrl);
 
+        OidcCredentials oidcCredentials = target.oidcCredentials();
         if (oidcCredentials != null) {
             this.tokenEndpoint = oidcCredentials.tokenEndpoint();
             this.clientId = oidcCredentials.clientId();
