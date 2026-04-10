@@ -2,6 +2,10 @@
 
 Integration tests for Wanaku file resource provider capability.
 
+Test-specific resources live under `src/test/resources`:
+- `wanaku-realm.json` for the Keycloak test realm
+- `logback-test.xml` for test logging configuration
+
 ## Prerequisites
 
 File provider JAR is required. Download via:
