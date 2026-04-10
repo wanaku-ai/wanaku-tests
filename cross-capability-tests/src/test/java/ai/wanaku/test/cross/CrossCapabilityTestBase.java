@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import ai.wanaku.test.base.BaseIntegrationTest;
 import ai.wanaku.test.client.RouterClient;
 import ai.wanaku.test.config.OidcCredentials;
+import ai.wanaku.test.config.TargetConfiguration;
 import ai.wanaku.test.fixtures.TestFixtures;
 import ai.wanaku.test.managers.CamelCapabilityManager;
 import ai.wanaku.test.managers.ResourceProviderManager;
@@ -43,10 +44,11 @@ public abstract class CrossCapabilityTestBase extends BaseIntegrationTest {
 
     protected ResourceProviderManager startResourceProvider() throws Exception {
         OidcCredentials oidcCredentials = getOidcCredentials();
+        TargetConfiguration target = new TargetConfiguration(
+                "localhost", routerManager.getHttpPort(), routerManager.getGrpcPort(), oidcCredentials);
 
         resourceProviderManager = new ResourceProviderManager(config);
-        resourceProviderManager.prepare(
-                "localhost", routerManager.getHttpPort(), routerManager.getGrpcPort(), oidcCredentials);
+        resourceProviderManager.prepare(target);
         resourceProviderManager.setLogContext("file-provider", getClass().getSimpleName(), "file-provider");
         resourceProviderManager.start(getClass().getSimpleName());
 
@@ -63,14 +65,13 @@ public abstract class CrossCapabilityTestBase extends BaseIntegrationTest {
         Path rulesRef = fixtureDir.resolve("rules.yaml");
 
         OidcCredentials oidcCredentials = getOidcCredentials();
+        TargetConfiguration target = new TargetConfiguration(
+                "localhost", routerManager.getHttpPort(), routerManager.getGrpcPort(), oidcCredentials);
 
         camelCapabilityManager = new CamelCapabilityManager(config);
         camelCapabilityManager.prepare(
                 serviceName,
-                "localhost",
-                routerManager.getHttpPort(),
-                routerManager.getGrpcPort(),
-                oidcCredentials,
+                target,
                 "file://" + routesRef.toAbsolutePath(),
                 rulesRef.toFile().exists() ? "file://" + rulesRef.toAbsolutePath() : null,
                 null);
