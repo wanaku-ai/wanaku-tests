@@ -16,6 +16,7 @@
         <module>test-common</module>
         <module>http-capability-tests</module>
         <module>resources-tests</module>
+        <module>cross-capability-tests</module>
         <module>camel-integration-capability-tests</module>
     </modules>
 

@@ -1,0 +1,29 @@
+- route:
+    id: simple-greeting
+    from:
+      uri: direct:simple-greeting
+      steps:
+        - setBody:
+            constant: "Hello from CIC!"
+        - convertBodyTo:
+            type: java.lang.String
+
+- route:
+    id: weather-lookup
+    from:
+      uri: direct:weather-lookup
+      steps:
+        - setBody:
+            simple: "Weather report for ${header.Wanaku.city}: sunny, 25C"
+        - convertBodyTo:
+            type: java.lang.String
+
+- route:
+    id: explicit-param-tool
+    from:
+      uri: direct:explicit-param-tool
+      steps:
+        - setBody:
+            simple: "Received custom header: ${header.CUSTOM_HEADER}"
+        - convertBodyTo:
+            type: java.lang.String
