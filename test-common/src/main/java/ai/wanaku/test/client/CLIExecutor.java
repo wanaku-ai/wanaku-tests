@@ -128,19 +128,28 @@ public class CLIExecutor {
 
     /**
      * Checks if the CLI is available.
-     * Note: Wanaku CLI may return exit code 1 for --version even when working correctly,
-     * so we check for output presence (stdout or stderr) instead of just exit code.
+     * For JAR-based CLIs, verifies the file exists (avoids unreliable --version subprocess).
+     * For binary CLIs, attempts to execute --version.
      */
     public boolean isAvailable() {
+        if (cliPath.endsWith(".jar")) {
+            Path jarPath = Path.of(cliPath).toAbsolutePath().normalize();
+            boolean exists = jarPath.toFile().exists();
+            if (!exists) {
+                LOG.warn("CLI JAR not found at resolved path '{}'", jarPath);
+            }
+            return exists;
+        }
+
         try {
             CLIResult result = execute("--version");
-            // Exit code -1 indicates an error (IOException, timeout, etc.)
-            if (result.getExitCode() == -1) {
-                return false;
+            boolean available = result.getExitCode() != -1;
+            if (!available) {
+                LOG.warn("CLI not available at '{}': {}", cliPath, result.getCombinedOutput());
             }
-            // CLI is available if it produces any output or exits successfully
-            return !result.getCombinedOutput().isEmpty() || result.isSuccess();
+            return available;
         } catch (Exception e) {
+            LOG.warn("CLI availability check failed: {}", e.getMessage());
             return false;
         }
     }
