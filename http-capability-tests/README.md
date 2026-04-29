@@ -8,10 +8,10 @@ Required artifacts are downloaded via:
 
 ```bash
 cd ..
-./artifacts/download.sh
+./artifacts/download.sh 0.1.0
 ```
 
-This downloads Router, HTTP Tool Service, and CLI from [wanaku releases](https://github.com/wanaku-ai/wanaku/releases/tag/early-access).
+This downloads Router, HTTP Tool Service, and CLI from [wanaku releases](https://github.com/wanaku-ai/wanaku/releases).
 
 ## Run Tests
 
