@@ -31,9 +31,7 @@ public abstract class ResourceTestBase extends BaseIntegrationTest {
 
     @BeforeAll
     static void startFileProvider(TestInfo testInfo) throws Exception {
-        if (config == null
-                || config.getFileProviderJarPath() == null
-                || !config.getFileProviderJarPath().toFile().exists()) {
+        if (!isFileProviderAvailable()) {
             LOG.warn("File provider JAR not available, skipping provider startup");
             return;
         }
@@ -103,12 +101,31 @@ public abstract class ResourceTestBase extends BaseIntegrationTest {
         return file;
     }
 
+    protected static boolean isFileProviderAvailable() {
+        if (config == null) {
+            LOG.warn("A configuration was not provided");
+            return false;
+        }
+        return isFileAvailable(config.getFileProviderJarPath());
+    }
+
     /**
-     * Checks if the file provider JAR is available.
+     * Checks if the file exists and is available.
      */
-    protected boolean isFileProviderAvailable() {
-        return config != null
-                && config.getFileProviderJarPath() != null
-                && config.getFileProviderJarPath().toFile().exists();
+    protected static boolean isFileAvailable(Path path) {
+        if (path == null) {
+            LOG.warn("Couldn't determine the path to the jar (config returned null)");
+
+            return false;
+        }
+
+        final boolean exists = path.toFile().exists();
+        if (!exists) {
+            LOG.warn("The expected file doesn't exist at the location {}", path);
+
+            return false;
+        }
+
+        return true;
     }
 }
