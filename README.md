@@ -25,7 +25,8 @@ Tests require Router, HTTP Capability, File Provider, and CLI JARs. Choose one o
 
 **Option A: Download from GitHub releases (recommended)**
 ```bash
-./artifacts/download.sh
+./artifacts/download.sh 0.1.0             # release
+./artifacts/download.sh 0.1.1-SNAPSHOT    # snapshot (early-access)
 ```
 
 **Option B: Copy from local Wanaku build**

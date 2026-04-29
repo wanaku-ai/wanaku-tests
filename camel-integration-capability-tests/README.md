@@ -8,7 +8,7 @@ Required artifacts are downloaded via:
 
 ```bash
 cd ..
-./artifacts/download.sh
+./artifacts/download.sh 0.1.0
 ```
 
 Docker is required for Keycloak (all tests) and PostgreSQL (database tests).
