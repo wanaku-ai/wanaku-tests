@@ -45,6 +45,7 @@ public class ResourceProviderManager extends ProcessManager {
                 target.routerGrpcPort());
 
         addSystemProperty("quarkus.http.port", "0");
+        addSystemProperty("quarkus.grpc.server.use-separate-server", "true");
         addSystemProperty("quarkus.grpc.server.port", String.valueOf(grpcPort));
 
         String registrationUri = target.registrationUri();
