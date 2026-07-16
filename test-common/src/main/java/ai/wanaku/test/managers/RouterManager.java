@@ -45,6 +45,7 @@ public class RouterManager extends ProcessManager {
 
         // Configure Quarkus properties
         addSystemProperty("quarkus.http.port", String.valueOf(httpPort));
+        addSystemProperty("quarkus.grpc.server.use-separate-server", "true");
         addSystemProperty("quarkus.grpc.server.port", String.valueOf(grpcPort));
 
         Path dataDir = config.getTempDataDir();

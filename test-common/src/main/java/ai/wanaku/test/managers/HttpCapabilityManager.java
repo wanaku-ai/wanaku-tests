@@ -46,7 +46,8 @@ public class HttpCapabilityManager extends ProcessManager {
                 target.routerGrpcPort());
 
         // Configure Quarkus properties
-        addSystemProperty("quarkus.http.port", "0"); // Disable HTTP, only gRPC
+        addSystemProperty("quarkus.http.port", "0");
+        addSystemProperty("quarkus.grpc.server.use-separate-server", "true");
         addSystemProperty("quarkus.grpc.server.port", String.valueOf(grpcPort));
 
         // Configure Router connection for capability registration (HTTP REST API)
