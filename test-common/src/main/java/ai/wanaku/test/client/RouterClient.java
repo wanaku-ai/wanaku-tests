@@ -43,9 +43,15 @@ public class RouterClient {
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
     private final String baseUrl;
+    private final String accessToken;
 
     public RouterClient(String baseUrl) {
+        this(baseUrl, null);
+    }
+
+    public RouterClient(String baseUrl, String accessToken) {
         this.baseUrl = baseUrl;
+        this.accessToken = accessToken;
         this.httpClient =
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
         this.objectMapper = new ObjectMapper();
@@ -566,7 +572,12 @@ public class RouterClient {
     }
 
     private HttpRequest.Builder buildRequest(String path) {
-        return HttpRequest.newBuilder().uri(URI.create(baseUrl + path)).timeout(Duration.ofSeconds(30));
+        HttpRequest.Builder builder =
+                HttpRequest.newBuilder().uri(URI.create(baseUrl + path)).timeout(Duration.ofSeconds(30));
+        if (accessToken != null) {
+            builder.header("Authorization", "Bearer " + accessToken);
+        }
+        return builder;
     }
 
     public String getBaseUrl() {
