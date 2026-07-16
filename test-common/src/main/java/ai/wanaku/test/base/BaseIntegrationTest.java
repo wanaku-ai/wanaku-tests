@@ -108,15 +108,16 @@ public abstract class BaseIntegrationTest {
 
         // Create RouterClient and McpClient
         if (routerManager != null && routerManager.isRunning()) {
-            routerClient = new RouterClient(routerManager.getBaseUrl());
+            String accessToken = null;
+            if (keycloakManager != null && keycloakManager.isRunning()) {
+                accessToken = keycloakManager.getMcpToken();
+                LOG.debug("Obtained MCP access token with wanaku-mcp-client scope");
+            }
+
+            routerClient = new RouterClient(routerManager.getBaseUrl(), accessToken);
 
             // Create MCP client with authentication token (requires wanaku-mcp-client scope)
             try {
-                String accessToken = null;
-                if (keycloakManager != null && keycloakManager.isRunning()) {
-                    accessToken = keycloakManager.getMcpToken();
-                    LOG.debug("Obtained MCP access token with wanaku-mcp-client scope");
-                }
                 mcpClient = new McpTestClient(routerManager.getBaseUrl(), accessToken);
                 mcpClient.connect();
                 LOG.debug("MCP client connected");
