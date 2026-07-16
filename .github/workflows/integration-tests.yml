@@ -58,7 +58,7 @@ jobs:
           ./artifacts/download.sh "${{ steps.version.outputs.version }}"
 
       - name: Run integration tests
-        run: mvn -B verify --file pom.xml
+        run: mvn -B verify --fail-at-end --file pom.xml
 
       - name: Test summary
         if: always()
