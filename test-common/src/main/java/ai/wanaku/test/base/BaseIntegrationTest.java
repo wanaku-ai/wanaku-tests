@@ -1,7 +1,6 @@
 package ai.wanaku.test.base;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import org.awaitility.Awaitility;
@@ -16,24 +15,24 @@ import ai.wanaku.test.managers.HttpCapabilityManager;
 import ai.wanaku.test.managers.KeycloakManager;
 import ai.wanaku.test.managers.RouterManager;
 
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 /**
  * Abstract base class for Wanaku integration tests.
  * Provides layered lifecycle management:
- * - Suite-scoped: Keycloak, Router (shared across all tests)
+ * - Module-scoped: Keycloak, Router (shared across all test classes via {@link SharedInfrastructureExtension})
  * - Test-scoped: HttpToolService, McpClient (fresh per test)
  */
+@ExtendWith(SharedInfrastructureExtension.class)
 public abstract class BaseIntegrationTest {
 
-    // Dynamic logger - uses actual test class name instead of BaseIntegrationTest
     private static Logger LOG = LoggerFactory.getLogger(BaseIntegrationTest.class);
 
-    // Suite-scoped resources (shared across all tests)
+    // Module-scoped resources (populated by SharedInfrastructureExtension, shared across all test classes)
     protected static TestConfiguration config;
     protected static KeycloakManager keycloakManager;
     protected static RouterManager routerManager;
@@ -46,58 +45,10 @@ public abstract class BaseIntegrationTest {
     protected String testName;
 
     @BeforeAll
-    static void setupSuiteInfrastructure(TestInfo testInfo) throws Exception {
-        // Use actual test class for logging
+    static void setupSuiteInfrastructure(TestInfo testInfo) {
         Class<?> testClass = testInfo.getTestClass().orElse(BaseIntegrationTest.class);
-        String testClassName = testClass.getSimpleName();
         LOG = LoggerFactory.getLogger(testClass);
-        LOG.info("=== Setting up suite infrastructure ===");
-
-        // Create isolated temp directory for this test suite
-        tempDataDir = Files.createTempDirectory("wanaku-test-");
-        LOG.debug("Created temp directory: {}", tempDataDir);
-
-        // Load configuration (finds JARs automatically)
-        TestConfiguration baseConfig = TestConfiguration.fromSystemProperties();
-        config = TestConfiguration.builder()
-                .artifactsDir(baseConfig.getArtifactsDir())
-                .routerJarPath(baseConfig.getRouterJarPath())
-                .httpToolServiceJarPath(baseConfig.getHttpToolServiceJarPath())
-                .fileProviderJarPath(baseConfig.getFileProviderJarPath())
-                .camelCapabilityJarPath(baseConfig.getCamelCapabilityJarPath())
-                .tempDataDir(tempDataDir)
-                .defaultTimeout(baseConfig.getDefaultTimeout())
-                .build();
-
-        LOG.debug("Router JAR: {}", config.getRouterJarPath());
-        LOG.debug("HTTP Capability JAR: {}", config.getHttpToolServiceJarPath());
-
-        // Check if we should skip infrastructure setup (for unit tests of test-common)
-        if (shouldSkipInfrastructure()) {
-            LOG.info("Skipping infrastructure setup (no JARs available)");
-            return;
-        }
-
-        // Start Keycloak
-        keycloakManager = new KeycloakManager();
-        try {
-            keycloakManager.start();
-        } catch (Exception e) {
-            LOG.warn("Keycloak startup failed, Router will run without authentication: {}", e.getMessage());
-        }
-
-        // Start Router
-        if (config.getRouterJarPath() != null
-                && config.getRouterJarPath().toFile().exists()) {
-            routerManager = new RouterManager(config);
-            routerManager.prepare();
-            routerManager.start(testClassName);
-            LOG.info("Router started on port {}", routerManager.getHttpPort());
-        } else {
-            LOG.warn("Router JAR not found at {}, skipping Router startup", config.getRouterJarPath());
-        }
-
-        LOG.info("=== Suite infrastructure ready ===");
+        LOG.info("=== Test class starting: {} (reusing shared infrastructure) ===", testClass.getSimpleName());
     }
 
     @BeforeEach
@@ -192,75 +143,6 @@ public abstract class BaseIntegrationTest {
         }
 
         LOG.debug("Test teardown complete: {}", testName);
-    }
-
-    @AfterAll
-    static void teardownSuiteInfrastructure() {
-        LOG.info("=== Tearing down suite infrastructure ===");
-
-        // Stop Router
-        if (routerManager != null) {
-            routerManager.stop();
-            routerManager = null;
-        }
-
-        // Stop Keycloak
-        if (keycloakManager != null) {
-            keycloakManager.stop();
-            keycloakManager = null;
-        }
-
-        // Cleanup temp directory
-        if (tempDataDir != null) {
-            try {
-                deleteRecursively(tempDataDir);
-            } catch (IOException e) {
-                LOG.warn("Failed to cleanup temp directory: {}", e.getMessage());
-            }
-        }
-
-        LOG.info("=== Suite infrastructure teardown complete ===");
-    }
-
-    /**
-     * Checks if infrastructure setup should be skipped.
-     * Override this in subclasses for different behavior.
-     */
-    protected static boolean shouldSkipInfrastructure() {
-        Path artifactsDir = Path.of(System.getProperty("wanaku.test.artifacts.dir", "artifacts"));
-        return !Files.exists(artifactsDir) || !hasJars(artifactsDir);
-    }
-
-    private static boolean hasJars(Path dir) {
-        try {
-            return Files.list(dir).anyMatch(p -> {
-                // Check for standalone JAR files
-                if (p.toString().endsWith(".jar")) {
-                    return true;
-                }
-                // Check for Quarkus app directories containing quarkus-run.jar
-                if (Files.isDirectory(p)) {
-                    Path quarkusRunJar = p.resolve("quarkus-run.jar");
-                    return Files.exists(quarkusRunJar);
-                }
-                return false;
-            });
-        } catch (IOException e) {
-            return false;
-        }
-    }
-
-    private static void deleteRecursively(Path path) throws IOException {
-        if (Files.isDirectory(path)) {
-            Files.list(path).forEach(p -> {
-                try {
-                    deleteRecursively(p);
-                } catch (IOException e) {
-                    LOG.warn("Failed to delete: {}", p);
-                }
-            });
-        }
-        Files.deleteIfExists(path);
     }
 
     /**
