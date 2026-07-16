@@ -91,14 +91,14 @@ public abstract class ProcessManager {
 
         state = ProcessState.STARTING;
 
-        // Isolate all Wanaku data to target/ so mvn clean removes it.
+        // Isolate all Wanaku data to a unique temp directory per process instance.
         // Without this, processes write to ~/.wanaku/ which conflicts with
         // local Wanaku usage and causes stale data between runs.
         // Each property is used by different process types:
         //   - infinispan.base-folder: Router (Infinispan .dat files)
         //   - service-home: Capabilities (provisioning .properties files)
         // Unused properties are harmlessly ignored by the receiving process.
-        Path dataDir = Path.of("target", "wanaku-data");
+        Path dataDir = Path.of("target", "wanaku-data", getProcessName() + "-" + System.nanoTime());
         addSystemProperty(
                 "wanaku.persistence.infinispan.base-folder",
                 dataDir.resolve("router").toAbsolutePath().toString());

@@ -6,7 +6,9 @@ import java.io.InputStreamReader;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -21,10 +23,15 @@ public class CLIExecutor {
     private static final Logger LOG = LoggerFactory.getLogger(CLIExecutor.class);
 
     private final String cliPath;
+    private final Map<String, String> environment = new HashMap<>();
     private Duration timeout = Duration.ofSeconds(30);
 
     public CLIExecutor(String cliPath) {
         this.cliPath = cliPath;
+    }
+
+    public void setEnvironment(String key, String value) {
+        environment.put(key, value);
     }
 
     /**
@@ -32,7 +39,11 @@ public class CLIExecutor {
      */
     public static CLIExecutor createDefault() {
         String cliPath = System.getProperty(WanakuTestConstants.PROP_CLI_PATH, WanakuTestConstants.DEFAULT_CLI_PATH);
-        return new CLIExecutor(cliPath);
+        CLIExecutor executor = new CLIExecutor(cliPath);
+        executor.setEnvironment(
+                "WANAKU_HOME",
+                Path.of("target", "wanaku-cli-home").toAbsolutePath().toString());
+        return executor;
     }
 
     /**
@@ -85,6 +96,9 @@ public class CLIExecutor {
                 }
 
                 pb.directory(effectiveWorkingDir.toFile());
+            }
+            if (!environment.isEmpty()) {
+                pb.environment().putAll(environment);
             }
             Process process = pb.start();
 
