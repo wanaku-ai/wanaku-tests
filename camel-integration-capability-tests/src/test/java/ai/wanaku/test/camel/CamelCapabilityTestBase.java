@@ -8,9 +8,11 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import org.awaitility.Awaitility;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import io.quarkiverse.mcp.server.ToolResponse;
 import ai.wanaku.test.base.BaseIntegrationTest;
 import ai.wanaku.test.client.DataStoreClient;
 import ai.wanaku.test.config.OidcCredentials;
@@ -243,6 +245,16 @@ public abstract class CamelCapabilityTestBase extends BaseIntegrationTest {
 
         camelManagers.add(manager);
         return manager;
+    }
+
+    protected void assertToolCallWithRetry(
+            String toolName, Map<String, Object> args, Consumer<ToolResponse> assertions) {
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofSeconds(2))
+                .untilAsserted(() -> {
+                    mcpClient.when().toolsCall(toolName, args, assertions).thenAssertResults();
+                });
     }
 
     /**

@@ -3,9 +3,12 @@ package ai.wanaku.test.http;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.testcontainers.containers.GenericContainer;
 import io.quarkus.test.junit.QuarkusTest;
 import ai.wanaku.test.model.HttpToolConfig;
 
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,15 +16,35 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assumptions.assumeThat;
 
 /**
- * Tests invoking public APIs (httpbin.org, jsonplaceholder, meowfacts) via MCP protocol.
+ * Tests invoking HTTP APIs (local go-httpbin container, jsonplaceholder, meowfacts) via MCP protocol.
  *
- * These tests register HTTP tools pointing to real public APIs and invoke them
+ * These tests register HTTP tools pointing to HTTP APIs and invoke them
  * through the MCP client, verifying the full end-to-end flow.
+ * httpbin endpoints use a local go-httpbin Testcontainer to avoid external network dependencies.
  */
 @QuarkusTest
 class PublicApiITCase extends HttpCapabilityTestBase {
 
     private static final Logger LOG = LoggerFactory.getLogger(PublicApiITCase.class);
+
+    @SuppressWarnings("resource")
+    private static GenericContainer<?> httpbinContainer;
+
+    private static String httpbinBaseUrl;
+
+    @BeforeAll
+    static void startHttpbin() {
+        httpbinContainer = new GenericContainer<>("mccutchen/go-httpbin").withExposedPorts(8080);
+        httpbinContainer.start();
+        httpbinBaseUrl = "http://" + httpbinContainer.getHost() + ":" + httpbinContainer.getMappedPort(8080);
+    }
+
+    @AfterAll
+    static void stopHttpbin() {
+        if (httpbinContainer != null) {
+            httpbinContainer.stop();
+        }
+    }
 
     @BeforeEach
     void assumeFullStackAndMcpAvailable() {
@@ -38,13 +61,13 @@ class PublicApiITCase extends HttpCapabilityTestBase {
         routerClient.registerTool(HttpToolConfig.builder()
                 .name("mcp-list-tool-1")
                 .description("First tool for MCP list test")
-                .uri("https://httpbin.org/get?tool=1")
+                .uri(httpbinBaseUrl + "/get?tool=1")
                 .build());
 
         routerClient.registerTool(HttpToolConfig.builder()
                 .name("mcp-list-tool-2")
                 .description("Second tool for MCP list test")
-                .uri("https://httpbin.org/get?tool=2")
+                .uri(httpbinBaseUrl + "/get?tool=2")
                 .build());
 
         // When/Then - List tools via MCP
@@ -96,7 +119,7 @@ class PublicApiITCase extends HttpCapabilityTestBase {
         HttpToolConfig config = HttpToolConfig.builder()
                 .name("httpbin-post-tool")
                 .description("Tool using httpbin.org POST endpoint")
-                .uri("https://httpbin.org/post")
+                .uri(httpbinBaseUrl + "/post")
                 .method("POST")
                 .property("wanaku_body", "string", "The request body")
                 .build();
@@ -164,7 +187,7 @@ class PublicApiITCase extends HttpCapabilityTestBase {
         HttpToolConfig config = HttpToolConfig.builder()
                 .name("httpbin-headers-tool")
                 .description("Tool with custom headers via configurationData")
-                .uri("https://httpbin.org/headers")
+                .uri(httpbinBaseUrl + "/headers")
                 .method("GET")
                 .build();
 
@@ -201,7 +224,7 @@ class PublicApiITCase extends HttpCapabilityTestBase {
         HttpToolConfig config = HttpToolConfig.builder()
                 .name("echo-param")
                 .description("Echo a parameter value")
-                .uri("https://httpbin.org/anything/{parameter.valueOrElse('value', 'default')}")
+                .uri(httpbinBaseUrl + "/anything/{parameter.valueOrElse('value', 'default')}")
                 .property("value", "string", "Value to echo in URL path")
                 .build();
 
@@ -216,7 +239,7 @@ class PublicApiITCase extends HttpCapabilityTestBase {
                     assertThat(response.content()).isNotEmpty();
                     // httpbin /anything returns JSON with "url" field containing the full request URL
                     String content = response.content().toString();
-                    assertThat(content).contains("httpbin.org/anything/test-value");
+                    assertThat(content).contains("/anything/test-value");
                 })
                 .thenAssertResults();
     }

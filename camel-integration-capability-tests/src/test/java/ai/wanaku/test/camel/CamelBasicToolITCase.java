@@ -56,15 +56,12 @@ class CamelBasicToolITCase extends CamelCapabilityTestBase {
     void shouldInvokeSimpleToolViaMcp() throws Exception {
         startCapability("simple-tool-svc", "simple-tool");
 
-        mcpClient
-                .when()
-                .toolsCall("simple-greeting", Map.of(), response -> {
-                    LOG.debug("=== MCP toolsCall response [simple-greeting]: {}", response.content());
-                    assertThat(response.isError()).isFalse();
-                    assertThat(response.content()).isNotEmpty();
-                    assertThat(response.content().get(0).asText().text()).contains("Hello from CIC!");
-                })
-                .thenAssertResults();
+        assertToolCallWithRetry("simple-greeting", Map.of(), response -> {
+            LOG.debug("=== MCP toolsCall response [simple-greeting]: {}", response.content());
+            assertThat(response.isError()).isFalse();
+            assertThat(response.content()).isNotEmpty();
+            assertThat(response.content().get(0).asText().text()).contains("Hello from CIC!");
+        });
     }
 
     @DisplayName("Invoke weather-lookup tool with city parameter and verify substitution")
@@ -72,15 +69,12 @@ class CamelBasicToolITCase extends CamelCapabilityTestBase {
     void shouldInvokeToolWithParameters() throws Exception {
         startCapability("simple-tool-svc", "simple-tool");
 
-        mcpClient
-                .when()
-                .toolsCall("weather-lookup", Map.of("city", "London"), response -> {
-                    LOG.debug("=== MCP toolsCall response [weather-lookup]: {}", response.content());
-                    assertThat(response.isError()).isFalse();
-                    assertThat(response.content()).isNotEmpty();
-                    assertThat(response.content().get(0).asText().text()).contains("London");
-                })
-                .thenAssertResults();
+        assertToolCallWithRetry("weather-lookup", Map.of("city", "London"), response -> {
+            LOG.debug("=== MCP toolsCall response [weather-lookup]: {}", response.content());
+            assertThat(response.isError()).isFalse();
+            assertThat(response.content()).isNotEmpty();
+            assertThat(response.content().get(0).asText().text()).contains("London");
+        });
     }
 
     @DisplayName("Invoke explicit-param-tool with mapped header and verify substitution")
@@ -88,15 +82,12 @@ class CamelBasicToolITCase extends CamelCapabilityTestBase {
     void shouldInvokeToolWithExplicitParameterMapping() throws Exception {
         startCapability("simple-tool-svc", "simple-tool");
 
-        mcpClient
-                .when()
-                .toolsCall("explicit-param-tool", Map.of("myValue", "test-value-123"), response -> {
-                    LOG.debug("=== MCP toolsCall response [explicit-param-tool]: {}", response.content());
-                    assertThat(response.isError()).isFalse();
-                    assertThat(response.content()).isNotEmpty();
-                    assertThat(response.content().get(0).asText().text()).contains("test-value-123");
-                })
-                .thenAssertResults();
+        assertToolCallWithRetry("explicit-param-tool", Map.of("myValue", "test-value-123"), response -> {
+            LOG.debug("=== MCP toolsCall response [explicit-param-tool]: {}", response.content());
+            assertThat(response.isError()).isFalse();
+            assertThat(response.content()).isNotEmpty();
+            assertThat(response.content().get(0).asText().text()).contains("test-value-123");
+        });
     }
 
     @DisplayName("Invoke weather-lookup without required city parameter")
@@ -104,21 +95,18 @@ class CamelBasicToolITCase extends CamelCapabilityTestBase {
     void shouldHandleMissingRequiredParameter() throws Exception {
         startCapability("simple-tool-svc", "simple-tool");
 
-        mcpClient
-                .when()
-                .toolsCall("weather-lookup", Map.of(), response -> {
-                    LOG.debug(
-                            "=== MCP toolsCall response [weather-lookup-no-param]: isError={}, content={}",
-                            response.isError(),
-                            response.content());
-                    assertThat(response.isError())
-                            .as("CIC does not validate required params")
-                            .isFalse();
-                    String text = response.content().get(0).asText().text();
-                    assertThat(text).contains("Weather report for");
-                    assertThat(text).doesNotContain("London");
-                })
-                .thenAssertResults();
+        assertToolCallWithRetry("weather-lookup", Map.of(), response -> {
+            LOG.debug(
+                    "=== MCP toolsCall response [weather-lookup-no-param]: isError={}, content={}",
+                    response.isError(),
+                    response.content());
+            assertThat(response.isError())
+                    .as("CIC does not validate required params")
+                    .isFalse();
+            String text = response.content().get(0).asText().text();
+            assertThat(text).contains("Weather report for");
+            assertThat(text).doesNotContain("London");
+        });
     }
 
     @DisplayName("Load tool config from Data Store and verify tool works identically")
@@ -133,17 +121,18 @@ class CamelBasicToolITCase extends CamelCapabilityTestBase {
 
         dataStoreClient.upload("test-routes.camel.yaml", routesContent);
         dataStoreClient.upload("test-rules.yaml", rulesContent);
+        dataStoreClient.upload("empty-deps.txt", "");
 
         startCapabilityFromDataStore(
-                "ds-tool-svc", "datastore://test-routes.camel.yaml", "datastore://test-rules.yaml", null);
+                "ds-tool-svc",
+                "datastore://test-routes.camel.yaml",
+                "datastore://test-rules.yaml",
+                "datastore://empty-deps.txt");
 
-        mcpClient
-                .when()
-                .toolsCall("simple-greeting", Map.of(), response -> {
-                    LOG.debug("=== MCP toolsCall response [simple-greeting-datastore]: {}", response.content());
-                    assertThat(response.isError()).isFalse();
-                    assertThat(response.content().get(0).asText().text()).contains("Hello from CIC!");
-                })
-                .thenAssertResults();
+        assertToolCallWithRetry("simple-greeting", Map.of(), response -> {
+            LOG.debug("=== MCP toolsCall response [simple-greeting-datastore]: {}", response.content());
+            assertThat(response.isError()).isFalse();
+            assertThat(response.content().get(0).asText().text()).contains("Hello from CIC!");
+        });
     }
 }

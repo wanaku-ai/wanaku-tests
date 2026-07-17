@@ -1,7 +1,9 @@
 package ai.wanaku.test.camel;
 
 import java.io.InputStream;
+import java.time.Duration;
 import java.util.Map;
+import org.awaitility.Awaitility;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import io.quarkus.test.junit.QuarkusTest;
@@ -69,17 +71,15 @@ class CamelPostgresToolITCase extends CamelCapabilityTestBase {
     void shouldQueryDatabaseViaTool() throws Exception {
         startPostgresCapability();
 
-        mcpClient
-                .when()
-                .toolsCall("query-db", Map.of("query", "SELECT id, name, email FROM users ORDER BY id"), response -> {
+        assertToolCallWithRetry(
+                "query-db", Map.of("query", "SELECT id, name, email FROM users ORDER BY id"), response -> {
                     LOG.debug("=== MCP toolsCall response [query-db]: {}", response.content());
                     assertThat(response.isError()).isFalse();
                     assertThat(response.content()).isNotEmpty();
                     String text = response.content().get(0).asText().text();
                     assertThat(text).contains("Alice");
                     assertThat(text).contains("Bob");
-                })
-                .thenAssertResults();
+                });
     }
 
     @DisplayName("Query non-existent table and verify error response")
@@ -87,24 +87,29 @@ class CamelPostgresToolITCase extends CamelCapabilityTestBase {
     void shouldHandleDatabaseError() throws Exception {
         startPostgresCapability();
 
-        mcpClient
-                .when()
-                .toolsCall("query-db")
-                .withArguments(Map.of("query", "SELECT * FROM nonexistent_table"))
-                .withErrorAssert(error -> {
-                    LOG.debug(
-                            "=== MCP toolsCall error [query-db-error]: code={}, message={}",
-                            error.code(),
-                            error.message());
-                    assertThat(error.code())
-                            .as("Invalid SQL should return internal error code")
-                            .isEqualTo(-32603);
-                    assertThat(error.message())
-                            .as("Error message should indicate internal error")
-                            .containsIgnoringCase("Internal error");
-                })
-                .send()
-                .thenAssertResults();
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofSeconds(2))
+                .untilAsserted(() -> {
+                    mcpClient
+                            .when()
+                            .toolsCall("query-db")
+                            .withArguments(Map.of("query", "SELECT * FROM nonexistent_table"))
+                            .withErrorAssert(error -> {
+                                LOG.debug(
+                                        "=== MCP toolsCall error [query-db-error]: code={}, message={}",
+                                        error.code(),
+                                        error.message());
+                                assertThat(error.code())
+                                        .as("Invalid SQL should return internal error code")
+                                        .isEqualTo(-32603);
+                                assertThat(error.message())
+                                        .as("Error message should indicate internal error")
+                                        .containsIgnoringCase("Internal error");
+                            })
+                            .send()
+                            .thenAssertResults();
+                });
     }
 
     @DisplayName("Load PostgreSQL tool config from Data Store and verify it works")
@@ -133,15 +138,12 @@ class CamelPostgresToolITCase extends CamelCapabilityTestBase {
                 "datastore://test-pg-rules.yaml",
                 "datastore://test-pg-dependencies.txt");
 
-        mcpClient
-                .when()
-                .toolsCall("query-db", Map.of("query", "SELECT name FROM users ORDER BY id"), response -> {
-                    LOG.debug("=== MCP toolsCall response [query-db-datastore]: {}", response.content());
-                    assertThat(response.isError()).isFalse();
-                    assertThat(response.content()).isNotEmpty();
-                    assertThat(response.content().get(0).asText().text()).contains("Alice");
-                })
-                .thenAssertResults();
+        assertToolCallWithRetry("query-db", Map.of("query", "SELECT name FROM users ORDER BY id"), response -> {
+            LOG.debug("=== MCP toolsCall response [query-db-datastore]: {}", response.content());
+            assertThat(response.isError()).isFalse();
+            assertThat(response.content()).isNotEmpty();
+            assertThat(response.content().get(0).asText().text()).contains("Alice");
+        });
     }
 
     // ── Helpers ─────────────────────────────────────────────────────
