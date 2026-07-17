@@ -65,7 +65,7 @@ class NamespaceCliITCase extends RouterTestBase {
         namespaceClient.create(name, "/" + name);
         assertThat(namespaceClient.exists(name)).isTrue();
 
-        CLIResult result = executeWithAuth("namespaces", "delete", "--host", getRouterHost(), "--name", name);
+        CLIResult result = executeWithAuth("namespaces", "delete", "--host", getRouterHost(), name);
 
         assumeThat(result.getCombinedOutput())
                 .as("CLI delete should not return auth redirect")

@@ -27,7 +27,7 @@ class ForwardsCrudITCase extends RouterTestBase {
     @DisplayName("Add a forward and verify it exists")
     @Test
     void shouldAddForward() {
-        forwardsClient.add("test-fwd", "http://example.com/mcp", nsId);
+        forwardsClient.add("test-fwd", routerManager.getBaseUrl() + "/mcp/", nsId);
 
         assertThat(forwardsClient.exists("test-fwd")).isTrue();
     }
@@ -35,9 +35,9 @@ class ForwardsCrudITCase extends RouterTestBase {
     @DisplayName("Add 3 forwards and verify all are present in the list")
     @Test
     void shouldListForwards() {
-        forwardsClient.add("fwd-alpha", "http://alpha.example.com/mcp", nsId);
-        forwardsClient.add("fwd-beta", "http://beta.example.com/mcp", nsId);
-        forwardsClient.add("fwd-gamma", "http://gamma.example.com/mcp", nsId);
+        forwardsClient.add("fwd-alpha", routerManager.getBaseUrl() + "/mcp/", nsId);
+        forwardsClient.add("fwd-beta", routerManager.getBaseUrl() + "/mcp/", nsId);
+        forwardsClient.add("fwd-gamma", routerManager.getBaseUrl() + "/mcp/", nsId);
 
         List<JsonNode> forwards = forwardsClient.list();
 
@@ -47,7 +47,7 @@ class ForwardsCrudITCase extends RouterTestBase {
     @DisplayName("Add a forward, remove it, and verify it no longer exists")
     @Test
     void shouldRemoveForward() {
-        forwardsClient.add("fwd-to-remove", "http://example.com/mcp", nsId);
+        forwardsClient.add("fwd-to-remove", routerManager.getBaseUrl() + "/mcp/", nsId);
         assertThat(forwardsClient.exists("fwd-to-remove")).isTrue();
 
         boolean removed = forwardsClient.remove("fwd-to-remove");
@@ -67,7 +67,7 @@ class ForwardsCrudITCase extends RouterTestBase {
     @DisplayName("Add a forward, call refresh, and verify no error occurs")
     @Test
     void shouldRefreshForwards() {
-        forwardsClient.add("refresh-fwd", "http://example.com/mcp", nsId);
+        forwardsClient.add("refresh-fwd", routerManager.getBaseUrl() + "/mcp/", nsId);
 
         forwardsClient.refresh("refresh-fwd");
     }

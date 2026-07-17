@@ -44,7 +44,7 @@ class ForwardsCliITCase extends RouterTestBase {
                 "--name",
                 name,
                 "--service",
-                "http://example.com/mcp",
+                routerManager.getBaseUrl() + "/mcp/",
                 "--namespace-name",
                 "fwd-cli-test-ns");
 
@@ -58,7 +58,7 @@ class ForwardsCliITCase extends RouterTestBase {
     @Test
     void shouldListForwardsViaCli() {
         String name = "cli-list-fwd";
-        forwardsClient.add(name, "http://example.com/mcp", nsId);
+        forwardsClient.add(name, routerManager.getBaseUrl() + "/mcp/", nsId);
 
         CLIResult result = executeWithAuth("forwards", "list", "--host", getRouterHost());
 
@@ -74,7 +74,7 @@ class ForwardsCliITCase extends RouterTestBase {
     @Test
     void shouldRemoveForwardViaCli() {
         String name = "cli-remove-fwd";
-        forwardsClient.add(name, "http://example.com/mcp", nsId);
+        forwardsClient.add(name, routerManager.getBaseUrl() + "/mcp/", nsId);
         assertThat(forwardsClient.exists(name)).isTrue();
 
         CLIResult result = executeWithAuth("forwards", "remove", "--host", getRouterHost(), "--name", name);

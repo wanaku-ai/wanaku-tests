@@ -19,6 +19,7 @@ class McpForwardingBasicITCase extends McpForwardingTestBase {
         assumeThat(isTargetRouterAvailable())
                 .as("Target router must be available for forwarding tests")
                 .isTrue();
+        assumeThat(testNamespaceId).as("Test namespace must be available").isNotNull();
     }
 
     @DisplayName("Add a forward to a remote MCP server")
@@ -32,9 +33,10 @@ class McpForwardingBasicITCase extends McpForwardingTestBase {
     @DisplayName("List forwards after adding multiple entries")
     @Test
     void shouldListForwards() {
-        forwardsClient.add("fwd-alpha", getTargetMcpUrl(), testNamespaceId);
-        forwardsClient.add("fwd-beta", "http://localhost:9999/mcp/", testNamespaceId);
-        forwardsClient.add("fwd-gamma", "http://localhost:9998/mcp/", testNamespaceId);
+        String targetUrl = getTargetMcpUrl();
+        forwardsClient.add("fwd-alpha", targetUrl, testNamespaceId);
+        forwardsClient.add("fwd-beta", targetUrl, testNamespaceId);
+        forwardsClient.add("fwd-gamma", targetUrl, testNamespaceId);
 
         List<JsonNode> forwards = forwardsClient.list();
 
