@@ -1,9 +1,7 @@
 package ai.wanaku.test.camel;
 
 import java.io.InputStream;
-import java.time.Duration;
 import java.util.Map;
-import org.awaitility.Awaitility;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import io.quarkus.test.junit.QuarkusTest;
@@ -87,29 +85,16 @@ class CamelPostgresToolITCase extends CamelCapabilityTestBase {
     void shouldHandleDatabaseError() throws Exception {
         startPostgresCapability();
 
-        Awaitility.await()
-                .atMost(Duration.ofSeconds(90))
-                .pollInterval(Duration.ofSeconds(3))
-                .untilAsserted(() -> {
-                    mcpClient
-                            .when()
-                            .toolsCall("query-db")
-                            .withArguments(Map.of("query", "SELECT * FROM nonexistent_table"))
-                            .withErrorAssert(error -> {
-                                LOG.debug(
-                                        "=== MCP toolsCall error [query-db-error]: code={}, message={}",
-                                        error.code(),
-                                        error.message());
-                                assertThat(error.code())
-                                        .as("Invalid SQL should return internal error code")
-                                        .isEqualTo(-32603);
-                                assertThat(error.message())
-                                        .as("Error message should indicate internal error")
-                                        .containsIgnoringCase("Internal error");
-                            })
-                            .send()
-                            .thenAssertResults();
-                });
+        assertToolCallWithRetry("query-db", Map.of("query", "SELECT * FROM nonexistent_table"), response -> {
+            LOG.debug("=== MCP toolsCall response [query-db-error]: {}", response.content());
+            assertThat(response.isError())
+                    .as("Invalid SQL should return an error response")
+                    .isTrue();
+            assertThat(response.content()).isNotEmpty();
+            assertThat(response.content().get(0).asText().text())
+                    .as("Error response should mention the invocation failure")
+                    .containsIgnoringCase("Unable to invoke tool");
+        });
     }
 
     @DisplayName("Load PostgreSQL tool config from Data Store and verify it works")
