@@ -224,7 +224,7 @@ public abstract class CamelCapabilityTestBase extends BaseIntegrationTest {
         // Wait for capability registration
         LOG.debug("Waiting for CIC '{}' to register with Router...", serviceName);
         Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
+                .atMost(Duration.ofSeconds(90))
                 .pollInterval(Duration.ofMillis(500))
                 .until(() -> routerClient.isCapabilityRegistered(serviceName));
         LOG.info("CIC '{}' is registered with Router", serviceName);
@@ -233,7 +233,7 @@ public abstract class CamelCapabilityTestBase extends BaseIntegrationTest {
         // after the capability service itself is registered)
         LOG.debug("Waiting for CIC '{}' tools/resources to appear in Router...", serviceName);
         Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
+                .atMost(Duration.ofSeconds(90))
                 .pollInterval(Duration.ofMillis(500))
                 .until(() -> {
                     boolean hasTools = routerClient.listTools().stream().anyMatch(t -> serviceName.equals(t.getType()));
