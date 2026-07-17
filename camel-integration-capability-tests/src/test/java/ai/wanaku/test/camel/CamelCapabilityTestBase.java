@@ -8,6 +8,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import org.awaitility.Awaitility;
 import org.slf4j.Logger;
@@ -237,8 +238,12 @@ public abstract class CamelCapabilityTestBase extends BaseIntegrationTest {
                 .pollInterval(Duration.ofMillis(500))
                 .until(() -> {
                     if (!manager.isRunning()) {
-                        throw new IllegalStateException(
-                                "CIC '" + serviceName + "' process exited before tools/resources registered.");
+                        String logPath = manager.getLogFile() != null
+                                ? manager.getLogFile().getAbsolutePath()
+                                : "unknown";
+                        throw new IllegalStateException("CIC '" + serviceName + "' process exited (exit code: "
+                                + manager.getExitCode() + ") before tools/resources registered."
+                                + " Log file: " + logPath);
                     }
                     boolean hasTools = routerClient.listTools().stream().anyMatch(t -> serviceName.equals(t.getType()));
                     boolean hasResources =
@@ -262,22 +267,19 @@ public abstract class CamelCapabilityTestBase extends BaseIntegrationTest {
         } catch (Exception e) {
             LOG.debug("MCP disconnect during reconnect: {}", e.getMessage());
         }
-        try {
-            String accessToken = null;
-            if (keycloakManager != null && keycloakManager.isRunning()) {
-                accessToken = keycloakManager.getMcpToken();
-            }
-            mcpClient = new McpTestClient(routerManager.getBaseUrl(), accessToken);
-            mcpClient.connect();
-            LOG.debug("MCP client reconnected");
-        } catch (Exception e) {
-            LOG.warn("Failed to reconnect MCP client: {}", e.getMessage());
+        mcpClient = null;
+        String accessToken = null;
+        if (keycloakManager != null && keycloakManager.isRunning()) {
+            accessToken = keycloakManager.getMcpToken();
         }
+        mcpClient = new McpTestClient(routerManager.getBaseUrl(), accessToken);
+        mcpClient.connect();
+        LOG.debug("MCP client reconnected");
     }
 
     protected void assertToolCallWithRetry(
             String toolName, Map<String, Object> args, Consumer<ToolResponse> assertions) {
-        java.util.concurrent.atomic.AtomicBoolean loggedOnce = new java.util.concurrent.atomic.AtomicBoolean();
+        AtomicBoolean loggedOnce = new AtomicBoolean();
         Awaitility.await()
                 .atMost(Duration.ofSeconds(90))
                 .pollInterval(Duration.ofSeconds(3))
@@ -307,7 +309,7 @@ public abstract class CamelCapabilityTestBase extends BaseIntegrationTest {
                 });
     }
 
-    protected void assertResourceReadWithRetry(String resourceUri, Runnable assertion) {
+    protected void assertResourceReadWithRetry(Runnable assertion) {
         Awaitility.await()
                 .atMost(Duration.ofSeconds(90))
                 .pollInterval(Duration.ofSeconds(3))
