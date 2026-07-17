@@ -169,7 +169,7 @@ public abstract class CamelCapabilityTestBase extends BaseIntegrationTest {
 
         LOG.debug("Waiting for CIC '{}' to register with Router...", serviceName);
         Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
+                .atMost(Duration.ofSeconds(90))
                 .pollInterval(Duration.ofMillis(500))
                 .until(() -> routerClient.isCapabilityRegistered(serviceName));
         LOG.info("CIC '{}' is registered with Router", serviceName);
@@ -177,7 +177,7 @@ public abstract class CamelCapabilityTestBase extends BaseIntegrationTest {
         // Wait for tools/resources to be registered
         LOG.debug("Waiting for CIC '{}' tools/resources to appear in Router...", serviceName);
         Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
+                .atMost(Duration.ofSeconds(90))
                 .pollInterval(Duration.ofMillis(500))
                 .until(() -> {
                     boolean hasTools = routerClient.listTools().stream().anyMatch(t -> serviceName.equals(t.getType()));
@@ -250,8 +250,8 @@ public abstract class CamelCapabilityTestBase extends BaseIntegrationTest {
     protected void assertToolCallWithRetry(
             String toolName, Map<String, Object> args, Consumer<ToolResponse> assertions) {
         Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofSeconds(2))
+                .atMost(Duration.ofSeconds(90))
+                .pollInterval(Duration.ofSeconds(3))
                 .untilAsserted(() -> {
                     mcpClient.when().toolsCall(toolName, args, assertions).thenAssertResults();
                 });

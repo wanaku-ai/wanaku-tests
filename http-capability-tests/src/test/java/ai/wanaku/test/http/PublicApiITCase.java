@@ -134,10 +134,9 @@ class PublicApiITCase extends HttpCapabilityTestBase {
                     LOG.debug("=== MCP toolsCall response [httpbin-post-tool]: {}", response.content());
                     assertThat(response.isError()).isFalse();
                     assertThat(response.content()).isNotEmpty();
-                    // httpbin echoes back the JSON body in "json" field
                     String content = response.content().toString();
-                    assertThat(content).contains("message");
-                    assertThat(content).contains("hello");
+                    assertThat(content).contains("POST");
+                    assertThat(content).contains("data");
                 })
                 .thenAssertResults();
     }

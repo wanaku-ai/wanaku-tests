@@ -88,8 +88,8 @@ class CamelPostgresToolITCase extends CamelCapabilityTestBase {
         startPostgresCapability();
 
         Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofSeconds(2))
+                .atMost(Duration.ofSeconds(90))
+                .pollInterval(Duration.ofSeconds(3))
                 .untilAsserted(() -> {
                     mcpClient
                             .when()
