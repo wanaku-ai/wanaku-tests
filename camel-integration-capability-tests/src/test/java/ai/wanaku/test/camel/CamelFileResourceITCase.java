@@ -76,7 +76,7 @@ class CamelFileResourceITCase extends CamelCapabilityTestBase {
         Path testFile = createTestFile("test-read.txt", "Hello Wanaku from CIC resource");
         startFileResourceCapability(SERVICE_NAME, RESOURCE_NAME, testFile);
 
-        assertResourceReadWithRetry(RESOURCE_URI, () -> {
+        assertResourceReadWithRetry(() -> {
             mcpClient
                     .when()
                     .resourcesRead(RESOURCE_URI)
@@ -132,7 +132,7 @@ class CamelFileResourceITCase extends CamelCapabilityTestBase {
         startFileResourceCapability("switch-svc-b", "switch-res-b", fileB);
 
         // First read (with retry — CIC routes may not be fully started yet)
-        assertResourceReadWithRetry("switch-svc-a://switch-res-a", () -> {
+        assertResourceReadWithRetry(() -> {
             mcpClient
                     .when()
                     .resourcesRead("switch-svc-a://switch-res-a")
@@ -145,7 +145,7 @@ class CamelFileResourceITCase extends CamelCapabilityTestBase {
                     .thenAssertResults();
         });
 
-        assertResourceReadWithRetry("switch-svc-b://switch-res-b", () -> {
+        assertResourceReadWithRetry(() -> {
             mcpClient
                     .when()
                     .resourcesRead("switch-svc-b://switch-res-b")
@@ -219,7 +219,7 @@ class CamelFileResourceITCase extends CamelCapabilityTestBase {
                 "datastore://test-res-rules.yaml",
                 "datastore://empty-deps.txt");
 
-        assertResourceReadWithRetry(dsResourceUri, () -> {
+        assertResourceReadWithRetry(() -> {
             mcpClient
                     .when()
                     .resourcesRead(dsResourceUri)
