@@ -18,25 +18,43 @@ import static org.assertj.core.api.Assertions.assertThat;
 @QuarkusTest
 class CliResourceITCase extends ResourceTestBase {
 
+    private CLIExecutor cliExecutor;
+    private String authToken;
+
     @BeforeEach
     void checkInfrastructureAvailable() {
         assertThat(isRouterAvailable()).as("Router must be available").isTrue();
         assertThat(isFileProviderAvailable())
                 .as("File provider must be available")
                 .isTrue();
+
+        cliExecutor = CLIExecutor.createDefault();
+        assertThat(cliExecutor.isAvailable()).as("CLI must be available").isTrue();
+
+        if (keycloakManager != null && keycloakManager.isRunning()) {
+            authToken = keycloakManager.getMcpToken();
+        }
+    }
+
+    private CLIResult executeWithAuth(String... args) {
+        if (authToken != null) {
+            String[] authArgs = new String[args.length + 2];
+            System.arraycopy(args, 0, authArgs, 0, args.length);
+            authArgs[args.length] = "--token";
+            authArgs[args.length + 1] = authToken;
+            return cliExecutor.execute(authArgs);
+        }
+        return cliExecutor.execute(args);
     }
 
     @DisplayName("Expose a resource via CLI and verify it appears in the list")
     @Test
     void shouldExposeResourceViaCli() throws Exception {
-        CLIExecutor cliExecutor = CLIExecutor.createDefault();
-        assertThat(cliExecutor.isAvailable()).as("CLI must be available").isTrue();
-
         // Given
         String routerHost = routerManager.getBaseUrl();
 
         // When
-        CLIResult result = cliExecutor.execute(
+        CLIResult result = executeWithAuth(
                 "resources",
                 "expose",
                 "--host",
@@ -57,7 +75,7 @@ class CliResourceITCase extends ResourceTestBase {
         assertThat(routerClient.resourceExists("test-cli-resource")).isTrue();
 
         // Verify the resource also shows up in CLI list output
-        CLIResult listResult = cliExecutor.execute("resources", "list", "--host", routerHost);
+        CLIResult listResult = executeWithAuth("resources", "list", "--host", routerHost);
         assertThat(listResult.isSuccess()).as("CLI list should succeed").isTrue();
         assertThat(listResult.getCombinedOutput())
                 .as("CLI list output should contain the exposed resource")
@@ -67,9 +85,6 @@ class CliResourceITCase extends ResourceTestBase {
     @DisplayName("List multiple resources via CLI and verify all are captured in output")
     @Test
     void shouldListResourcesViaCli() throws Exception {
-        CLIExecutor cliExecutor = CLIExecutor.createDefault();
-        assertThat(cliExecutor.isAvailable()).as("CLI must be available").isTrue();
-
         // Given - expose multiple resources via REST
         String[] names = {"cli-list-alpha", "cli-list-beta", "cli-list-gamma"};
         for (String name : names) {
@@ -83,7 +98,7 @@ class CliResourceITCase extends ResourceTestBase {
 
         // When
         String routerHost = routerManager.getBaseUrl();
-        CLIResult result = cliExecutor.execute("resources", "list", "--host", routerHost);
+        CLIResult result = executeWithAuth("resources", "list", "--host", routerHost);
 
         // Then - verify output was captured via subprocess
         assertThat(result.isSuccess())
@@ -104,9 +119,6 @@ class CliResourceITCase extends ResourceTestBase {
     @DisplayName("Remove a resource via CLI and verify it no longer exists")
     @Test
     void shouldRemoveResourceViaCli() throws Exception {
-        CLIExecutor cliExecutor = CLIExecutor.createDefault();
-        assertThat(cliExecutor.isAvailable()).as("CLI must be available").isTrue();
-
         // Given - expose a resource first via REST
         Path testFile = createTestFile("test-cli-remove.txt", "CLI remove test");
         ResourceConfig config = ResourceConfig.builder()
@@ -120,7 +132,7 @@ class CliResourceITCase extends ResourceTestBase {
         // When
         String routerHost = routerManager.getBaseUrl();
         CLIResult result =
-                cliExecutor.execute("resources", "remove", "--host", routerHost, "--name", "cli-remove-resource");
+                executeWithAuth("resources", "remove", "--host", routerHost, "--name", "cli-remove-resource");
 
         // Then
         assertThat(result.isSuccess())
@@ -129,7 +141,7 @@ class CliResourceITCase extends ResourceTestBase {
         assertThat(routerClient.resourceExists("cli-remove-resource")).isFalse();
 
         // Verify the resource no longer shows up in CLI list output
-        CLIResult listResult = cliExecutor.execute("resources", "list", "--host", routerHost);
+        CLIResult listResult = executeWithAuth("resources", "list", "--host", routerHost);
         assertThat(listResult.isSuccess()).as("CLI list should succeed").isTrue();
         assertThat(listResult.getCombinedOutput())
                 .as("CLI list output should not contain the removed resource")

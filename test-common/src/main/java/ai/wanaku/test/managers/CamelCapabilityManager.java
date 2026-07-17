@@ -1,6 +1,7 @@
 package ai.wanaku.test.managers;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -166,9 +167,11 @@ public class CamelCapabilityManager extends ProcessManager {
             args.add(rulesRef);
         }
 
+        args.add("--dependencies");
         if (dependenciesRef != null) {
-            args.add("--dependencies");
             args.add(dependenciesRef);
+        } else {
+            args.add("file://" + getOrCreateEmptyDepsFile().toAbsolutePath());
         }
 
         args.add("--registration-url");
@@ -217,5 +220,18 @@ public class CamelCapabilityManager extends ProcessManager {
      */
     public int getGrpcPort() {
         return grpcPort;
+    }
+
+    private static Path getOrCreateEmptyDepsFile() {
+        Path emptyDeps = Path.of("target", "empty-dependencies.txt");
+        if (!emptyDeps.toFile().exists()) {
+            try {
+                Files.createDirectories(emptyDeps.getParent());
+                Files.createFile(emptyDeps);
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to create empty dependencies file", e);
+            }
+        }
+        return emptyDeps;
     }
 }
