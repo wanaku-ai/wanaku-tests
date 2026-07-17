@@ -620,6 +620,39 @@ public class RouterClient {
         return false;
     }
 
+    /**
+     * Checks if a capability service is registered and healthy.
+     * Polls the capabilities state endpoint to verify the Router's health probe
+     * has confirmed the service is ready to handle requests.
+     *
+     * @param serviceName the service name
+     * @return true if the service is healthy
+     */
+    public boolean isCapabilityHealthy(String serviceName) {
+        try {
+            HttpRequest request = buildRequest(WanakuTestConstants.ROUTER_CAPABILITIES_PATH + "/tools/state")
+                    .GET()
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() != 200) return false;
+
+            JsonNode data = objectMapper.readTree(response.body()).path("data");
+            JsonNode serviceRecords = data.path(serviceName);
+            if (serviceRecords.isMissingNode() || !serviceRecords.isArray()) return false;
+
+            for (JsonNode record : serviceRecords) {
+                String healthStatus = record.path("healthStatus").asText("");
+                if ("healthy".equalsIgnoreCase(healthStatus)) {
+                    return true;
+                }
+            }
+        } catch (IOException | InterruptedException e) {
+            LOG.debug("Failed to check capability health: {}", e.getMessage());
+        }
+        return false;
+    }
+
     // Exception classes
     public static class RouterClientException extends RuntimeException {
         public RouterClientException(String message) {

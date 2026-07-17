@@ -185,6 +185,8 @@ public abstract class CamelCapabilityTestBase extends BaseIntegrationTest {
                 });
         LOG.info("CIC '{}' tools/resources are available", serviceName);
 
+        waitForCapabilityHealthy(serviceName);
+
         camelManagers.add(manager);
         return manager;
     }
@@ -241,8 +243,19 @@ public abstract class CamelCapabilityTestBase extends BaseIntegrationTest {
                 });
         LOG.info("CIC '{}' tools/resources are available", serviceName);
 
+        waitForCapabilityHealthy(serviceName);
+
         camelManagers.add(manager);
         return manager;
+    }
+
+    private void waitForCapabilityHealthy(String serviceName) {
+        LOG.debug("Waiting for CIC '{}' to become healthy in Router...", serviceName);
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofMillis(500))
+                .until(() -> routerClient.isCapabilityHealthy(serviceName));
+        LOG.info("CIC '{}' is healthy", serviceName);
     }
 
     /**
