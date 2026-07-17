@@ -161,6 +161,48 @@ target/logs/
 - Suite-scoped: Keycloak, Router (shared across tests in a class)
 - Test-scoped: HTTP Capability (fresh per test)
 
+## Testing From Source (CI)
+
+The `full-integration-test` workflow builds all Wanaku components from source before running the integration tests. This is useful for validating unreleased changes across repositories.
+
+Each component accepts a repository (`owner/repo`) and branch input. All default to the `wanaku-ai` org on `main`.
+
+**Build all from a release branch (e.g. 0.2.x):**
+```bash
+gh workflow run full-integration-test.yml \
+  -f wanaku_branch=0.2.x \
+  -f sdk_branch=0.2.x \
+  -f cic_branch=0.2.x \
+  -f examples_branch=0.2.x \
+  -R <your github ID>/wanaku-tests
+```
+
+**Build only wanaku from a specific branch (others use main):**
+```bash
+gh workflow run full-integration-test.yml \
+  -f wanaku_branch=0.2.x \
+  -R <your github ID>/wanaku-tests
+```
+
+**Build from a fork:**
+```bash
+gh workflow run full-integration-test.yml \
+  -f wanaku_repo=<your github ID>/wanaku \
+  -f wanaku_branch=my-feature-branch \
+  -R <your github ID>/wanaku-tests
+```
+
+| Input | Default | Description |
+|-------|---------|-------------|
+| `wanaku_repo` | `wanaku-ai/wanaku` | Wanaku repository |
+| `wanaku_branch` | `main` | Wanaku branch |
+| `sdk_repo` | `wanaku-ai/wanaku-capabilities-java-sdk` | SDK repository |
+| `sdk_branch` | `main` | SDK branch |
+| `cic_repo` | `wanaku-ai/camel-integration-capability` | CIC repository |
+| `cic_branch` | `main` | CIC branch |
+| `examples_repo` | `wanaku-ai/wanaku-examples` | Examples repository |
+| `examples_branch` | `main` | Examples branch |
+
 ## Troubleshooting
 
 | Problem | Solution |
