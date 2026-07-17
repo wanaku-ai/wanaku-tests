@@ -55,7 +55,11 @@ public abstract class ResourceTestBase extends BaseIntegrationTest {
         resourceProviderManager.start(testClassName);
 
         LOG.debug("Waiting for file provider registration...");
-        RouterClient client = new RouterClient(routerManager.getBaseUrl());
+        String accessToken = null;
+        if (keycloakManager != null && keycloakManager.isRunning()) {
+            accessToken = keycloakManager.getMcpToken();
+        }
+        RouterClient client = new RouterClient(routerManager.getBaseUrl(), accessToken);
         Awaitility.await()
                 .atMost(Duration.ofSeconds(10))
                 .pollInterval(Duration.ofMillis(200))

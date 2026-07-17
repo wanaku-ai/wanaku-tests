@@ -18,12 +18,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 class HttpToolCliITCase extends HttpCapabilityTestBase {
 
     private CLIExecutor cliExecutor;
+    private String authToken;
 
     @BeforeEach
     void setupCli() {
         cliExecutor = CLIExecutor.createDefault();
         assertThat(cliExecutor.isAvailable()).as("CLI must be available").isTrue();
         assertThat(isRouterAvailable()).as("Router must be available").isTrue();
+
+        if (keycloakManager != null && keycloakManager.isRunning()) {
+            authToken = keycloakManager.getMcpToken();
+        }
     }
 
     @DisplayName("Register a tool via CLI and verify it appears in CLI list output")
@@ -34,7 +39,7 @@ class HttpToolCliITCase extends HttpCapabilityTestBase {
         String toolUri = "https://httpbin.org/get";
 
         // When
-        CLIResult result = cliExecutor.execute(
+        CLIResult result = executeWithAuth(
                 "tools",
                 "add",
                 "--host",
@@ -55,7 +60,7 @@ class HttpToolCliITCase extends HttpCapabilityTestBase {
         assertThat(routerClient.toolExists(toolName)).isTrue();
 
         // Verify the tool shows up in CLI list output
-        CLIResult listResult = cliExecutor.execute("tools", "list", "--host", getRouterHost());
+        CLIResult listResult = executeWithAuth("tools", "list", "--host", getRouterHost());
         assertThat(listResult.isSuccess()).as("CLI list should succeed").isTrue();
         assertThat(listResult.getCombinedOutput())
                 .as("CLI list output should contain the registered tool")
@@ -75,7 +80,7 @@ class HttpToolCliITCase extends HttpCapabilityTestBase {
         }
 
         // When
-        CLIResult result = cliExecutor.execute("tools", "list", "--host", getRouterHost());
+        CLIResult result = executeWithAuth("tools", "list", "--host", getRouterHost());
 
         // Then
         assertThat(result.isSuccess())
@@ -104,7 +109,7 @@ class HttpToolCliITCase extends HttpCapabilityTestBase {
         assertThat(routerClient.toolExists(toolName)).isTrue();
 
         // When
-        CLIResult result = cliExecutor.execute("tools", "remove", "--host", getRouterHost(), "--name", toolName);
+        CLIResult result = executeWithAuth("tools", "remove", "--host", getRouterHost(), "--name", toolName);
 
         // Then
         assertThat(result.isSuccess())
@@ -113,7 +118,7 @@ class HttpToolCliITCase extends HttpCapabilityTestBase {
         assertThat(routerClient.toolExists(toolName)).isFalse();
 
         // Verify the tool no longer shows up in CLI list output
-        CLIResult listResult = cliExecutor.execute("tools", "list", "--host", getRouterHost());
+        CLIResult listResult = executeWithAuth("tools", "list", "--host", getRouterHost());
         assertThat(listResult.isSuccess()).as("CLI list should succeed").isTrue();
         assertThat(listResult.getCombinedOutput())
                 .as("CLI list output should not contain the removed tool")
@@ -122,5 +127,16 @@ class HttpToolCliITCase extends HttpCapabilityTestBase {
 
     private String getRouterHost() {
         return routerManager != null ? routerManager.getBaseUrl() : "http://localhost:8080";
+    }
+
+    private CLIResult executeWithAuth(String... args) {
+        if (authToken != null) {
+            String[] authArgs = new String[args.length + 2];
+            System.arraycopy(args, 0, authArgs, 0, args.length);
+            authArgs[args.length] = "--token";
+            authArgs[args.length + 1] = authToken;
+            return cliExecutor.execute(authArgs);
+        }
+        return cliExecutor.execute(args);
     }
 }
