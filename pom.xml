@@ -27,7 +27,7 @@
 
         <!-- Dependency versions (aligned with Wanaku) -->
         <quarkus.version>3.33.2</quarkus.version>
-        <quarkus-mcp.version>1.10.2</quarkus-mcp.version>
+        <quarkus-mcp.version>1.13.1</quarkus-mcp.version>
         <junit.version>6.1.2</junit.version>
         <testcontainers.version>2.0.5</testcontainers.version>
         <keycloak-testcontainer.version>4.1.1</keycloak-testcontainer.version>
