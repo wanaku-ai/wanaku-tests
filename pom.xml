@@ -14,11 +14,11 @@
 
     <modules>
         <module>test-common</module>
-        <module>router-tests</module>
         <module>http-capability-tests</module>
         <module>resources-tests</module>
-        <module>mcp-forwarding-tests</module>
         <module>camel-integration-capability-tests</module>
+        <module>router-tests</module>
+        <module>mcp-forwarding-tests</module>
     </modules>
 
     <properties>
