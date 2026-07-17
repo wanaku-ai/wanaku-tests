@@ -9,7 +9,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * Manages a PostgreSQL container lifecycle using Testcontainers.
@@ -24,7 +24,7 @@ public class PostgresServiceManager {
     private static final String DEFAULT_PASSWORD = "test";
     private static final String DEFAULT_DATABASE = "testdb";
 
-    private PostgreSQLContainer<?> container;
+    private PostgreSQLContainer container;
     private ManagerState state = ManagerState.STOPPED;
 
     public enum ManagerState {
@@ -45,7 +45,7 @@ public class PostgresServiceManager {
         state = ManagerState.STARTING;
         LOG.info("Starting PostgreSQL container with image {}", DEFAULT_IMAGE);
 
-        container = new PostgreSQLContainer<>(DEFAULT_IMAGE)
+        container = new PostgreSQLContainer(DEFAULT_IMAGE)
                 .withDatabaseName(DEFAULT_DATABASE)
                 .withUsername(DEFAULT_USERNAME)
                 .withPassword(DEFAULT_PASSWORD);

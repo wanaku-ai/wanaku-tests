@@ -44,7 +44,7 @@
         <!-- PostgreSQL Testcontainer -->
         <dependency>
             <groupId>org.testcontainers</groupId>
-            <artifactId>postgresql</artifactId>
+            <artifactId>testcontainers-postgresql</artifactId>
             <scope>compile</scope>
         </dependency>
         <!-- PostgreSQL JDBC Driver (needed by PostgresServiceManager for seeding) -->
