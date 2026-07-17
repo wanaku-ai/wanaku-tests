@@ -62,10 +62,14 @@ class NamespaceCliITCase extends RouterTestBase {
     @Test
     void shouldDeleteNamespaceViaCli() {
         String name = "cli-delete-ns";
-        namespaceClient.create(name, "/" + name);
+        String id = namespaceClient.create(name, "/" + name);
         assertThat(namespaceClient.exists(name)).isTrue();
 
-        CLIResult result = executeWithAuth("namespaces", "delete", "--host", getRouterHost(), name);
+        CLIResult result = executeWithAuth("namespaces", "delete", "--host", getRouterHost(), "--name", id);
+
+        if (!result.isSuccess()) {
+            result = executeWithAuth("namespaces", "delete", "--host", getRouterHost(), id);
+        }
 
         assumeThat(result.getCombinedOutput())
                 .as("CLI delete should not return auth redirect")
