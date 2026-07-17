@@ -218,9 +218,12 @@ public abstract class CamelCapabilityTestBase extends BaseIntegrationTest {
                 .pollInterval(Duration.ofMillis(500))
                 .until(() -> {
                     if (!manager.isRunning()) {
-                        throw new IllegalStateException(
-                                "CIC '" + serviceName + "' process exited before registration completed."
-                                        + " Check process logs for details.");
+                        String logPath = manager.getLogFile() != null
+                                ? manager.getLogFile().getAbsolutePath()
+                                : "unknown";
+                        throw new IllegalStateException("CIC '" + serviceName + "' process exited (exit code: "
+                                + manager.getExitCode() + ") before registration completed."
+                                + " Log file: " + logPath);
                     }
                     return routerClient.isCapabilityRegistered(serviceName);
                 });
@@ -235,8 +238,7 @@ public abstract class CamelCapabilityTestBase extends BaseIntegrationTest {
                 .until(() -> {
                     if (!manager.isRunning()) {
                         throw new IllegalStateException(
-                                "CIC '" + serviceName + "' process exited before tools/resources registered."
-                                        + " Check process logs for details.");
+                                "CIC '" + serviceName + "' process exited before tools/resources registered.");
                     }
                     boolean hasTools = routerClient.listTools().stream().anyMatch(t -> serviceName.equals(t.getType()));
                     boolean hasResources =
@@ -275,11 +277,33 @@ public abstract class CamelCapabilityTestBase extends BaseIntegrationTest {
 
     protected void assertToolCallWithRetry(
             String toolName, Map<String, Object> args, Consumer<ToolResponse> assertions) {
+        java.util.concurrent.atomic.AtomicBoolean loggedOnce = new java.util.concurrent.atomic.AtomicBoolean();
         Awaitility.await()
                 .atMost(Duration.ofSeconds(90))
                 .pollInterval(Duration.ofSeconds(3))
                 .untilAsserted(() -> {
-                    mcpClient.when().toolsCall(toolName, args, assertions).thenAssertResults();
+                    try {
+                        mcpClient.when().toolsCall(toolName, args, assertions).thenAssertResults();
+                    } catch (AssertionError | Exception e) {
+                        if (!loggedOnce.getAndSet(true)) {
+                            LOG.warn("Tool call '{}' failed, listing available MCP tools for diagnostics...", toolName);
+                            try {
+                                mcpClient
+                                        .when()
+                                        .toolsList()
+                                        .withAssert(page -> LOG.info(
+                                                "Available MCP tools: {}",
+                                                page.tools().stream()
+                                                        .map(t -> t.name())
+                                                        .toList()))
+                                        .send()
+                                        .thenAssertResults();
+                            } catch (Exception listErr) {
+                                LOG.warn("Failed to list MCP tools: {}", listErr.getMessage());
+                            }
+                        }
+                        throw e;
+                    }
                 });
     }
 

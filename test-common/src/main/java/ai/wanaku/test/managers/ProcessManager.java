@@ -203,6 +203,23 @@ public abstract class ProcessManager {
     }
 
     /**
+     * Gets the log file for this process.
+     */
+    public File getLogFile() {
+        return logFile;
+    }
+
+    /**
+     * Gets the process exit code, or -1 if the process is still running or hasn't started.
+     */
+    public int getExitCode() {
+        if (process == null || process.isAlive()) {
+            return -1;
+        }
+        return process.exitValue();
+    }
+
+    /**
      * Creates a log file for this process.
      * Override in subclasses for custom log file locations.
      *
