@@ -1,0 +1,182 @@
+name: Full Integration Test (From Source)
+
+on:
+  workflow_dispatch:
+    inputs:
+      wanaku_repo:
+        description: 'Wanaku repository (owner/repo)'
+        required: false
+        default: 'wanaku-ai/wanaku'
+      wanaku_branch:
+        description: 'Wanaku branch'
+        required: false
+        default: 'main'
+      sdk_repo:
+        description: 'SDK repository (owner/repo)'
+        required: false
+        default: 'wanaku-ai/wanaku-capabilities-java-sdk'
+      sdk_branch:
+        description: 'SDK branch'
+        required: false
+        default: 'main'
+      cic_repo:
+        description: 'Camel Integration Capability repository (owner/repo)'
+        required: false
+        default: 'wanaku-ai/camel-integration-capability'
+      cic_branch:
+        description: 'Camel Integration Capability branch'
+        required: false
+        default: 'main'
+      examples_repo:
+        description: 'Wanaku Examples repository (owner/repo)'
+        required: false
+        default: 'wanaku-ai/wanaku-examples'
+      examples_branch:
+        description: 'Wanaku Examples branch'
+        required: false
+        default: 'main'
+
+jobs:
+  full-integration-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      WANAKU_REPO: ${{ inputs.wanaku_repo }}
+      WANAKU_BRANCH: ${{ inputs.wanaku_branch }}
+      SDK_REPO: ${{ inputs.sdk_repo }}
+      SDK_BRANCH: ${{ inputs.sdk_branch }}
+      CIC_REPO: ${{ inputs.cic_repo }}
+      CIC_BRANCH: ${{ inputs.cic_branch }}
+      EXAMPLES_REPO: ${{ inputs.examples_repo }}
+      EXAMPLES_BRANCH: ${{ inputs.examples_branch }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5.5.0
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Clone sources
+        run: |
+          mkdir -p source
+
+          echo "::group::Cloning SDK (${SDK_REPO}@${SDK_BRANCH})"
+          git clone --depth 1 --branch "${SDK_BRANCH}" \
+            "https://github.com/${SDK_REPO}.git" source/wanaku-sdk
+          echo "::endgroup::"
+
+          echo "::group::Cloning Wanaku (${WANAKU_REPO}@${WANAKU_BRANCH})"
+          git clone --depth 1 --branch "${WANAKU_BRANCH}" \
+            "https://github.com/${WANAKU_REPO}.git" source/wanaku
+          echo "::endgroup::"
+
+          echo "::group::Cloning CIC (${CIC_REPO}@${CIC_BRANCH})"
+          git clone --depth 1 --branch "${CIC_BRANCH}" \
+            "https://github.com/${CIC_REPO}.git" source/camel-integration-capability
+          echo "::endgroup::"
+
+          echo "::group::Cloning Examples (${EXAMPLES_REPO}@${EXAMPLES_BRANCH})"
+          git clone --depth 1 --branch "${EXAMPLES_BRANCH}" \
+            "https://github.com/${EXAMPLES_REPO}.git" source/wanaku-examples
+          echo "::endgroup::"
+
+      - name: Build sources summary
+        run: |
+          {
+            echo "## Build Configuration"
+            echo ""
+            echo "| Component | Repository | Branch |"
+            echo "|-----------|-----------|--------|"
+            echo "| SDK | \`${SDK_REPO}\` | \`${SDK_BRANCH}\` |"
+            echo "| Wanaku | \`${WANAKU_REPO}\` | \`${WANAKU_BRANCH}\` |"
+            echo "| CIC | \`${CIC_REPO}\` | \`${CIC_BRANCH}\` |"
+            echo "| Examples | \`${EXAMPLES_REPO}\` | \`${EXAMPLES_BRANCH}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build SDK
+        run: |
+          if [ -x source/wanaku-sdk/mvnw ]; then
+            source/wanaku-sdk/mvnw -B -DskipTests install -f source/wanaku-sdk/pom.xml
+          else
+            mvn -B -DskipTests install -f source/wanaku-sdk/pom.xml
+          fi
+
+      - name: Build Wanaku
+        run: |
+          if [ -x source/wanaku/mvnw ]; then
+            source/wanaku/mvnw -B -DskipTests install -f source/wanaku/pom.xml
+          else
+            mvn -B -DskipTests install -f source/wanaku/pom.xml
+          fi
+
+      - name: Build Camel Integration Capability
+        run: |
+          if [ -x source/camel-integration-capability/mvnw ]; then
+            source/camel-integration-capability/mvnw -B -DskipTests package -f source/camel-integration-capability/pom.xml
+          else
+            mvn -B -DskipTests package -f source/camel-integration-capability/pom.xml
+          fi
+
+      - name: Build Wanaku Examples
+        run: |
+          if [ -x source/wanaku-examples/mvnw ]; then
+            source/wanaku-examples/mvnw -B -DskipTests package -f source/wanaku-examples/pom.xml
+          else
+            mvn -B -DskipTests package -f source/wanaku-examples/pom.xml
+          fi
+
+      - name: Collect artifacts
+        run: |
+          chmod +x ./.github/scripts/collect-from-source-artifacts.sh
+          ./.github/scripts/collect-from-source-artifacts.sh
+
+      - name: Validate artifacts
+        run: |
+          ROUTER_JAR=$(find artifacts/wanaku-router-backend -name "quarkus-run.jar" 2>/dev/null | head -1)
+          if [ -z "$ROUTER_JAR" ]; then
+            echo "::error::Router artifact not found — from-source build did not produce the expected output"
+            exit 1
+          fi
+          echo "Router artifact OK: ${ROUTER_JAR}"
+
+      - name: Resolve CLI path
+        id: cli
+        run: |
+          CLI_PATH=$(find artifacts -name "wanaku" -path "*/bin/*" -type f 2>/dev/null | head -1)
+          if [ -z "$CLI_PATH" ]; then
+            CLI_PATH=$(find artifacts -name "quarkus-run.jar" -path "*wanaku-cli*" 2>/dev/null | head -1)
+          fi
+          if [ -n "$CLI_PATH" ]; then
+            chmod +x "$CLI_PATH" 2>/dev/null || true
+            echo "path=$(pwd)/${CLI_PATH}" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::CLI not found in built artifacts"
+          fi
+
+      - name: Run integration tests
+        env:
+          CLI_PATH: ${{ steps.cli.outputs.path }}
+        run: |
+          CLI_OPTS=""
+          if [ -n "$CLI_PATH" ]; then
+            CLI_OPTS="-Dwanaku.test.cli.path=$CLI_PATH"
+          fi
+          mvn -B verify --fail-at-end --file pom.xml $CLI_OPTS
+
+      - name: Test summary
+        if: always()
+        run: ./.github/scripts/test-summary.sh
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: full-integration-test-reports
+          path: |
+            **/target/failsafe-reports/
+            **/target/logs/
+          retention-days: 14
+          if-no-files-found: ignore
