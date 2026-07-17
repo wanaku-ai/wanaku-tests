@@ -35,7 +35,13 @@ public final class WanakuTestConstants {
     public static final String ROUTER_RESOURCES_PATH = ROUTER_API_BASE_PATH + "/resources";
     public static final String ROUTER_CAPABILITIES_PATH = ROUTER_API_BASE_PATH + "/capabilities";
     public static final String ROUTER_MANAGEMENT_DISCOVERY_PATH = ROUTER_API_BASE_PATH + "/management/discovery";
+    public static final String ROUTER_MANAGEMENT_INFO_PATH = ROUTER_API_BASE_PATH + "/management/info";
+    public static final String ROUTER_MANAGEMENT_STATISTICS_PATH = ROUTER_API_BASE_PATH + "/management/statistics";
     public static final String ROUTER_DATA_STORE_PATH = ROUTER_API_BASE_PATH + "/data-store";
+    public static final String ROUTER_NAMESPACES_PATH = ROUTER_API_BASE_PATH + "/namespaces";
+    public static final String ROUTER_PROMPTS_PATH = ROUTER_API_BASE_PATH + "/prompts";
+    public static final String ROUTER_FORWARDS_PATH = ROUTER_API_BASE_PATH + "/forwards";
+    public static final String ROUTER_SERVICE_CATALOG_PATH = ROUTER_API_BASE_PATH + "/service-catalog";
 
     // Port allocation
     public static final int PORT_ALLOCATION_RETRIES = 5;
