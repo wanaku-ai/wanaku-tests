@@ -28,6 +28,7 @@ class ConcurrentOperationsITCase extends RouterTestBase {
     @DisplayName("Register multiple tools concurrently without errors")
     @Test
     void shouldHandleConcurrentToolRegistration() throws Exception {
+        int initialSize = routerClient.listTools().size();
         int threadCount = 5;
         ExecutorService executor = Executors.newFixedThreadPool(threadCount);
         CountDownLatch startLatch = new CountDownLatch(1);
@@ -61,7 +62,7 @@ class ConcurrentOperationsITCase extends RouterTestBase {
 
         assertThat(successCount.get()).isEqualTo(threadCount);
         assertThat(failureCount.get()).isZero();
-        assertThat(routerClient.listTools()).hasSize(threadCount);
+        assertThat(routerClient.listTools()).hasSize(initialSize + threadCount);
     }
 
     @DisplayName("Concurrent list operations do not interfere with each other")

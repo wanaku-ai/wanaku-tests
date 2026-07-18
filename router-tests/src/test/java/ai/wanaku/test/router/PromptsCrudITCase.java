@@ -10,6 +10,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assumptions.assumeThat;
 
 @QuarkusTest
@@ -100,20 +101,15 @@ class PromptsCrudITCase extends RouterTestBase {
         assertThat(edited.get("description").asText()).isEqualTo("Updated description");
     }
 
-    @DisplayName("Handle adding a prompt with a duplicate name")
+    @DisplayName("Reject adding a prompt with a duplicate name")
     @Test
-    void shouldHandleDuplicatePrompt() {
-        // Given
+    void shouldRejectDuplicatePrompt() {
         String name = "duplicate-prompt";
         promptsClient.add(name, "First registration");
 
-        try {
-            promptsClient.add(name, "Second registration");
-            assertThat(promptsClient.exists(name)).isTrue();
-        } catch (PromptsClient.PromptExistsException e) {
-            assertThat(e.getMessage()).contains(name);
-        } catch (PromptsClient.PromptsClientException e) {
-            assertThat(e.getMessage()).containsAnyOf("409", "500", "already exists", "Generic error");
-        }
+        assertThatThrownBy(() -> promptsClient.add(name, "Second registration"))
+                .isInstanceOf(PromptsClient.PromptsClientException.class);
+
+        assertThat(promptsClient.exists(name)).isTrue();
     }
 }

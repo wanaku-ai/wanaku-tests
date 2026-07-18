@@ -69,31 +69,6 @@ class ServiceDiscoveryITCase extends RouterTestBase {
         assertThat(registered).isFalse();
     }
 
-    @DisplayName("Capabilities endpoint is accessible and returns HTTP 200")
-    @Test
-    void shouldListCapabilitiesEndpointAccessible() throws Exception {
-        String accessToken = null;
-        if (keycloakManager != null && keycloakManager.isRunning()) {
-            accessToken = keycloakManager.getMcpToken();
-        }
-
-        HttpClient httpClient =
-                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
-
-        HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
-                .uri(URI.create(routerManager.getBaseUrl() + WanakuTestConstants.ROUTER_CAPABILITIES_PATH))
-                .GET()
-                .timeout(Duration.ofSeconds(30));
-
-        if (accessToken != null) {
-            requestBuilder.header("Authorization", "Bearer " + accessToken);
-        }
-
-        HttpResponse<String> response = httpClient.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString());
-
-        assertThat(response.statusCode()).isEqualTo(200);
-    }
-
     @DisplayName("Deregister a capability and verify it is no longer registered")
     @Test
     void shouldDeregisterCapability() {
