@@ -20,9 +20,9 @@ class McpForwardingErrorITCase extends McpForwardingTestBase {
         assumeThat(testNamespaceId).as("Test namespace must be available").isNotNull();
     }
 
-    @DisplayName("Router rejects a forward pointing to an unreachable server")
+    @DisplayName("Router handles a forward pointing to an unreachable server")
     @Test
-    void shouldRejectUnreachableServerForward() {
+    void shouldHandleUnreachableServerForward() {
         try {
             forwardsClient.add("unreachable-fwd", "http://localhost:1/mcp/", testNamespaceId);
             assertThat(forwardsClient.exists("unreachable-fwd")).isTrue();
