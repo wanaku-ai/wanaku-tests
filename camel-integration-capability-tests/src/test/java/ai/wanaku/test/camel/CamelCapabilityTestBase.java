@@ -14,6 +14,7 @@ import org.awaitility.Awaitility;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import io.quarkiverse.mcp.server.ToolResponse;
+import ai.wanaku.test.WanakuTestConstants;
 import ai.wanaku.test.base.BaseIntegrationTest;
 import ai.wanaku.test.client.DataStoreClient;
 import ai.wanaku.test.client.McpTestClient;
@@ -216,7 +217,7 @@ public abstract class CamelCapabilityTestBase extends BaseIntegrationTest {
         LOG.debug("Waiting for CIC '{}' to register with Router...", serviceName);
         Awaitility.await()
                 .atMost(Duration.ofSeconds(90))
-                .pollInterval(Duration.ofMillis(200))
+                .pollInterval(WanakuTestConstants.DEFAULT_HEALTH_CHECK_INTERVAL)
                 .until(() -> {
                     if (!manager.isRunning()) {
                         String logPath = manager.getLogFile() != null
@@ -235,7 +236,7 @@ public abstract class CamelCapabilityTestBase extends BaseIntegrationTest {
         LOG.debug("Waiting for CIC '{}' tools/resources to appear in Router...", serviceName);
         Awaitility.await()
                 .atMost(Duration.ofSeconds(90))
-                .pollInterval(Duration.ofMillis(200))
+                .pollInterval(WanakuTestConstants.DEFAULT_HEALTH_CHECK_INTERVAL)
                 .until(() -> {
                     if (!manager.isRunning()) {
                         String logPath = manager.getLogFile() != null

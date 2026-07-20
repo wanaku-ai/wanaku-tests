@@ -21,6 +21,7 @@ import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
 import io.quarkus.test.keycloak.client.KeycloakTestClient;
 import io.quarkus.test.keycloak.server.KeycloakContainer;
+import ai.wanaku.test.WanakuTestConstants;
 import ai.wanaku.test.config.OidcCredentials;
 
 /**
@@ -85,7 +86,7 @@ public class KeycloakManager {
         LOG.debug("Waiting for OIDC discovery: {}", url);
         Awaitility.await()
                 .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(200))
+                .pollInterval(WanakuTestConstants.DEFAULT_HEALTH_CHECK_INTERVAL)
                 .ignoreExceptions()
                 .until(() -> {
                     HttpRequest req =

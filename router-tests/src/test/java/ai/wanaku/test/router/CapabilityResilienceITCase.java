@@ -3,6 +3,7 @@ package ai.wanaku.test.router;
 import java.time.Duration;
 import org.awaitility.Awaitility;
 import io.quarkus.test.junit.QuarkusTest;
+import ai.wanaku.test.WanakuTestConstants;
 import ai.wanaku.test.config.OidcCredentials;
 import ai.wanaku.test.config.TargetConfiguration;
 import ai.wanaku.test.managers.HttpCapabilityManager;
@@ -54,7 +55,7 @@ class CapabilityResilienceITCase extends RouterTestBase {
 
         Awaitility.await()
                 .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(200))
+                .pollInterval(WanakuTestConstants.DEFAULT_HEALTH_CHECK_INTERVAL)
                 .until(() -> routerClient.isCapabilityRegistered("http"));
 
         assertThat(routerClient.isCapabilityRegistered("http")).isTrue();
@@ -86,7 +87,7 @@ class CapabilityResilienceITCase extends RouterTestBase {
 
         Awaitility.await()
                 .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(200))
+                .pollInterval(WanakuTestConstants.DEFAULT_HEALTH_CHECK_INTERVAL)
                 .until(() -> routerClient.isCapabilityRegistered("http"));
 
         resilienceCapability.stop();
@@ -104,7 +105,7 @@ class CapabilityResilienceITCase extends RouterTestBase {
 
         Awaitility.await()
                 .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(200))
+                .pollInterval(WanakuTestConstants.DEFAULT_HEALTH_CHECK_INTERVAL)
                 .until(() -> routerClient.isCapabilityRegistered("http"));
 
         assertThat(routerClient.isCapabilityRegistered("http")).isTrue();
