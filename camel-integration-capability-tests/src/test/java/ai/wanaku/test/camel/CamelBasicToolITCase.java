@@ -90,7 +90,7 @@ class CamelBasicToolITCase extends CamelCapabilityTestBase {
         });
     }
 
-    @DisplayName("Invoke weather-lookup without required city parameter")
+    @DisplayName("Invoke weather-lookup without required city parameter returns validation error")
     @Test
     void shouldHandleMissingRequiredParameter() throws Exception {
         startCapability("simple-tool-svc", "simple-tool");
@@ -101,11 +101,11 @@ class CamelBasicToolITCase extends CamelCapabilityTestBase {
                     response.isError(),
                     response.content());
             assertThat(response.isError())
-                    .as("CIC does not validate required params")
-                    .isFalse();
+                    .as("CIC should reject calls with missing required params")
+                    .isTrue();
             String text = response.content().get(0).asText().text();
-            assertThat(text).contains("Weather report for");
-            assertThat(text).doesNotContain("London");
+            assertThat(text).containsIgnoringCase("missing required parameter");
+            assertThat(text).contains("city");
         });
     }
 
