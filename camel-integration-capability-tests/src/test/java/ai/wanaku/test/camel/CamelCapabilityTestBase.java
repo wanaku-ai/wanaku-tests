@@ -216,7 +216,7 @@ public abstract class CamelCapabilityTestBase extends BaseIntegrationTest {
         LOG.debug("Waiting for CIC '{}' to register with Router...", serviceName);
         Awaitility.await()
                 .atMost(Duration.ofSeconds(90))
-                .pollInterval(Duration.ofMillis(500))
+                .pollInterval(Duration.ofMillis(200))
                 .until(() -> {
                     if (!manager.isRunning()) {
                         String logPath = manager.getLogFile() != null
@@ -235,7 +235,7 @@ public abstract class CamelCapabilityTestBase extends BaseIntegrationTest {
         LOG.debug("Waiting for CIC '{}' tools/resources to appear in Router...", serviceName);
         Awaitility.await()
                 .atMost(Duration.ofSeconds(90))
-                .pollInterval(Duration.ofMillis(500))
+                .pollInterval(Duration.ofMillis(200))
                 .until(() -> {
                     if (!manager.isRunning()) {
                         String logPath = manager.getLogFile() != null

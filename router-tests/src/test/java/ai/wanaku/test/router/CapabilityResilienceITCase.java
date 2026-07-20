@@ -54,7 +54,7 @@ class CapabilityResilienceITCase extends RouterTestBase {
 
         Awaitility.await()
                 .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(500))
+                .pollInterval(Duration.ofMillis(200))
                 .until(() -> routerClient.isCapabilityRegistered("http"));
 
         assertThat(routerClient.isCapabilityRegistered("http")).isTrue();
@@ -86,7 +86,7 @@ class CapabilityResilienceITCase extends RouterTestBase {
 
         Awaitility.await()
                 .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(500))
+                .pollInterval(Duration.ofMillis(200))
                 .until(() -> routerClient.isCapabilityRegistered("http"));
 
         resilienceCapability.stop();
@@ -104,7 +104,7 @@ class CapabilityResilienceITCase extends RouterTestBase {
 
         Awaitility.await()
                 .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofMillis(500))
+                .pollInterval(Duration.ofMillis(200))
                 .until(() -> routerClient.isCapabilityRegistered("http"));
 
         assertThat(routerClient.isCapabilityRegistered("http")).isTrue();

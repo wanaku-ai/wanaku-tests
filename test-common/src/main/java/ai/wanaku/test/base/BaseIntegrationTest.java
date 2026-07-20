@@ -2,10 +2,10 @@ package ai.wanaku.test.base;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.time.Duration;
 import org.awaitility.Awaitility;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import ai.wanaku.test.WanakuTestConstants;
 import ai.wanaku.test.client.McpTestClient;
 import ai.wanaku.test.client.RouterClient;
 import ai.wanaku.test.config.OidcCredentials;
@@ -105,7 +105,7 @@ public abstract class BaseIntegrationTest {
             // Wait for HTTP Capability to register with Router
             LOG.debug("Waiting for HTTP Capability registration...");
             Awaitility.await()
-                    .pollInterval(Duration.ofMillis(200))
+                    .pollInterval(WanakuTestConstants.DEFAULT_REGISTRATION_POLL_INTERVAL)
                     .until(() -> routerClient.isCapabilityRegistered("http"));
             LOG.debug("HTTP Capability is registered");
         }

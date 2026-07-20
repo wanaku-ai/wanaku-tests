@@ -85,7 +85,7 @@ public class KeycloakManager {
         LOG.debug("Waiting for OIDC discovery: {}", url);
         Awaitility.await()
                 .atMost(Duration.ofSeconds(30))
-                .pollInterval(Duration.ofSeconds(1))
+                .pollInterval(Duration.ofMillis(200))
                 .ignoreExceptions()
                 .until(() -> {
                     HttpRequest req =

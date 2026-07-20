@@ -24,7 +24,8 @@ public final class WanakuTestConstants {
     public static final String DEFAULT_ARTIFACTS_DIR = "artifacts";
     public static final String DEFAULT_CLI_PATH = "wanaku";
     public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(60);
-    public static final Duration DEFAULT_HEALTH_CHECK_INTERVAL = Duration.ofMillis(500);
+    public static final Duration DEFAULT_HEALTH_CHECK_INTERVAL = Duration.ofMillis(200);
+    public static final Duration DEFAULT_REGISTRATION_POLL_INTERVAL = Duration.ofMillis(100);
 
     // Health check endpoints
     public static final String ROUTER_HEALTH_PATH = "/q/health/ready";

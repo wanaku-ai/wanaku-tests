@@ -7,6 +7,7 @@ import java.time.Duration;
 import org.awaitility.Awaitility;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import ai.wanaku.test.WanakuTestConstants;
 import ai.wanaku.test.base.BaseIntegrationTest;
 import ai.wanaku.test.client.RouterClient;
 import ai.wanaku.test.config.OidcCredentials;
@@ -62,7 +63,7 @@ public abstract class ResourceTestBase extends BaseIntegrationTest {
         RouterClient client = new RouterClient(routerManager.getBaseUrl(), accessToken);
         Awaitility.await()
                 .atMost(Duration.ofSeconds(10))
-                .pollInterval(Duration.ofMillis(200))
+                .pollInterval(WanakuTestConstants.DEFAULT_REGISTRATION_POLL_INTERVAL)
                 .until(() -> client.isCapabilityRegistered("file"));
         LOG.info("File provider is registered");
     }
