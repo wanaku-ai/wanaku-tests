@@ -1,15 +1,21 @@
 package ai.wanaku.test.resources;
 
 import java.nio.file.Path;
+import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import io.quarkus.test.junit.QuarkusTest;
 import ai.wanaku.test.client.CLIExecutor;
 import ai.wanaku.test.client.CLIResult;
+import ai.wanaku.test.client.NamespaceClient;
 import ai.wanaku.test.model.ResourceConfig;
+import com.fasterxml.jackson.databind.JsonNode;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assumptions.assumeThat;
 
 /**
  * Tests for resource operations via CLI.
@@ -17,6 +23,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @QuarkusTest
 class CliResourceITCase extends ResourceTestBase {
+
+    private static final Logger LOG = LoggerFactory.getLogger(CliResourceITCase.class);
+    private static final String NAMESPACE_NAME = "resources-cli-test-ns";
 
     private CLIExecutor cliExecutor;
     private String authToken;
@@ -33,6 +42,25 @@ class CliResourceITCase extends ResourceTestBase {
 
         if (keycloakManager != null && keycloakManager.isRunning()) {
             authToken = keycloakManager.getMcpToken();
+        }
+
+        String nsId = getOrCreateNamespaceId(NAMESPACE_NAME);
+        assumeThat(nsId).as("Test namespace must be available").isNotNull();
+    }
+
+    private String getOrCreateNamespaceId(String name) {
+        NamespaceClient nsClient = new NamespaceClient(routerManager.getBaseUrl(), authToken);
+        try {
+            List<JsonNode> namespaces = nsClient.list();
+            for (JsonNode ns : namespaces) {
+                if (ns.has("name") && name.equals(ns.get("name").asText())) {
+                    return ns.has("id") ? ns.get("id").asText() : null;
+                }
+            }
+            return nsClient.create(name, "/" + name);
+        } catch (Exception e) {
+            LOG.warn("Failed to get/create namespace '{}': {}", name, e.getMessage());
+            return null;
         }
     }
 
@@ -59,6 +87,8 @@ class CliResourceITCase extends ResourceTestBase {
                 "expose",
                 "--host",
                 routerHost,
+                "-N",
+                NAMESPACE_NAME,
                 "--name",
                 "test-cli-resource",
                 "--description",
