@@ -1,7 +1,6 @@
 package ai.wanaku.test.forward;
 
 import java.io.IOException;
-import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ai.wanaku.test.base.BaseIntegrationTest;
@@ -83,16 +82,7 @@ public abstract class McpForwardingTestBase extends BaseIntegrationTest {
             forwardsClient = new ForwardsClient(routerManager.getBaseUrl(), accessToken);
             namespaceClient = new NamespaceClient(routerManager.getBaseUrl(), accessToken);
             try {
-                List<JsonNode> namespaces = namespaceClient.list();
-                for (JsonNode ns : namespaces) {
-                    if (ns.has("name") && "fwd-test-ns".equals(ns.get("name").asText())) {
-                        testNamespaceId = ns.get("id").asText();
-                        break;
-                    }
-                }
-                if (testNamespaceId == null) {
-                    testNamespaceId = namespaceClient.create("fwd-test-ns", "fwd-test-ns");
-                }
+                testNamespaceId = findOrAllocateNamespace(namespaceClient, "fwd-test-ns");
             } catch (Exception e) {
                 LOG.warn("Failed to setup test namespace: {}", e.getMessage());
             }

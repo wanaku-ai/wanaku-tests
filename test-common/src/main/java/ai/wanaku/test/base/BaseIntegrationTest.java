@@ -2,12 +2,16 @@ package ai.wanaku.test.base;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
 import org.awaitility.Awaitility;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ai.wanaku.test.WanakuTestConstants;
 import ai.wanaku.test.client.McpTestClient;
+import ai.wanaku.test.client.NamespaceClient;
 import ai.wanaku.test.client.RouterClient;
+import com.fasterxml.jackson.databind.JsonNode;
 import ai.wanaku.test.config.OidcCredentials;
 import ai.wanaku.test.config.TargetConfiguration;
 import ai.wanaku.test.config.TestConfiguration;
@@ -188,6 +192,32 @@ public abstract class BaseIntegrationTest {
         }
         // Check preconditions (for @EnabledIf which runs before @BeforeEach)
         return isRouterAvailable();
+    }
+
+    /**
+     * Finds or allocates a pre-allocated namespace for the given name.
+     * The router pre-allocates namespace slots at startup, each backed by an MCP server instance.
+     * This method first looks for an existing namespace with the given name. If not found,
+     * it assigns the name to an unallocated slot via update.
+     *
+     * @return the namespace ID, or null if no slot is available
+     */
+    protected static String findOrAllocateNamespace(NamespaceClient nsClient, String name) {
+        List<JsonNode> namespaces = nsClient.list();
+        for (JsonNode ns : namespaces) {
+            if (ns.has("name") && name.equals(ns.get("name").asText())) {
+                return ns.has("id") ? ns.get("id").asText() : null;
+            }
+        }
+        for (JsonNode ns : namespaces) {
+            if ((!ns.has("name") || ns.get("name").isNull()) && ns.has("id")) {
+                String id = ns.get("id").asText();
+                nsClient.update(id, Map.of("name", name));
+                return id;
+            }
+        }
+        LOG.warn("No pre-allocated namespace available for '{}'", name);
+        return null;
     }
 
     /**

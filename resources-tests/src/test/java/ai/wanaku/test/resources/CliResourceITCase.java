@@ -1,7 +1,6 @@
 package ai.wanaku.test.resources;
 
 import java.nio.file.Path;
-import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import io.quarkus.test.junit.QuarkusTest;
@@ -9,7 +8,6 @@ import ai.wanaku.test.client.CLIExecutor;
 import ai.wanaku.test.client.CLIResult;
 import ai.wanaku.test.client.NamespaceClient;
 import ai.wanaku.test.model.ResourceConfig;
-import com.fasterxml.jackson.databind.JsonNode;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -49,15 +47,9 @@ class CliResourceITCase extends ResourceTestBase {
     }
 
     private String getOrCreateNamespaceId(String name) {
-        NamespaceClient nsClient = new NamespaceClient(routerManager.getBaseUrl(), authToken);
         try {
-            List<JsonNode> namespaces = nsClient.list();
-            for (JsonNode ns : namespaces) {
-                if (ns.has("name") && name.equals(ns.get("name").asText())) {
-                    return ns.has("id") ? ns.get("id").asText() : null;
-                }
-            }
-            return nsClient.create(name, name);
+            NamespaceClient nsClient = new NamespaceClient(routerManager.getBaseUrl(), authToken);
+            return findOrAllocateNamespace(nsClient, name);
         } catch (Exception e) {
             LOG.warn("Failed to get/create namespace '{}': {}", name, e.getMessage());
             return null;
