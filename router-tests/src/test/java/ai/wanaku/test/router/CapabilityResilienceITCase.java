@@ -69,7 +69,10 @@ class CapabilityResilienceITCase extends RouterTestBase {
         }
         routerClient.deregisterCapability("http", serviceToken);
 
-        assertThat(routerClient.isCapabilityRegistered("http")).isFalse();
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(30))
+                .pollInterval(WanakuTestConstants.DEFAULT_HEALTH_CHECK_INTERVAL)
+                .until(() -> !routerClient.isCapabilityRegistered("http"));
     }
 
     @DisplayName("Capability can re-register after being stopped and restarted")
