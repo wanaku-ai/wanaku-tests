@@ -91,7 +91,7 @@ public abstract class McpForwardingTestBase extends BaseIntegrationTest {
                     }
                 }
                 if (testNamespaceId == null) {
-                    testNamespaceId = namespaceClient.create("fwd-test-ns", "/fwd-test-ns");
+                    testNamespaceId = namespaceClient.create("fwd-test-ns", "fwd-test-ns");
                 }
             } catch (Exception e) {
                 LOG.warn("Failed to setup test namespace: {}", e.getMessage());

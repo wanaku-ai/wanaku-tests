@@ -33,7 +33,7 @@ class NamespaceCliITCase extends RouterTestBase {
         String name = "test-cli-ns";
 
         CLIResult result = executeWithAuth(
-                "namespaces", "create", "--host", getRouterHost(), "--name", name, "--path", "/" + name);
+                "namespaces", "create", "--host", getRouterHost(), "--name", name, "--path", name);
 
         assertThat(result.isSuccess())
                 .as("CLI command should succeed: %s", result.getCombinedOutput())
@@ -45,7 +45,7 @@ class NamespaceCliITCase extends RouterTestBase {
     @Test
     void shouldListNamespacesViaCli() {
         String name = "cli-list-ns";
-        namespaceClient.create(name, "/" + name);
+        namespaceClient.create(name, name);
 
         CLIResult result = executeWithAuth("namespaces", "list", "--host", getRouterHost());
 
@@ -62,7 +62,7 @@ class NamespaceCliITCase extends RouterTestBase {
     @Test
     void shouldDeleteNamespaceViaCli() {
         String name = "cli-delete-ns";
-        String id = namespaceClient.create(name, "/" + name);
+        String id = namespaceClient.create(name, name);
         assertThat(namespaceClient.exists(name)).isTrue();
 
         CLIResult result = executeWithAuth("namespaces", "delete", "--host", getRouterHost(), "--name", id);

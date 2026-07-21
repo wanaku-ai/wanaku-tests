@@ -81,7 +81,7 @@ public abstract class RouterTestBase extends BaseIntegrationTest {
                     return ns.has("id") ? ns.get("id").asText() : null;
                 }
             }
-            return namespaceClient.create(name, "/" + name);
+            return namespaceClient.create(name, name);
         } catch (Exception e) {
             LOG.warn("Failed to get/create namespace '{}': {}", name, e.getMessage());
             return null;

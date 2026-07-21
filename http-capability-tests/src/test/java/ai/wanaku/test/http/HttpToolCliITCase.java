@@ -148,7 +148,7 @@ class HttpToolCliITCase extends HttpCapabilityTestBase {
                     return ns.has("id") ? ns.get("id").asText() : null;
                 }
             }
-            return nsClient.create(name, "/" + name);
+            return nsClient.create(name, name);
         } catch (Exception e) {
             LOG.warn("Failed to get/create namespace '{}': {}", name, e.getMessage());
             return null;
