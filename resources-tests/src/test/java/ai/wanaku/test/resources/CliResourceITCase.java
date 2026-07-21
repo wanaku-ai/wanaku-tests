@@ -42,18 +42,10 @@ class CliResourceITCase extends ResourceTestBase {
             authToken = keycloakManager.getMcpToken();
         }
 
-        String nsId = getOrCreateNamespaceId(NAMESPACE_NAME);
-        assumeThat(nsId).as("Test namespace must be available").isNotNull();
-    }
-
-    private String getOrCreateNamespaceId(String name) {
-        try {
-            NamespaceClient nsClient = new NamespaceClient(routerManager.getBaseUrl(), authToken);
-            return findOrAllocateNamespace(nsClient, name);
-        } catch (Exception e) {
-            LOG.warn("Failed to get/create namespace '{}': {}", name, e.getMessage());
-            return null;
-        }
+        NamespaceClient nsClient = new NamespaceClient(routerManager.getBaseUrl(), authToken);
+        assumeThat(hasAvailableNamespaces(nsClient))
+                .as("Router must have available namespace slots")
+                .isTrue();
     }
 
     private CLIResult executeWithAuth(String... args) {
