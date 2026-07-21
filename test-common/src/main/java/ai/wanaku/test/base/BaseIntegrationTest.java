@@ -2,15 +2,12 @@ package ai.wanaku.test.base;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.List;
 import org.awaitility.Awaitility;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ai.wanaku.test.WanakuTestConstants;
 import ai.wanaku.test.client.McpTestClient;
-import ai.wanaku.test.client.NamespaceClient;
 import ai.wanaku.test.client.RouterClient;
-import com.fasterxml.jackson.databind.JsonNode;
 import ai.wanaku.test.config.OidcCredentials;
 import ai.wanaku.test.config.TargetConfiguration;
 import ai.wanaku.test.config.TestConfiguration;
@@ -191,22 +188,6 @@ public abstract class BaseIntegrationTest {
         }
         // Check preconditions (for @EnabledIf which runs before @BeforeEach)
         return isRouterAvailable();
-    }
-
-    /**
-     * Checks whether the router has pre-allocated namespace slots available.
-     * Tests that register tools/resources under a namespace should call this
-     * to skip gracefully when no slots are available.
-     */
-    protected static boolean hasAvailableNamespaces(NamespaceClient nsClient) {
-        try {
-            List<JsonNode> namespaces = nsClient.list();
-            return namespaces.stream()
-                    .anyMatch(ns -> !ns.has("name") || ns.get("name").isNull());
-        } catch (Exception e) {
-            LOG.warn("Failed to check namespace availability: {}", e.getMessage());
-            return false;
-        }
     }
 
     /**

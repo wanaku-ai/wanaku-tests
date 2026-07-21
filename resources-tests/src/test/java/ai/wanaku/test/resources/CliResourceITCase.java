@@ -6,14 +6,12 @@ import org.slf4j.LoggerFactory;
 import io.quarkus.test.junit.QuarkusTest;
 import ai.wanaku.test.client.CLIExecutor;
 import ai.wanaku.test.client.CLIResult;
-import ai.wanaku.test.client.NamespaceClient;
 import ai.wanaku.test.model.ResourceConfig;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assumptions.assumeThat;
 
 /**
  * Tests for resource operations via CLI.
@@ -23,8 +21,6 @@ import static org.assertj.core.api.Assumptions.assumeThat;
 class CliResourceITCase extends ResourceTestBase {
 
     private static final Logger LOG = LoggerFactory.getLogger(CliResourceITCase.class);
-    private static final String NAMESPACE_NAME = "resources-cli-test-ns";
-
     private CLIExecutor cliExecutor;
     private String authToken;
 
@@ -41,11 +37,6 @@ class CliResourceITCase extends ResourceTestBase {
         if (keycloakManager != null && keycloakManager.isRunning()) {
             authToken = keycloakManager.getMcpToken();
         }
-
-        NamespaceClient nsClient = new NamespaceClient(routerManager.getBaseUrl(), authToken);
-        assumeThat(hasAvailableNamespaces(nsClient))
-                .as("Router must have available namespace slots")
-                .isTrue();
     }
 
     private CLIResult executeWithAuth(String... args) {
@@ -72,7 +63,7 @@ class CliResourceITCase extends ResourceTestBase {
                 "--host",
                 routerHost,
                 "-N",
-                NAMESPACE_NAME,
+                "default",
                 "--name",
                 "test-cli-resource",
                 "--description",
@@ -94,6 +85,33 @@ class CliResourceITCase extends ResourceTestBase {
         assertThat(listResult.getCombinedOutput())
                 .as("CLI list output should contain the exposed resource")
                 .contains("test-cli-resource");
+    }
+
+    @DisplayName("Expose a resource via CLI with a named namespace")
+    @Test
+    void shouldExposeResourceWithNamespace() throws Exception {
+        String routerHost = routerManager.getBaseUrl();
+
+        CLIResult result = executeWithAuth(
+                "resources",
+                "expose",
+                "--host",
+                routerHost,
+                "-N",
+                "public",
+                "--name",
+                "test-ns-resource",
+                "--description",
+                "Resource in public namespace",
+                "--location",
+                "file:///tmp/test.txt",
+                "--type",
+                "file");
+
+        assertThat(result.isSuccess())
+                .as("CLI command should succeed: %s", result.getCombinedOutput())
+                .isTrue();
+        assertThat(routerClient.resourceExists("test-ns-resource")).isTrue();
     }
 
     @DisplayName("List multiple resources via CLI and verify all are captured in output")

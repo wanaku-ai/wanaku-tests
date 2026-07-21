@@ -5,13 +5,11 @@ import org.slf4j.LoggerFactory;
 import io.quarkus.test.junit.QuarkusTest;
 import ai.wanaku.test.client.CLIExecutor;
 import ai.wanaku.test.client.CLIResult;
-import ai.wanaku.test.client.NamespaceClient;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assumptions.assumeThat;
 
 /**
  * Tests for HTTP tool registration via CLI.
@@ -22,8 +20,6 @@ import static org.assertj.core.api.Assumptions.assumeThat;
 class HttpToolCliITCase extends HttpCapabilityTestBase {
 
     private static final Logger LOG = LoggerFactory.getLogger(HttpToolCliITCase.class);
-    private static final String NAMESPACE_NAME = "tools-cli-test-ns";
-
     private CLIExecutor cliExecutor;
     private String authToken;
 
@@ -36,11 +32,6 @@ class HttpToolCliITCase extends HttpCapabilityTestBase {
         if (keycloakManager != null && keycloakManager.isRunning()) {
             authToken = keycloakManager.getMcpToken();
         }
-
-        NamespaceClient nsClient = new NamespaceClient(routerManager.getBaseUrl(), authToken);
-        assumeThat(hasAvailableNamespaces(nsClient))
-                .as("Router must have available namespace slots")
-                .isTrue();
     }
 
     @DisplayName("Register a tool via CLI and verify it appears in CLI list output")
@@ -57,7 +48,7 @@ class HttpToolCliITCase extends HttpCapabilityTestBase {
                 "--host",
                 getRouterHost(),
                 "-N",
-                NAMESPACE_NAME,
+                "default",
                 "--name",
                 toolName,
                 "--type",
@@ -79,6 +70,34 @@ class HttpToolCliITCase extends HttpCapabilityTestBase {
         assertThat(listResult.getCombinedOutput())
                 .as("CLI list output should contain the registered tool")
                 .contains(toolName);
+    }
+
+    @DisplayName("Register a tool via CLI with a named namespace")
+    @Test
+    void shouldRegisterToolWithNamespace() {
+        String toolName = "cli-ns-tool";
+        String toolUri = "https://httpbin.org/get";
+
+        CLIResult result = executeWithAuth(
+                "tools",
+                "add",
+                "--host",
+                getRouterHost(),
+                "-N",
+                "public",
+                "--name",
+                toolName,
+                "--type",
+                "http",
+                "--uri",
+                toolUri,
+                "--description",
+                "Tool registered in public namespace");
+
+        assertThat(result.isSuccess())
+                .as("CLI command should succeed: %s", result.getCombinedOutput())
+                .isTrue();
+        assertThat(routerClient.toolExists(toolName)).isTrue();
     }
 
     @DisplayName("List multiple tools via CLI and verify all are captured in output")
