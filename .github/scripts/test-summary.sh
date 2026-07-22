@@ -8,9 +8,15 @@ echo "|--------|------:|-------:|-------:|-------:|--------:|-----:|" >> "$GITHU
 
 total_tests=0 total_fail=0 total_err=0 total_skip=0 total_time=0
 
-for dir in */target/failsafe-reports; do
-  [ -d "$dir" ] || continue
-  module="${dir%%/target/failsafe-reports}"
+# Extract test modules from parent POM (excludes test-common which has no tests)
+modules=$(grep '<module>' pom.xml | sed 's|.*<module>\(.*\)</module>.*|\1|' | grep -v '^test-common$')
+
+for module in $modules; do
+  dir="${module}/target/failsafe-reports"
+  if [ ! -d "$dir" ]; then
+    echo "| ${module} | - | - | - | - | - | - |" >> "$GITHUB_STEP_SUMMARY"
+    continue
+  fi
 
   mod_tests=0 mod_fail=0 mod_err=0 mod_skip=0 mod_time=0
   for f in "$dir"/TEST-*.xml; do
