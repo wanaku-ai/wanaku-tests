@@ -96,7 +96,11 @@ public abstract class CrossCapabilityTestBase extends BaseIntegrationTest {
         routerManager.stop();
         routerManager.start(testName);
 
-        routerClient = new RouterClient(routerManager.getBaseUrl());
+        String accessToken = null;
+        if (keycloakManager != null && keycloakManager.isRunning()) {
+            accessToken = keycloakManager.getMcpToken();
+        }
+        routerClient = new RouterClient(routerManager.getBaseUrl(), accessToken);
         if (httpPort != routerManager.getHttpPort() || grpcPort != routerManager.getGrpcPort()) {
             throw new IllegalStateException("Router restarted on different ports, reconnection would be invalid");
         }
