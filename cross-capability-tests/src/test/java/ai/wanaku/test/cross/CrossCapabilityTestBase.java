@@ -8,7 +8,6 @@ import org.awaitility.Awaitility;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ai.wanaku.test.base.BaseIntegrationTest;
-import ai.wanaku.test.client.RouterClient;
 import ai.wanaku.test.config.OidcCredentials;
 import ai.wanaku.test.config.TargetConfiguration;
 import ai.wanaku.test.fixtures.TestFixtures;
@@ -87,19 +86,6 @@ public abstract class CrossCapabilityTestBase extends BaseIntegrationTest {
                 .pollInterval(Duration.ofMillis(500))
                 .until(() -> routerClient.listTools().stream().anyMatch(t -> serviceName.equals(t.getType())));
         return camelCapabilityManager;
-    }
-
-    protected void restartRouterWithSamePorts(String testName) throws Exception {
-        int httpPort = routerManager.getHttpPort();
-        int grpcPort = routerManager.getGrpcPort();
-
-        routerManager.stop();
-        routerManager.start(testName);
-
-        routerClient = new RouterClient(routerManager.getBaseUrl());
-        if (httpPort != routerManager.getHttpPort() || grpcPort != routerManager.getGrpcPort()) {
-            throw new IllegalStateException("Router restarted on different ports, reconnection would be invalid");
-        }
     }
 
     protected void clearRouterState() {
