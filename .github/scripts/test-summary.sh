@@ -8,12 +8,9 @@ echo "|--------|------:|-------:|-------:|-------:|--------:|-----:|" >> "$GITHU
 
 total_tests=0 total_fail=0 total_err=0 total_skip=0 total_time=0
 
-for module in http-capability-tests resources-tests camel-integration-capability-tests; do
-  dir="${module}/target/failsafe-reports"
-  if [ ! -d "$dir" ]; then
-    echo "| ${module} | - | - | - | - | - | - |" >> "$GITHUB_STEP_SUMMARY"
-    continue
-  fi
+for dir in */target/failsafe-reports; do
+  [ -d "$dir" ] || continue
+  module="${dir%%/target/failsafe-reports}"
 
   mod_tests=0 mod_fail=0 mod_err=0 mod_skip=0 mod_time=0
   for f in "$dir"/TEST-*.xml; do
