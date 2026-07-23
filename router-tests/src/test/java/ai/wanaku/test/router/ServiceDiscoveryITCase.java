@@ -9,6 +9,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import ai.wanaku.test.WanakuTestConstants;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -70,6 +71,7 @@ class ServiceDiscoveryITCase extends RouterTestBase {
     }
 
     @DisplayName("Deregister a capability and verify it is no longer registered")
+    @Disabled("Blocked on wanaku-ai/wanaku#1702: deregistration endpoint needs identity verification")
     @Test
     void shouldDeregisterCapability() {
         assumeThat(isHttpToolServiceAvailable())
