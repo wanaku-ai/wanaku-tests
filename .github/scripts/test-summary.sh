@@ -55,8 +55,28 @@ if [ "$total_fail" -gt 0 ] || [ "$total_err" -gt 0 ]; then
     grep -l 'failures="[1-9]\|errors="[1-9]' "$f" > /dev/null 2>&1 || continue
     classname=$(grep -oP 'name="\K[^"]+' "$f" | head -1)
     grep -oP '<testcase name="\K[^"]+' "$f" | while read -r tc; do
-      if grep -A5 "name=\"${tc}\"" "$f" | grep -q '<failure\|<error'; then
+      block=$(sed -n "/<testcase name=\"${tc}\"/,/<\/testcase>/p" "$f")
+      if echo "$block" | grep -q '<failure\|<error'; then
         echo "- \`${classname}#${tc}\`" >> "$GITHUB_STEP_SUMMARY"
+        msg=$(echo "$block" | grep -oP '<failure message="\K[^"]*' | head -1)
+        type=$(echo "$block" | grep -oP '<failure[^>]* type="\K[^"]*' | head -1)
+        if [ -z "$msg" ]; then
+          msg=$(echo "$block" | grep -oP '<error message="\K[^"]*' | head -1)
+          type=$(echo "$block" | grep -oP '<error[^>]* type="\K[^"]*' | head -1)
+        fi
+        if [ -n "$msg" ]; then
+          msg=$(echo "$msg" | sed 's/&quot;/"/g; s/&lt;/</g; s/&gt;/>/g; s/&amp;/\&/g; s/&apos;/'"'"'/g')
+          if [ ${#msg} -gt 300 ]; then
+            msg="${msg:0:300}..."
+          fi
+          short_type=""
+          if [ -n "$type" ]; then
+            short_type=$(echo "$type" | sed 's/.*\.//')
+            echo "  > **${short_type}**: ${msg}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "  > ${msg}" >> "$GITHUB_STEP_SUMMARY"
+          fi
+        fi
       fi
     done
   done
