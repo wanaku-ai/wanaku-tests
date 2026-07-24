@@ -27,7 +27,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
  * - Module-scoped: Keycloak, Router (shared across all test classes via {@link SharedInfrastructureExtension})
  * - Test-scoped: HttpToolService, McpClient (fresh per test)
  */
-@ExtendWith(SharedInfrastructureExtension.class)
+@ExtendWith({SharedInfrastructureExtension.class, SkipThresholdExtension.class})
 public abstract class BaseIntegrationTest {
 
     private static Logger LOG = LoggerFactory.getLogger(BaseIntegrationTest.class);

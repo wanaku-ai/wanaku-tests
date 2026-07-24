@@ -50,6 +50,7 @@ wanaku-tests/
 - `wanaku.test.camel-capability.jar` - CIC JAR path
 - `wanaku.test.cli.path` - CLI path (JAR or binary)
 - `wanaku.test.timeout` - global timeout in seconds (default: 60)
+- `wanaku.test.skip.threshold` - max allowed skip percentage before build fails (default: 30)
 
 ## Test Lifecycle
 

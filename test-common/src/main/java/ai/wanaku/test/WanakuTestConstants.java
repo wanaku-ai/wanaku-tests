@@ -19,6 +19,7 @@ public final class WanakuTestConstants {
     public static final String PROP_FILE_PROVIDER_JAR = "wanaku.test.file-provider.jar";
     public static final String PROP_CAMEL_CAPABILITY_JAR = "wanaku.test.camel-capability.jar";
     public static final String PROP_TIMEOUT = "wanaku.test.timeout";
+    public static final String PROP_SKIP_THRESHOLD = "wanaku.test.skip.threshold";
 
     // Default values
     public static final String DEFAULT_ARTIFACTS_DIR = "artifacts";
@@ -26,6 +27,7 @@ public final class WanakuTestConstants {
     public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(60);
     public static final Duration DEFAULT_HEALTH_CHECK_INTERVAL = Duration.ofMillis(200);
     public static final Duration DEFAULT_REGISTRATION_POLL_INTERVAL = Duration.ofMillis(100);
+    public static final int DEFAULT_SKIP_THRESHOLD = 30;
 
     // Health check endpoints
     public static final String ROUTER_HEALTH_PATH = "/q/health/ready";
