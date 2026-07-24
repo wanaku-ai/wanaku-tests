@@ -96,7 +96,7 @@ public class SkipThresholdExtension implements TestWatcher, BeforeAllCallback {
                 }
             }
 
-            int skipPercent = (skip * 100) / total;
+            int skipPercent = skip * 100 / total;
             LOG.info("Test skip summary: {}/{} skipped ({}%), threshold {}%", skip, total, skipPercent, threshold);
 
             // Compare without integer truncation: skip/total > threshold/100
