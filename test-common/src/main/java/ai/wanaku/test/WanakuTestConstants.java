@@ -39,7 +39,7 @@ public final class WanakuTestConstants {
     public static final int PORT_ALLOCATION_RETRIES = 5;
 
     // Process management
-    public static final Duration GRACEFUL_SHUTDOWN_TIMEOUT = Duration.ofSeconds(10);
+    public static final Duration GRACEFUL_SHUTDOWN_TIMEOUT = Duration.ofSeconds(5);
 
     // Log directory
     public static final String LOG_DIR = "target/logs";
