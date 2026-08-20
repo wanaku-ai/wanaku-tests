@@ -41,21 +41,21 @@ download_and_extract() {
     local url="$1"
     local name="$2"
     local zip_file="${SCRIPT_DIR}/${name}.zip"
+    local extract_dir
 
     echo "Downloading ${name}..."
     curl -fSL -o "${zip_file}" "${url}"
 
     echo "Extracting ${name}..."
-    unzip -o -d "${SCRIPT_DIR}" "${zip_file}"
+    # Extract into a unique temp directory so parallel extractions never write
+    # to the same target file at the same time, then move the result in place.
+    extract_dir="$(mktemp -d "${SCRIPT_DIR}/.extract-${name}.XXXXXX")"
+    unzip -o -d "${extract_dir}" "${zip_file}"
+    cp -a "${extract_dir}/." "${SCRIPT_DIR}/"
 
-    rm -f "${zip_file}"
+    rm -rf "${extract_dir}" "${zip_file}"
     echo "${name} ready."
 }
-
-download_and_extract "${ROUTER_URL}" "wanaku-router-backend"
-download_and_extract "${HTTP_URL}" "wanaku-tool-service-http"
-download_and_extract "${CLI_URL}" "wanaku-cli"
-download_and_extract "${FILE_PROVIDER_URL}" "wanaku-provider-file"
 
 # CIC is a single fat JAR (not a ZIP) — download directly
 download_jar() {
@@ -70,8 +70,6 @@ download_jar() {
 
     echo "${filename} ready."
 }
-
-download_jar "${CIC_URL}" "camel-integration-capability" "camel-integration-capability-main-${VERSION}-jar-with-dependencies.jar"
 
 # Wanaku server binary (optional — downloaded from wanaku releases)
 download_server_binary() {
@@ -95,7 +93,34 @@ download_server_binary() {
     fi
 }
 
-download_server_binary
+# Run all downloads in parallel and fail if any of them fails.
+# Each download uses its own uniquely-named temp file, so parallel runs don't
+# clash; total time drops from the sum of all downloads to the slowest one.
+pids=()
+download_and_extract "${ROUTER_URL}" "wanaku-router-backend" &
+pids+=($!)
+download_and_extract "${HTTP_URL}" "wanaku-tool-service-http" &
+pids+=($!)
+download_and_extract "${CLI_URL}" "wanaku-cli" &
+pids+=($!)
+download_and_extract "${FILE_PROVIDER_URL}" "wanaku-provider-file" &
+pids+=($!)
+download_jar "${CIC_URL}" "camel-integration-capability" "camel-integration-capability-main-${VERSION}-jar-with-dependencies.jar" &
+pids+=($!)
+download_server_binary &
+pids+=($!)
+
+failed=0
+for pid in "${pids[@]}"; do
+    if ! wait "${pid}"; then
+        failed=1
+    fi
+done
+
+if [ "${failed}" -ne 0 ]; then
+    echo "One or more artifact downloads failed" >&2
+    exit 1
+fi
 
 echo ""
 echo "All artifacts downloaded to ${SCRIPT_DIR}"
