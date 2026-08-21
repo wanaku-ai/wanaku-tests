@@ -12,20 +12,7 @@ import ai.wanaku.test.WanakuTestConstants;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-/**
- * REST API client for Wanaku evaluator management operations,
- * including versioned configuration revisions.
- *
- * <p>Endpoints covered:
- * <ul>
- *   <li>GET  /api/v1/evaluators                         - List evaluators</li>
- *   <li>PUT  /api/v1/evaluators                         - Update evaluators (with optional expected_revision)</li>
- *   <li>GET  /api/v1/evaluators/revisions               - List revisions</li>
- *   <li>GET  /api/v1/evaluators/revisions/active         - Get active revision</li>
- *   <li>GET  /api/v1/evaluators/revisions/{id}           - Get revision by ID</li>
- *   <li>POST /api/v1/evaluators/revisions/{id}/activate  - Rollback to a revision</li>
- * </ul>
- */
+/** REST client for evaluator management and revision operations. */
 public class EvaluatorClient {
 
     private static final Logger LOG = LoggerFactory.getLogger(EvaluatorClient.class);
@@ -43,11 +30,7 @@ public class EvaluatorClient {
         this.objectMapper = new ObjectMapper();
     }
 
-    /**
-     * Lists all evaluators via GET /api/v1/evaluators.
-     *
-     * @return the parsed JSON response body
-     */
+    /** Lists all evaluators. */
     public JsonNode listEvaluators() {
         LOG.debug("Listing evaluators");
 
@@ -57,14 +40,7 @@ public class EvaluatorClient {
         return executeAndParse(request, "list evaluators");
     }
 
-    /**
-     * Updates evaluators via PUT /api/v1/evaluators using a raw JSON body.
-     * The body may be a legacy EvaluatorsConfig or the new UpdateEvaluatorsRequest
-     * format with optional expected_revision.
-     *
-     * @param jsonBody the raw JSON body to send
-     * @return a response wrapper containing the status code and parsed body
-     */
+    /** Updates evaluators via PUT with a raw JSON body. */
     public EvaluatorResponse updateEvaluators(String jsonBody) {
         LOG.debug("Updating evaluators");
 
@@ -76,11 +52,7 @@ public class EvaluatorClient {
         return executeRaw(request, "update evaluators");
     }
 
-    /**
-     * Lists all revisions via GET /api/v1/evaluators/revisions.
-     *
-     * @return the parsed JSON response body
-     */
+    /** Lists all evaluator configuration revisions. */
     public JsonNode listRevisions() {
         LOG.debug("Listing evaluator revisions");
 
@@ -90,11 +62,7 @@ public class EvaluatorClient {
         return executeAndParse(request, "list revisions");
     }
 
-    /**
-     * Gets the active revision via GET /api/v1/evaluators/revisions/active.
-     *
-     * @return a response wrapper containing the status code and parsed body
-     */
+    /** Gets the currently active evaluator revision. */
     public EvaluatorResponse getActiveRevision() {
         LOG.debug("Getting active evaluator revision");
 
@@ -105,12 +73,7 @@ public class EvaluatorClient {
         return executeRaw(request, "get active revision");
     }
 
-    /**
-     * Gets a specific revision by ID via GET /api/v1/evaluators/revisions/{id}.
-     *
-     * @param revisionId the revision ID
-     * @return a response wrapper containing the status code and parsed body
-     */
+    /** Gets a specific revision by its ID. */
     public EvaluatorResponse getRevision(long revisionId) {
         LOG.debug("Getting evaluator revision: {}", revisionId);
 
@@ -121,13 +84,7 @@ public class EvaluatorClient {
         return executeRaw(request, "get revision " + revisionId);
     }
 
-    /**
-     * Activates (rolls back to) a specific revision via POST /api/v1/evaluators/revisions/{id}/activate.
-     *
-     * @param revisionId the source revision ID to restore
-     * @param jsonBody the raw JSON body (may contain expected_revision), or empty string
-     * @return a response wrapper containing the status code and parsed body
-     */
+    /** Activates (rolls back to) a specific revision. */
     public EvaluatorResponse activateRevision(long revisionId, String jsonBody) {
         LOG.debug("Activating evaluator revision: {}", revisionId);
 

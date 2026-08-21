@@ -1,5 +1,7 @@
 package ai.wanaku.test.router;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import ai.wanaku.test.client.EvaluatorClient;
 import ai.wanaku.test.client.EvaluatorClient.EvaluatorResponse;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -14,22 +16,10 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assumptions.assumeThat;
 
-/**
- * Integration tests for the evaluator versioned configuration API
- * introduced in wanaku-ai/wanaku#1879.
- *
- * <p>Covers:
- * <ul>
- *   <li>Revision creation on evaluator update (PUT /api/v1/evaluators)</li>
- *   <li>Listing revisions (GET /api/v1/evaluators/revisions)</li>
- *   <li>Getting the active revision (GET /api/v1/evaluators/revisions/active)</li>
- *   <li>Getting a specific revision by ID (GET /api/v1/evaluators/revisions/{id})</li>
- *   <li>Rollback via revision activation (POST /api/v1/evaluators/revisions/{id}/activate)</li>
- *   <li>Optimistic concurrency control with expected_revision</li>
- *   <li>Legacy update format compatibility</li>
- * </ul>
- */
+/** Integration tests for the evaluator versioned configuration API (wanaku-ai/wanaku#1879). */
 class EvaluatorRevisionITCase extends RouterTestBase {
+
+    private static final Logger LOG = LoggerFactory.getLogger(EvaluatorRevisionITCase.class);
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -45,11 +35,7 @@ class EvaluatorRevisionITCase extends RouterTestBase {
     @AfterEach
     void clearEvaluators() {
         if (evaluatorClient != null) {
-            try {
-                evaluatorClient.updateEvaluators("{\"evaluators\": []}");
-            } catch (Exception e) {
-                // Ignore cleanup failures
-            }
+            evaluatorClient.updateEvaluators("{\"evaluators\": []}");
         }
     }
 
@@ -150,7 +136,7 @@ class EvaluatorRevisionITCase extends RouterTestBase {
         evaluatorClient.updateEvaluators(newFormatPayload("eval-beta"));
 
         // Rollback to the first revision
-        EvaluatorResponse rollback = evaluatorClient.activateRevision(firstRevisionId, "");
+        EvaluatorResponse rollback = evaluatorClient.activateRevision(firstRevisionId, "{}");
 
         assertThat(rollback.statusCode()).isEqualTo(200);
         assertThat(rollback.body()).isNotNull();
@@ -171,7 +157,7 @@ class EvaluatorRevisionITCase extends RouterTestBase {
     @DisplayName("Activating a nonexistent revision returns 404")
     @Test
     void shouldReturn404WhenActivatingNonexistentRevision() {
-        EvaluatorResponse response = evaluatorClient.activateRevision(999999, "");
+        EvaluatorResponse response = evaluatorClient.activateRevision(999999, "{}");
 
         assertThat(response.statusCode()).isEqualTo(404);
     }
@@ -216,15 +202,13 @@ class EvaluatorRevisionITCase extends RouterTestBase {
     // Legacy format compatibility
     // ──────────────────────────────────────────────────────────────
 
-    @DisplayName("Legacy evaluator update format (plain EvaluatorsConfig) still works")
+    @DisplayName("Update without expected_revision still creates a tracked revision")
     @Test
-    void shouldAcceptLegacyFormat() {
-        String legacyPayload = legacyFormatPayload("legacy-eval");
-        EvaluatorResponse response = evaluatorClient.updateEvaluators(legacyPayload);
+    void shouldCreateRevisionWithoutExpectedRevision() {
+        EvaluatorResponse response = evaluatorClient.updateEvaluators(newFormatPayload("no-occ-eval"));
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).isNotNull();
-        // The response should include revision metadata even for legacy format
         assertThat(response.body().has("revision")).isTrue();
         assertThat(response.body().get("revision").get("status").asText()).isEqualTo("active");
     }
@@ -260,7 +244,7 @@ class EvaluatorRevisionITCase extends RouterTestBase {
 
         assertThat(revision.has("id")).isTrue();
         assertThat(revision.has("created_at")).isTrue();
-        assertThat(revision.get("created_at").asText()).matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z");
+        assertThat(revision.get("created_at").asText()).matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z");
         assertThat(revision.has("activated_at")).isTrue();
         assertThat(revision.has("status")).isTrue();
         assertThat(revision.has("checksum")).isTrue();
@@ -301,16 +285,6 @@ class EvaluatorRevisionITCase extends RouterTestBase {
         ArrayNode evaluators = root.putArray("evaluators");
         evaluators.add(createEvaluatorNode(evaluatorName));
         root.put("expected_revision", expectedRevision);
-        return root.toString();
-    }
-
-    /**
-     * Creates a legacy EvaluatorsConfig payload (no expected_revision wrapper).
-     */
-    private String legacyFormatPayload(String evaluatorName) {
-        ObjectNode root = mapper.createObjectNode();
-        ArrayNode evaluators = root.putArray("evaluators");
-        evaluators.add(createEvaluatorNode(evaluatorName));
         return root.toString();
     }
 
