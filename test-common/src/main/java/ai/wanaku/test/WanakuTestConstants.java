@@ -35,6 +35,8 @@ public final class WanakuTestConstants {
     public static final String PROMPTS_PATH = API_BASE_PATH + "/prompts";
     public static final String FORWARDS_PATH = API_BASE_PATH + "/forwards";
     public static final String SERVICES_PATH = API_BASE_PATH + "/services";
+    public static final String EVALUATORS_PATH = API_BASE_PATH + "/evaluators";
+    public static final String EVALUATOR_REVISIONS_PATH = EVALUATORS_PATH + "/revisions";
 
     // Port allocation
     public static final int PORT_ALLOCATION_RETRIES = 5;
