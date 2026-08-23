@@ -264,6 +264,45 @@ class EvaluatorRevisionITCase extends RouterTestBase {
     }
 
     // ──────────────────────────────────────────────────────────────
+    // Pre-activation compilation failure and deserialization validation
+    // ──────────────────────────────────────────────────────────────
+
+    @DisplayName("Update with non-existent WASM processor returns 422 Unprocessable Entity")
+    @Test
+    void shouldRejectUpdateWhenWasmCompilationFails() {
+        ObjectNode root = mapper.createObjectNode();
+        ArrayNode evaluators = root.putArray("evaluators");
+        ObjectNode evaluator = createEvaluatorNode("invalid-wasm-eval");
+
+        ObjectNode processor = mapper.createObjectNode();
+        processor.put("path", "/nonexistent/path/to/module.wasm");
+        evaluator.set("processor", processor);
+
+        evaluators.add(evaluator);
+
+        EvaluatorResponse response = evaluatorClient.updateEvaluators(root.toString());
+
+        assertThat(response.statusCode()).isEqualTo(422);
+    }
+
+    @DisplayName("Update with missing processor path returns 400 Bad Request")
+    @Test
+    void shouldRejectUpdateWhenProcessorPathIsMissing() {
+        ObjectNode root = mapper.createObjectNode();
+        ArrayNode evaluators = root.putArray("evaluators");
+        ObjectNode evaluator = createEvaluatorNode("missing-path-eval");
+
+        ObjectNode processor = mapper.createObjectNode(); // missing 'path' field
+        evaluator.set("processor", processor);
+
+        evaluators.add(evaluator);
+
+        EvaluatorResponse response = evaluatorClient.updateEvaluators(root.toString());
+
+        assertThat(response.statusCode()).isEqualTo(400);
+    }
+
+    // ──────────────────────────────────────────────────────────────
     // Helpers
     // ──────────────────────────────────────────────────────────────
 
@@ -308,7 +347,7 @@ class EvaluatorRevisionITCase extends RouterTestBase {
         evaluator.set("llm", llm);
 
         ObjectNode processor = mapper.createObjectNode();
-        processor.put("path", "/actions/dist/safety_classifier.wasm");
+        processor.put("path", "actions/dist/safety_warn_action.wasm");
         evaluator.set("processor", processor);
 
         evaluator.put("on_error", "continue");
