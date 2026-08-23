@@ -76,6 +76,12 @@ jobs:
 
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+
+      - name: Install cargo-component
+        run: |
+          cargo install cargo-component
 
       - name: Clone sources
         run: |
@@ -136,6 +142,7 @@ jobs:
       - name: Build Wanaku Server (Rust)
         run: |
           cd source/wanaku
+          cargo build -p wanaku-feature-evaluator
           cargo build --release --bin wanaku-server
           echo "Wanaku server binary ready"
 
