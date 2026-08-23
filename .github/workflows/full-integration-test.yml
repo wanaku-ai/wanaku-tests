@@ -62,8 +62,6 @@ jobs:
       BARN_BRANCH: ${{ inputs.barn_branch }}
       PR_NUMBER: ${{ inputs.pr_number }}
       SOURCE_REPO: ${{ inputs.source_repo }}
-      SCCACHE_GHA_ENABLED: "true"
-      RUSTC_WRAPPER: "sccache"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -107,8 +105,23 @@ jobs:
             "https://github.com/${BARN_REPO}.git" source/wanaku-barn
           echo "::endgroup::"
 
-      - name: Set up sccache
-        uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+      - name: Cache Cargo registry
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-registry-${{ hashFiles('source/wanaku/Cargo.lock') }}
+          restore-keys: |
+            cargo-registry-
+
+      - name: Cache Rust target directory
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: source/wanaku/target
+          key: cargo-target-${{ runner.os }}-${{ hashFiles('source/wanaku/Cargo.lock') }}
+          restore-keys: |
+            cargo-target-${{ runner.os }}-
 
       - name: Build sources summary
         run: |
