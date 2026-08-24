@@ -34,7 +34,7 @@ public class ManagementClient {
 
         try {
             HttpRequest request =
-                    buildRequest("/api/v1/management/info/version").GET().build();
+                    buildRequest(WanakuTestConstants.MANAGEMENT_INFO_PATH).GET().build();
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             LOG.debug("Info response: {} - {}", response.statusCode(), response.body());
@@ -44,7 +44,8 @@ public class ManagementClient {
                 return root.has("data") ? root.get("data") : root;
             } else {
                 throw new ManagementClientException(
-                        "Failed to get info: " + response.statusCode() + " - " + response.body());
+                        "Failed to get info: " + response.statusCode() + " - " + response.body(),
+                        response.statusCode());
             }
         } catch (IOException | InterruptedException e) {
             if (e instanceof InterruptedException) {
@@ -70,7 +71,8 @@ public class ManagementClient {
                 return root.has("data") ? root.get("data") : root;
             } else {
                 throw new ManagementClientException(
-                        "Failed to get statistics: " + response.statusCode() + " - " + response.body());
+                        "Failed to get statistics: " + response.statusCode() + " - " + response.body(),
+                        response.statusCode());
             }
         } catch (IOException | InterruptedException e) {
             if (e instanceof InterruptedException) {
@@ -108,12 +110,24 @@ public class ManagementClient {
     }
 
     public static class ManagementClientException extends RuntimeException {
+        private final int statusCode;
+
         public ManagementClientException(String message) {
+            this(message, -1);
+        }
+
+        public ManagementClientException(String message, int statusCode) {
             super(message);
+            this.statusCode = statusCode;
         }
 
         public ManagementClientException(String message, Throwable cause) {
             super(message, cause);
+            this.statusCode = -1;
+        }
+
+        public int getStatusCode() {
+            return statusCode;
         }
     }
 }
