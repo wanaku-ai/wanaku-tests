@@ -30,6 +30,7 @@ public final class WanakuTestConstants {
     public static final String API_BASE_PATH = "/api/v1";
     public static final String TOOLS_PATH = API_BASE_PATH + "/tools";
     public static final String RESOURCES_PATH = API_BASE_PATH + "/resources";
+    public static final String MANAGEMENT_INFO_PATH = API_BASE_PATH + "/management/info";
     public static final String MANAGEMENT_STATISTICS_PATH = API_BASE_PATH + "/management/statistics";
     public static final String NAMESPACES_PATH = API_BASE_PATH + "/namespaces";
     public static final String PROMPTS_PATH = API_BASE_PATH + "/prompts";
