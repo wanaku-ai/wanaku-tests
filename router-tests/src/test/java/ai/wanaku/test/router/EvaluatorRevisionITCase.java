@@ -1,7 +1,10 @@
 package ai.wanaku.test.router;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import ai.wanaku.test.WanakuTestConstants;
 import ai.wanaku.test.client.EvaluatorClient;
 import ai.wanaku.test.client.EvaluatorClient.EvaluatorResponse;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -18,8 +21,6 @@ import static org.assertj.core.api.Assumptions.assumeThat;
 
 /** Integration tests for the evaluator versioned configuration API (wanaku-ai/wanaku#1879). */
 class EvaluatorRevisionITCase extends RouterTestBase {
-
-    private static final Logger LOG = LoggerFactory.getLogger(EvaluatorRevisionITCase.class);
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -46,6 +47,8 @@ class EvaluatorRevisionITCase extends RouterTestBase {
     @DisplayName("Updating evaluators creates a revision and returns revision metadata")
     @Test
     void shouldCreateRevisionOnUpdate() {
+        assumeValidWasmAvailable();
+
         EvaluatorResponse response = evaluatorClient.updateEvaluators(newFormatPayload("rev-test-eval"));
 
         assertThat(response.statusCode()).isEqualTo(200);
@@ -66,6 +69,8 @@ class EvaluatorRevisionITCase extends RouterTestBase {
     @DisplayName("List revisions returns all recorded revisions newest first")
     @Test
     void shouldListRevisionsNewestFirst() {
+        assumeValidWasmAvailable();
+
         evaluatorClient.updateEvaluators(newFormatPayload("eval-a"));
         evaluatorClient.updateEvaluators(newFormatPayload("eval-b"));
 
@@ -85,7 +90,10 @@ class EvaluatorRevisionITCase extends RouterTestBase {
     @DisplayName("Get active revision returns the most recently activated revision")
     @Test
     void shouldReturnActiveRevision() {
+        assumeValidWasmAvailable();
+
         EvaluatorResponse updateResponse = evaluatorClient.updateEvaluators(newFormatPayload("active-test"));
+        assertThat(updateResponse.statusCode()).isEqualTo(200);
 
         long expectedId = updateResponse.body().get("revision").get("id").asLong();
 
@@ -101,7 +109,10 @@ class EvaluatorRevisionITCase extends RouterTestBase {
     @DisplayName("Get a specific revision by its ID")
     @Test
     void shouldGetRevisionById() {
+        assumeValidWasmAvailable();
+
         EvaluatorResponse updateResponse = evaluatorClient.updateEvaluators(newFormatPayload("get-by-id"));
+        assertThat(updateResponse.statusCode()).isEqualTo(200);
         long revisionId = updateResponse.body().get("revision").get("id").asLong();
 
         EvaluatorResponse getResponse = evaluatorClient.getRevision(revisionId);
@@ -128,8 +139,11 @@ class EvaluatorRevisionITCase extends RouterTestBase {
     @DisplayName("Activating a previous revision rolls back the evaluator config")
     @Test
     void shouldRollbackToPreviousRevision() {
+        assumeValidWasmAvailable();
+
         // Create first revision with eval-alpha
         EvaluatorResponse first = evaluatorClient.updateEvaluators(newFormatPayload("eval-alpha"));
+        assertThat(first.statusCode()).isEqualTo(200);
         long firstRevisionId = first.body().get("revision").get("id").asLong();
 
         // Create second revision with eval-beta (this becomes active)
@@ -169,8 +183,11 @@ class EvaluatorRevisionITCase extends RouterTestBase {
     @DisplayName("Update with correct expected_revision succeeds")
     @Test
     void shouldSucceedWithCorrectExpectedRevision() {
+        assumeValidWasmAvailable();
+
         // Create initial revision
         EvaluatorResponse first = evaluatorClient.updateEvaluators(newFormatPayload("occ-first"));
+        assertThat(first.statusCode()).isEqualTo(200);
         long firstRevisionId = first.body().get("revision").get("id").asLong();
 
         // Update with correct expected_revision
@@ -184,8 +201,11 @@ class EvaluatorRevisionITCase extends RouterTestBase {
     @DisplayName("Update with stale expected_revision returns 409 Conflict")
     @Test
     void shouldReturn409WithStaleExpectedRevision() {
+        assumeValidWasmAvailable();
+
         // Create initial revision
         EvaluatorResponse first = evaluatorClient.updateEvaluators(newFormatPayload("conflict-first"));
+        assertThat(first.statusCode()).isEqualTo(200);
         long firstRevisionId = first.body().get("revision").get("id").asLong();
 
         // Create a second revision (the first is now stale)
@@ -205,6 +225,8 @@ class EvaluatorRevisionITCase extends RouterTestBase {
     @DisplayName("Update without expected_revision still creates a tracked revision")
     @Test
     void shouldCreateRevisionWithoutExpectedRevision() {
+        assumeValidWasmAvailable();
+
         EvaluatorResponse response = evaluatorClient.updateEvaluators(newFormatPayload("no-occ-eval"));
 
         assertThat(response.statusCode()).isEqualTo(200);
@@ -220,7 +242,10 @@ class EvaluatorRevisionITCase extends RouterTestBase {
     @DisplayName("Previous active revision is marked as superseded after a new update")
     @Test
     void shouldMarkPreviousRevisionAsSuperseded() {
+        assumeValidWasmAvailable();
+
         EvaluatorResponse first = evaluatorClient.updateEvaluators(newFormatPayload("sup-first"));
+        assertThat(first.statusCode()).isEqualTo(200);
         long firstRevisionId = first.body().get("revision").get("id").asLong();
 
         evaluatorClient.updateEvaluators(newFormatPayload("sup-second"));
@@ -238,7 +263,10 @@ class EvaluatorRevisionITCase extends RouterTestBase {
     @DisplayName("Revision metadata includes all expected fields")
     @Test
     void shouldIncludeCompleteRevisionMetadata() {
+        assumeValidWasmAvailable();
+
         EvaluatorResponse response = evaluatorClient.updateEvaluators(newFormatPayload("meta-test"));
+        assertThat(response.statusCode()).isEqualTo(200);
 
         JsonNode revision = response.body().get("revision");
 
@@ -254,8 +282,12 @@ class EvaluatorRevisionITCase extends RouterTestBase {
     @DisplayName("Different evaluator configs produce different checksums")
     @Test
     void shouldProduceDifferentChecksumsForDifferentConfigs() {
+        assumeValidWasmAvailable();
+
         EvaluatorResponse first = evaluatorClient.updateEvaluators(newFormatPayload("checksum-a"));
         EvaluatorResponse second = evaluatorClient.updateEvaluators(newFormatPayload("checksum-b"));
+        assertThat(first.statusCode()).isEqualTo(200);
+        assertThat(second.statusCode()).isEqualTo(200);
 
         String checksumA = first.body().get("revision").get("checksum").asText();
         String checksumB = second.body().get("revision").get("checksum").asText();
@@ -303,6 +335,112 @@ class EvaluatorRevisionITCase extends RouterTestBase {
     }
 
     // ──────────────────────────────────────────────────────────────
+    // Named LLM connections and secret safety (wanaku-ai/wanaku#1868)
+    // ──────────────────────────────────────────────────────────────
+
+    @DisplayName("Legacy inline LLM connection fields are rejected with 400 Bad Request")
+    @Test
+    void shouldRejectLegacyInlineLlmFields() {
+        ObjectNode root = mapper.createObjectNode();
+        ArrayNode evaluators = root.putArray("evaluators");
+
+        ObjectNode evaluator = mapper.createObjectNode();
+        evaluator.put("name", "legacy-inline-eval");
+        ObjectNode trigger = mapper.createObjectNode();
+        trigger.put("method", "tools/call");
+        evaluator.set("trigger", trigger);
+
+        // Pre-security-fix shape: a valid connection reference PLUS legacy inline connection
+        // details. Including the required `connection` isolates the failure to the inline fields, so
+        // deny_unknown_fields on the LLM definition is provably what rejects model/url/api_key (400).
+        ObjectNode llm = mapper.createObjectNode();
+        llm.put("operation", "classify");
+        llm.put("prompt", "classify this");
+        llm.put("connection", WanakuTestConstants.TEST_LLM_CONNECTION_NAME);
+        llm.put("model", "llama3.2");
+        llm.put("url", "http://localhost:11434/v1");
+        llm.put("api_key", "inline-secret-token");
+        evaluator.set("llm", llm);
+
+        ObjectNode processor = mapper.createObjectNode();
+        processor.put("path", validProcessorPath());
+        evaluator.set("processor", processor);
+
+        evaluators.add(evaluator);
+
+        EvaluatorResponse response = evaluatorClient.updateEvaluators(root.toString());
+
+        assertThat(response.statusCode()).isEqualTo(400);
+    }
+
+    @DisplayName("Referencing an unknown LLM connection is rejected with 422 Unprocessable Entity")
+    @Test
+    void shouldRejectUnknownLlmConnection() {
+        ObjectNode root = mapper.createObjectNode();
+        ArrayNode evaluators = root.putArray("evaluators");
+
+        // Connection validation happens before WASM compilation, so this fails with 422
+        // regardless of whether a compiled action is available.
+        ObjectNode evaluator = createEvaluatorNode("unknown-connection-eval");
+        ((ObjectNode) evaluator.get("llm")).put("connection", "does-not-exist");
+        evaluators.add(evaluator);
+
+        EvaluatorResponse response = evaluatorClient.updateEvaluators(root.toString());
+
+        assertThat(response.statusCode()).isEqualTo(422);
+    }
+
+    @DisplayName("List LLM connections returns names only, never credentials")
+    @Test
+    void shouldListLlmConnectionNamesWithoutSecrets() {
+        EvaluatorResponse response = evaluatorClient.listLlmConnections();
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).isNotNull();
+        assertThat(response.body().isArray()).isTrue();
+
+        List<String> names = new ArrayList<>();
+        response.body().forEach(node -> names.add(node.asText()));
+        assertThat(names).contains(WanakuTestConstants.TEST_LLM_CONNECTION_NAME);
+
+        // The endpoint exposes connection names for selection only — never the model, URL, or
+        // credential configured on the host.
+        assertThat(response.body().toString())
+                .doesNotContain(WanakuTestConstants.TEST_LLM_CONNECTION_SECRET)
+                .doesNotContain("api_key")
+                .doesNotContain("test-model");
+    }
+
+    @DisplayName("Revision responses reference the connection by name and never expose credentials")
+    @Test
+    void shouldNotExposeSecretsInRevisionResponses() {
+        assumeValidWasmAvailable();
+
+        EvaluatorResponse update = evaluatorClient.updateEvaluators(newFormatPayload("secret-safety-eval"));
+        assertThat(update.statusCode()).isEqualTo(200);
+
+        long revisionId = update.body().get("revision").get("id").asLong();
+
+        // The evaluator only references the connection by name; the resolved credential must not
+        // appear in the update response, the active revision, or a specific revision lookup.
+        assertConnectionReferencedWithoutSecret(update.body());
+        assertConnectionReferencedWithoutSecret(
+                evaluatorClient.getActiveRevision().body());
+        assertConnectionReferencedWithoutSecret(
+                evaluatorClient.getRevision(revisionId).body());
+    }
+
+    private void assertConnectionReferencedWithoutSecret(JsonNode body) {
+        assertThat(body).isNotNull();
+        String serialized = body.toString();
+        assertThat(serialized)
+                .doesNotContain(WanakuTestConstants.TEST_LLM_CONNECTION_SECRET)
+                .doesNotContain("api_key");
+        // The evaluator remains wired to the host connection purely by name.
+        assertThat(serialized).contains("\"connection\":\"" + WanakuTestConstants.TEST_LLM_CONNECTION_NAME + "\"");
+    }
+
+    // ──────────────────────────────────────────────────────────────
     // Helpers
     // ──────────────────────────────────────────────────────────────
 
@@ -328,7 +466,9 @@ class EvaluatorRevisionITCase extends RouterTestBase {
     }
 
     /**
-     * Creates a single evaluator definition node with minimal valid fields.
+     * Creates a single evaluator definition node with minimal valid fields. The LLM operation
+     * references a named, host-configured connection; inline model/url/api_key are no longer
+     * accepted (wanaku-ai/wanaku#1868).
      */
     private ObjectNode createEvaluatorNode(String name) {
         ObjectNode evaluator = mapper.createObjectNode();
@@ -341,17 +481,36 @@ class EvaluatorRevisionITCase extends RouterTestBase {
         ObjectNode llm = mapper.createObjectNode();
         llm.put("operation", "classify");
         llm.put("prompt", "Test prompt for " + name);
-        llm.put("model", "test-model");
-        llm.put("url", "http://localhost:11434");
-        llm.put("api_key", "");
+        llm.put("connection", WanakuTestConstants.TEST_LLM_CONNECTION_NAME);
         evaluator.set("llm", llm);
 
         ObjectNode processor = mapper.createObjectNode();
-        processor.put("path", "actions/dist/safety_warn_action.wasm");
+        processor.put("path", validProcessorPath());
         evaluator.set("processor", processor);
 
         evaluator.put("on_error", "continue");
 
         return evaluator;
+    }
+
+    /**
+     * Absolute path to a compiled WASM action the server can load, or the conventional relative
+     * path as a fallback for tests that are rejected before WASM compilation is reached.
+     */
+    private String validProcessorPath() {
+        Path wasm = config.getEvaluatorWasmPath();
+        return wasm != null ? wasm.toString() : "actions/dist/safety_warn_action.wasm";
+    }
+
+    /**
+     * Skips a test that needs a successful activation when no compiled WASM action is available.
+     * The server compiles every referenced module before activating, so without a real component
+     * these tests cannot reach a 200 response.
+     */
+    private void assumeValidWasmAvailable() {
+        Path wasm = config.getEvaluatorWasmPath();
+        assumeThat(wasm != null && Files.exists(wasm))
+                .as("A compiled evaluator WASM action is required (set -D%s)", WanakuTestConstants.PROP_EVALUATOR_WASM)
+                .isTrue();
     }
 }

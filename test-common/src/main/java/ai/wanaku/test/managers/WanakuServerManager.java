@@ -187,8 +187,21 @@ public class WanakuServerManager extends ProcessManager {
     }
 
     private Path generateWanakuConfig() throws IOException {
+        // Named LLM connections are config-only: they can only be defined here, never through the
+        // management API. Evaluator tests reference this connection by name; its credential must
+        // never surface through any API response (wanaku-ai/wanaku#1868).
+        String yaml = String.join(
+                "\n",
+                "# bootstrap config for testing",
+                "llm_connections:",
+                "  - name: \"" + WanakuTestConstants.TEST_LLM_CONNECTION_NAME + "\"",
+                "    model: \"test-model\"",
+                "    url: \"http://localhost:11434/v1/\"",
+                "    api_key: \"" + WanakuTestConstants.TEST_LLM_CONNECTION_SECRET + "\"",
+                "");
+
         Path configFile = Files.createTempFile("wanaku-config-", ".yaml");
-        Files.writeString(configFile, "# empty bootstrap config for testing\n");
+        Files.writeString(configFile, yaml);
         LOG.debug("Generated wanaku config at {}", configFile);
         return configFile;
     }
