@@ -31,6 +31,7 @@ public class SharedInfrastructure implements ExtensionContext.Store.CloseableRes
                 .artifactsDir(baseConfig.getArtifactsDir())
                 .serverBinaryPath(baseConfig.getServerBinaryPath())
                 .camelCapabilityJarPath(baseConfig.getCamelCapabilityJarPath())
+                .evaluatorWasmPath(baseConfig.getEvaluatorWasmPath())
                 .tempDataDir(tempDataDir)
                 .defaultTimeout(baseConfig.getDefaultTimeout())
                 .build();

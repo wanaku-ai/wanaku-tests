@@ -155,9 +155,23 @@ jobs:
       - name: Build Wanaku Server (Rust)
         run: |
           cd source/wanaku
+          # Building the evaluator feature runs its build script, which compiles the WASM
+          # evaluator actions (via cargo-component) into actions/dist/.
           cargo build -p wanaku-feature-evaluator
           cargo build --release --bin wanaku-server
-          echo "Wanaku server binary ready"
+
+          # The evaluator revision tests activate a real WASM action; ensure it is present.
+          # The build script normally produces it, but build it explicitly as a fallback so the
+          # tests never silently skip due to a missing component.
+          WASM="actions/dist/safety_warn_action.wasm"
+          if [ ! -f "$WASM" ]; then
+            echo "WASM action not produced by build script; building it explicitly"
+            (cd actions/safety-warn && cargo component build --release)
+            mkdir -p actions/dist
+            cp actions/safety-warn/target/wasm32-wasip1/release/safety_warn_action.wasm "$WASM"
+          fi
+          test -f "$WASM" || { echo "::error::Evaluator WASM action missing: $WASM"; exit 1; }
+          echo "Wanaku server binary and evaluator WASM action ready"
 
       - name: Build Camel Integration Capability
         run: |
@@ -195,10 +209,14 @@ jobs:
         run: |
           SERVER_BIN="$(pwd)/source/wanaku/target/release/wanaku-server"
           CIC_JAR=$(find source/camel-integration-capability -name "*-jar-with-dependencies.jar" -path "*/target/*" | head -1)
+          EVAL_WASM="$(pwd)/source/wanaku/actions/dist/safety_warn_action.wasm"
 
           EXTRA_OPTS="-Dwanaku.test.server.binary=${SERVER_BIN}"
           if [ -n "$CIC_JAR" ]; then
             EXTRA_OPTS="$EXTRA_OPTS -Dwanaku.test.camel-capability.jar=$(pwd)/${CIC_JAR}"
+          fi
+          if [ -f "$EVAL_WASM" ]; then
+            EXTRA_OPTS="$EXTRA_OPTS -Dwanaku.test.evaluator.wasm=${EVAL_WASM}"
           fi
           if [ -n "$CLI_PATH" ]; then
             EXTRA_OPTS="$EXTRA_OPTS -Dwanaku.test.cli.path=$CLI_PATH"

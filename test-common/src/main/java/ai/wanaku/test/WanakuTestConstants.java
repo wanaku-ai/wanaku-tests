@@ -13,6 +13,7 @@ public final class WanakuTestConstants {
     public static final String PROP_CAMEL_CAPABILITY_JAR = "wanaku.test.camel-capability.jar";
     public static final String PROP_TIMEOUT = "wanaku.test.timeout";
     public static final String PROP_SKIP_THRESHOLD = "wanaku.test.skip.threshold";
+    public static final String PROP_EVALUATOR_WASM = "wanaku.test.evaluator.wasm";
 
     // Default values
     public static final String DEFAULT_ARTIFACTS_DIR = "artifacts";
@@ -38,6 +39,15 @@ public final class WanakuTestConstants {
     public static final String SERVICES_PATH = API_BASE_PATH + "/services";
     public static final String EVALUATORS_PATH = API_BASE_PATH + "/evaluators";
     public static final String EVALUATOR_REVISIONS_PATH = EVALUATORS_PATH + "/revisions";
+    public static final String EVALUATOR_LLM_CONNECTIONS_PATH = EVALUATORS_PATH + "/llm-connections";
+
+    // Evaluator LLM connection fixture. The Wanaku server loads named, config-only LLM
+    // connections at startup; evaluators reference one by name and never carry credentials.
+    // WanakuServerManager writes this connection into the generated bootstrap config, and the
+    // evaluator tests reference it by name. The secret value must never surface through any
+    // management API response (see wanaku-ai/wanaku#1868).
+    public static final String TEST_LLM_CONNECTION_NAME = "test-connection";
+    public static final String TEST_LLM_CONNECTION_SECRET = "super-secret-test-key-do-not-leak";
 
     // Port allocation
     public static final int PORT_ALLOCATION_RETRIES = 5;

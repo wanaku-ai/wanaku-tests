@@ -62,6 +62,17 @@ public class EvaluatorClient {
         return executeAndParse(request, "list revisions");
     }
 
+    /** Lists configured LLM connection names. Never returns credentials. */
+    public EvaluatorResponse listLlmConnections() {
+        LOG.debug("Listing evaluator LLM connections");
+
+        HttpRequest request = buildRequest(WanakuTestConstants.EVALUATOR_LLM_CONNECTIONS_PATH)
+                .GET()
+                .build();
+
+        return executeRaw(request, "list llm connections");
+    }
+
     /** Gets the currently active evaluator revision. */
     public EvaluatorResponse getActiveRevision() {
         LOG.debug("Getting active evaluator revision");
@@ -124,7 +135,10 @@ public class EvaluatorClient {
 
             JsonNode body = null;
             if (response.body() != null && !response.body().isBlank()) {
-                body = objectMapper.readTree(response.body());
+                JsonNode root = objectMapper.readTree(response.body());
+                // Management API responses are wrapped as {"data": ..., "error": ...}; unwrap so
+                // callers work with the payload directly (data is null on error responses).
+                body = root.has("data") ? root.get("data") : root;
             }
             return new EvaluatorResponse(response.statusCode(), body);
         } catch (IOException | InterruptedException e) {

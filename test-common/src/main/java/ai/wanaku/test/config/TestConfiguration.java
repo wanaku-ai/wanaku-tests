@@ -12,6 +12,7 @@ public class TestConfiguration {
     private final Path camelCapabilityJarPath;
     private final Path artifactsDir;
     private final Path tempDataDir;
+    private final Path evaluatorWasmPath;
     private final Duration defaultTimeout;
 
     private TestConfiguration(Builder builder) {
@@ -19,6 +20,7 @@ public class TestConfiguration {
         this.camelCapabilityJarPath = builder.camelCapabilityJarPath;
         this.artifactsDir = builder.artifactsDir;
         this.tempDataDir = builder.tempDataDir;
+        this.evaluatorWasmPath = builder.evaluatorWasmPath;
         this.defaultTimeout = builder.defaultTimeout;
     }
 
@@ -34,10 +36,13 @@ public class TestConfiguration {
         String timeoutStr = System.getProperty(WanakuTestConstants.PROP_TIMEOUT, "60");
         Duration timeout = Duration.ofSeconds(Long.parseLong(timeoutStr.replaceAll("[^0-9]", "")));
 
+        Path serverBinary = findServerBinary();
+
         return builder()
                 .artifactsDir(artifactsDir)
-                .serverBinaryPath(findServerBinary())
+                .serverBinaryPath(serverBinary)
                 .camelCapabilityJarPath(findCicJar(artifactsDir))
+                .evaluatorWasmPath(findEvaluatorWasm(serverBinary))
                 .defaultTimeout(timeout)
                 .build();
     }
@@ -85,8 +90,50 @@ public class TestConfiguration {
         return null;
     }
 
+    /**
+     * Resolves the path to a compiled evaluator WASM action used as a valid processor in
+     * evaluator activation tests. The Wanaku server compiles every referenced WASM module before
+     * activating a configuration, so these tests need a real, loadable component.
+     *
+     * <p>An explicit {@code wanaku.test.evaluator.wasm} system property always wins. Otherwise, as
+     * a convenience for a standard cargo checkout, the path is derived from the server binary
+     * location ({@code <wanaku>/target/<profile>/wanaku-server} → {@code
+     * <wanaku>/actions/dist/safety_warn_action.wasm}) and only used when it actually exists.
+     * Returns {@code null} when no valid WASM can be located, in which case the activation tests
+     * skip rather than fail.
+     */
+    private static Path findEvaluatorWasm(Path serverBinary) {
+        String explicitPath = System.getProperty(WanakuTestConstants.PROP_EVALUATOR_WASM);
+        if (explicitPath != null) {
+            return Path.of(expandTilde(explicitPath)).toAbsolutePath().normalize();
+        }
+
+        if (serverBinary == null) {
+            return null;
+        }
+
+        // <wanaku>/target/<profile>/wanaku-server -> climb three parents to the repo root.
+        Path wanakuRoot = serverBinary.getParent();
+        for (int i = 0; i < 2 && wanakuRoot != null; i++) {
+            wanakuRoot = wanakuRoot.getParent();
+        }
+        if (wanakuRoot == null) {
+            return null;
+        }
+
+        Path candidate = wanakuRoot
+                .resolve("actions/dist/safety_warn_action.wasm")
+                .toAbsolutePath()
+                .normalize();
+        return Files.exists(candidate) ? candidate : null;
+    }
+
     public Path getServerBinaryPath() {
         return serverBinaryPath;
+    }
+
+    public Path getEvaluatorWasmPath() {
+        return evaluatorWasmPath;
     }
 
     public Path getCamelCapabilityJarPath() {
@@ -110,6 +157,7 @@ public class TestConfiguration {
         private Path camelCapabilityJarPath;
         private Path artifactsDir;
         private Path tempDataDir;
+        private Path evaluatorWasmPath;
         private Duration defaultTimeout = WanakuTestConstants.DEFAULT_TIMEOUT;
 
         public Builder serverBinaryPath(Path serverBinaryPath) {
@@ -129,6 +177,11 @@ public class TestConfiguration {
 
         public Builder tempDataDir(Path tempDataDir) {
             this.tempDataDir = tempDataDir;
+            return this;
+        }
+
+        public Builder evaluatorWasmPath(Path evaluatorWasmPath) {
+            this.evaluatorWasmPath = evaluatorWasmPath;
             return this;
         }
 
