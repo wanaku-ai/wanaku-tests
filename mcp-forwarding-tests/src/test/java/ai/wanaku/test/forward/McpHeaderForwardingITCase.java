@@ -142,7 +142,7 @@ class McpHeaderForwardingITCase extends McpForwardingTestBase {
                 .thenAssertResults();
     }
 
-    @DisplayName("Tool handles absent Authorization header without error (issue #873)")
+    @DisplayName("Trying to send an authenticated request without mandatory parameters causes error")
     @Test
     void shouldHandleAbsentAuthHeader() throws Exception {
         headerMcpClient = createClientWithHeaders(Map.of());
@@ -154,11 +154,7 @@ class McpHeaderForwardingITCase extends McpForwardingTestBase {
                             "echoAuthHeader response (no auth): isError={}, content={}",
                             response.isError(),
                             response.content());
-                    if (!response.isError() && !response.content().isEmpty()) {
-                        String text = response.content().get(0).asText().text();
-                        assertThat(text).contains("auth=MISSING");
-                        assertThat(text).contains("marker=no-auth");
-                    }
+                    assertThat(response.isError()).isTrue();
                 })
                 .thenAssertResults();
     }
