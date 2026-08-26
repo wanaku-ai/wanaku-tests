@@ -130,10 +130,15 @@ class McpHeaderForwardingITCase extends McpForwardingTestBase {
         headerMcpClient
                 .when()
                 .toolsCall("echoAuthHeader", Map.of("marker", "fwd-test"), response -> {
+                    LOG.info(
+                            "echoAuthHeader response: isError={}, content={}",
+                            response.isError(),
+                            response.content());
+
                     assertThat(response.isError()).isFalse();
                     assertThat(response.content()).isNotEmpty();
                     String text = response.content().get(0).asText().text();
-                    LOG.info("echoAuthHeader response: {}", text);
+                    LOG.info("echoAuthHeader response text: {}", text);
                     assertThat(text)
                             .as("Authorization header should be forwarded to the downstream MCP server")
                             .contains(TEST_TOKEN);
