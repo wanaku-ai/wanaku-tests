@@ -158,7 +158,8 @@ jobs:
           # Building the evaluator feature runs its build script, which compiles the WASM
           # evaluator actions (via cargo-component) into actions/dist/.
           cargo build -p wanaku-feature-evaluator
-          cargo build --release --bin wanaku-server
+          # Debug build: release optimizations make the server build too slow for CI.
+          cargo build --bin wanaku-server
 
           # The evaluator revision tests activate a real WASM action; ensure it is present.
           # The build script normally produces it, but build it explicitly as a fallback so the
@@ -207,7 +208,7 @@ jobs:
         env:
           CLI_PATH: ${{ steps.cli.outputs.path }}
         run: |
-          SERVER_BIN="$(pwd)/source/wanaku/target/release/wanaku-server"
+          SERVER_BIN="$(pwd)/source/wanaku/target/debug/wanaku-server"
           CIC_JAR=$(find source/camel-integration-capability -name "*-jar-with-dependencies.jar" -path "*/target/*" | head -1)
           EVAL_WASM="$(pwd)/source/wanaku/actions/dist/safety_warn_action.wasm"
 
