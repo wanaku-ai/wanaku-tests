@@ -499,7 +499,7 @@ class EvaluatorRevisionITCase extends RouterTestBase {
      */
     private String validProcessorPath() {
         Path wasm = config.getEvaluatorWasmPath();
-        return wasm != null ? wasm.toString() : "actions/dist/safety_warn_action.wasm";
+        return wasm != null ? wasm.toString() : "actions/dist/safety_review_action.wasm";
     }
 
     /**

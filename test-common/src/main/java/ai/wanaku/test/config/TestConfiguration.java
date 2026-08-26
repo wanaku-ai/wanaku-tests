@@ -102,7 +102,8 @@ public class TestConfiguration {
      * <p>An explicit {@code wanaku.test.evaluator.wasm} system property always wins. Otherwise, as
      * a convenience for a standard cargo checkout, the path is derived from the server binary
      * location ({@code <wanaku>/target/<profile>/wanaku-server} → {@code
-     * <wanaku>/actions/dist/safety_warn_action.wasm}) and only used when it actually exists.
+     * <wanaku>/actions/dist/}) and the first compiled safety action found there is used. The
+     * action has been renamed over time (safety-warn → safety-review), so both names are probed.
      * Returns {@code null} when no valid WASM can be located, in which case the activation tests
      * skip rather than fail.
      */
@@ -125,11 +126,16 @@ public class TestConfiguration {
             return null;
         }
 
-        Path candidate = wanakuRoot
-                .resolve("actions/dist/safety_warn_action.wasm")
-                .toAbsolutePath()
-                .normalize();
-        return Files.exists(candidate) ? candidate : null;
+        Path distDir = wanakuRoot.resolve("actions/dist");
+        // The safety evaluator action has been renamed (safety-warn -> safety-review); prefer the
+        // current name and fall back to the older one so a checkout of either revision resolves.
+        for (String actionName : new String[] {"safety_review_action.wasm", "safety_warn_action.wasm"}) {
+            Path candidate = distDir.resolve(actionName).toAbsolutePath().normalize();
+            if (Files.exists(candidate)) {
+                return candidate;
+            }
+        }
+        return null;
     }
 
     public Path getServerBinaryPath() {

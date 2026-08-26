@@ -161,18 +161,25 @@ jobs:
           # Debug build: release optimizations make the server build too slow for CI.
           cargo build --bin wanaku-server
 
-          # The evaluator revision tests activate a real WASM action; ensure it is present.
-          # The build script normally produces it, but build it explicitly as a fallback so the
-          # tests never silently skip due to a missing component.
-          WASM="actions/dist/safety_warn_action.wasm"
-          if [ ! -f "$WASM" ]; then
+          # The evaluator revision tests activate a real WASM action; ensure one is present.
+          # The build script normally produces it, but on a cached build it may not rerun, so
+          # build a safety action explicitly as a fallback. The action has been renamed over
+          # time (safety-warn -> safety-review), so detect it instead of hardcoding a name.
+          mkdir -p actions/dist
+          WASM=$(find actions/dist -maxdepth 1 -name 'safety_*_action.wasm' | sort | head -1)
+          if [ -z "$WASM" ]; then
             echo "WASM action not produced by build script; building it explicitly"
-            (cd actions/safety-warn && cargo component build --release)
-            mkdir -p actions/dist
-            cp actions/safety-warn/target/wasm32-wasip1/release/safety_warn_action.wasm "$WASM"
+            ACTION_DIR=$(find actions -maxdepth 1 -type d -name 'safety-*' | sort | head -1)
+            test -n "$ACTION_DIR" || { echo "::error::No safety-* evaluator action source found"; exit 1; }
+            (cd "$ACTION_DIR" && cargo component build --release)
+            BUILT=$(find "$ACTION_DIR/target/wasm32-wasip1/release" -maxdepth 1 -name 'safety_*_action.wasm' | sort | head -1)
+            test -n "$BUILT" || { echo "::error::Explicit build produced no WASM under $ACTION_DIR"; exit 1; }
+            cp "$BUILT" actions/dist/
+            WASM=$(find actions/dist -maxdepth 1 -name 'safety_*_action.wasm' | sort | head -1)
           fi
-          test -f "$WASM" || { echo "::error::Evaluator WASM action missing: $WASM"; exit 1; }
-          echo "Wanaku server binary and evaluator WASM action ready"
+          test -n "$WASM" || { echo "::error::Evaluator WASM action missing in actions/dist"; exit 1; }
+          echo "EVAL_WASM=$(pwd)/${WASM}" >> "$GITHUB_ENV"
+          echo "Wanaku server binary and evaluator WASM action ready: ${WASM}"
 
       - name: Build Camel Integration Capability
         run: |
@@ -210,13 +217,13 @@ jobs:
         run: |
           SERVER_BIN="$(pwd)/source/wanaku/target/debug/wanaku-server"
           CIC_JAR=$(find source/camel-integration-capability -name "*-jar-with-dependencies.jar" -path "*/target/*" | head -1)
-          EVAL_WASM="$(pwd)/source/wanaku/actions/dist/safety_warn_action.wasm"
 
           EXTRA_OPTS="-Dwanaku.test.server.binary=${SERVER_BIN}"
           if [ -n "$CIC_JAR" ]; then
             EXTRA_OPTS="$EXTRA_OPTS -Dwanaku.test.camel-capability.jar=$(pwd)/${CIC_JAR}"
           fi
-          if [ -f "$EVAL_WASM" ]; then
+          # EVAL_WASM is resolved and exported by the "Build Wanaku Server (Rust)" step.
+          if [ -n "$EVAL_WASM" ] && [ -f "$EVAL_WASM" ]; then
             EXTRA_OPTS="$EXTRA_OPTS -Dwanaku.test.evaluator.wasm=${EVAL_WASM}"
           fi
           # Servers built from wanaku-ai/wanaku#1849 register a wanaku_mcp_id filter and expect it
