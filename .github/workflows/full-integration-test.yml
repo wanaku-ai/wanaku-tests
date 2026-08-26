@@ -218,6 +218,17 @@ jobs:
           if [ -f "$EVAL_WASM" ]; then
             EXTRA_OPTS="$EXTRA_OPTS -Dwanaku.test.evaluator.wasm=${EVAL_WASM}"
           fi
+          # Servers built from wanaku-ai/wanaku#1849 register a wanaku_mcp_id filter and expect it
+          # in the pipeline; without it they answer MCP initialize with a null id and clients fail
+          # to connect. The harness generates its own pipeline (to inject a dynamic MCP port), so we
+          # detect whether this server build declares the filter in its default.yaml and, if so,
+          # mirror it into the generated pipeline. Older servers omit it and abort on the unknown
+          # filter type, so it must never be added unconditionally. The match is anchored to a
+          # filter declaration line to avoid matching comments or longer identifiers.
+          if grep -qE '^[[:space:]]*-[[:space:]]*filter:[[:space:]]*wanaku_mcp_id[[:space:]]*$' \
+              source/wanaku/server/src/default.yaml 2>/dev/null; then
+            EXTRA_OPTS="$EXTRA_OPTS -Dwanaku.test.server.mcp-id-filter=true"
+          fi
           if [ -n "$CLI_PATH" ]; then
             EXTRA_OPTS="$EXTRA_OPTS -Dwanaku.test.cli.path=$CLI_PATH"
           fi

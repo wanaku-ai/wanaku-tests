@@ -14,6 +14,7 @@ public class TestConfiguration {
     private final Path tempDataDir;
     private final Path evaluatorWasmPath;
     private final Duration defaultTimeout;
+    private final boolean mcpIdFilterEnabled;
 
     private TestConfiguration(Builder builder) {
         this.serverBinaryPath = builder.serverBinaryPath;
@@ -22,6 +23,7 @@ public class TestConfiguration {
         this.tempDataDir = builder.tempDataDir;
         this.evaluatorWasmPath = builder.evaluatorWasmPath;
         this.defaultTimeout = builder.defaultTimeout;
+        this.mcpIdFilterEnabled = builder.mcpIdFilterEnabled;
     }
 
     public static Builder builder() {
@@ -44,6 +46,8 @@ public class TestConfiguration {
                 .camelCapabilityJarPath(findCicJar(artifactsDir))
                 .evaluatorWasmPath(findEvaluatorWasm(serverBinary))
                 .defaultTimeout(timeout)
+                .mcpIdFilterEnabled(
+                        Boolean.parseBoolean(System.getProperty(WanakuTestConstants.PROP_MCP_ID_FILTER, "false")))
                 .build();
     }
 
@@ -152,6 +156,17 @@ public class TestConfiguration {
         return defaultTimeout;
     }
 
+    /**
+     * Whether the generated server pipeline should include the {@code wanaku_mcp_id} filter, which
+     * extracts the JSON-RPC id from the request body once and exposes it to downstream filters as
+     * {@code mcp.id} metadata (wanaku-ai/wanaku#1849). Servers that predate that change do not
+     * register the filter and abort startup on an unknown filter type, so this defaults to
+     * {@code false} and must be enabled only when the target server is known to support it.
+     */
+    public boolean isMcpIdFilterEnabled() {
+        return mcpIdFilterEnabled;
+    }
+
     public static class Builder {
         private Path serverBinaryPath;
         private Path camelCapabilityJarPath;
@@ -159,6 +174,7 @@ public class TestConfiguration {
         private Path tempDataDir;
         private Path evaluatorWasmPath;
         private Duration defaultTimeout = WanakuTestConstants.DEFAULT_TIMEOUT;
+        private boolean mcpIdFilterEnabled;
 
         public Builder serverBinaryPath(Path serverBinaryPath) {
             this.serverBinaryPath = serverBinaryPath;
@@ -187,6 +203,11 @@ public class TestConfiguration {
 
         public Builder defaultTimeout(Duration defaultTimeout) {
             this.defaultTimeout = defaultTimeout;
+            return this;
+        }
+
+        public Builder mcpIdFilterEnabled(boolean mcpIdFilterEnabled) {
+            this.mcpIdFilterEnabled = mcpIdFilterEnabled;
             return this;
         }
 

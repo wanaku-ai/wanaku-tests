@@ -34,6 +34,7 @@ public class SharedInfrastructure implements ExtensionContext.Store.CloseableRes
                 .evaluatorWasmPath(baseConfig.getEvaluatorWasmPath())
                 .tempDataDir(tempDataDir)
                 .defaultTimeout(baseConfig.getDefaultTimeout())
+                .mcpIdFilterEnabled(baseConfig.isMcpIdFilterEnabled())
                 .build();
 
         LOG.debug("Server binary: {}", config.getServerBinaryPath());

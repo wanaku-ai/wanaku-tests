@@ -49,6 +49,7 @@ wanaku-tests/
 - `wanaku.test.cli.path` - CLI path (JAR or binary)
 - `wanaku.test.timeout` - global timeout in seconds (default: 60)
 - `wanaku.test.skip.threshold` - max allowed skip percentage before build fails (default: 30)
+- `wanaku.test.server.mcp-id-filter` - add the `wanaku_mcp_id` filter to the generated server pipeline (default: false). Enable for servers that include wanaku-ai/wanaku#1849; older servers abort on the unknown filter type. The `full-integration-test` workflow sets this automatically by inspecting the built server's `default.yaml`.
 - `wanaku.test.external.mgmt.port` - connect to an already-running server management API on this port (skip launching server)
 - `wanaku.test.external.mcp.port` - connect to an already-running server MCP endpoint on this port (requires mgmt.port too)
 - `wanaku.test.external.cic.url` - connect to an already-running CIC MCP endpoint at this URL (skip launching CIC)

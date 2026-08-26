@@ -142,8 +142,7 @@ public class WanakuServerManager extends ProcessManager {
     }
 
     private Path generatePipelineConfig() throws IOException {
-        String yaml = String.join(
-                "\n",
+        List<String> lines = new ArrayList<>(List.of(
                 "listeners:",
                 "  - name: mcp",
                 "    address: \"0.0.0.0:" + mcpPort + "\"",
@@ -158,7 +157,20 @@ public class WanakuServerManager extends ProcessManager {
                 "        allow_headers: [\"Content-Type\", \"Accept\", \"Mcp-Session-Id\","
                         + " \"Mcp-Protocol-Version\", \"Authorization\"]",
                 "      - filter: mcp",
-                "        on_invalid: continue",
+                "        on_invalid: continue"));
+
+        // wanaku_mcp_id extracts the JSON-RPC id from the request body once and stores it as mcp.id
+        // metadata, which downstream filters (mcp_init, tool_call, ...) then read instead of
+        // re-parsing the body. Servers that predate wanaku-ai/wanaku#1849 do not register this
+        // filter and abort startup with "unknown filter type", so it is only added when the target
+        // server is known to support it. It must run right after the mcp filter, before any filter
+        // that reads the id. Without it, such servers answer initialize with a null id and MCP
+        // clients fail to connect.
+        if (config.isMcpIdFilterEnabled()) {
+            lines.add("      - filter: wanaku_mcp_id");
+        }
+
+        lines.addAll(List.of(
                 "      - filter: wanaku_namespace",
                 "      - filter: wanaku_well_known",
                 "      - filter: wanaku_mcp_init",
@@ -178,10 +190,10 @@ public class WanakuServerManager extends ProcessManager {
                 "",
                 "insecure_options:",
                 "  skip_pipeline_validation: true",
-                "");
+                ""));
 
         Path configFile = Files.createTempFile("pipeline-config-", ".yaml");
-        Files.writeString(configFile, yaml);
+        Files.writeString(configFile, String.join("\n", lines));
         LOG.debug("Generated pipeline config at {}", configFile);
         return configFile;
     }
