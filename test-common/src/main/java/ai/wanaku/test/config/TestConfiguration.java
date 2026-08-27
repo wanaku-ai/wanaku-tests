@@ -15,6 +15,7 @@ public class TestConfiguration {
     private final Path evaluatorWasmPath;
     private final Duration defaultTimeout;
     private final boolean mcpIdFilterEnabled;
+    private final String forwardHeaders;
 
     private TestConfiguration(Builder builder) {
         this.serverBinaryPath = builder.serverBinaryPath;
@@ -24,6 +25,7 @@ public class TestConfiguration {
         this.evaluatorWasmPath = builder.evaluatorWasmPath;
         this.defaultTimeout = builder.defaultTimeout;
         this.mcpIdFilterEnabled = builder.mcpIdFilterEnabled;
+        this.forwardHeaders = builder.forwardHeaders;
     }
 
     public static Builder builder() {
@@ -48,6 +50,7 @@ public class TestConfiguration {
                 .defaultTimeout(timeout)
                 .mcpIdFilterEnabled(
                         Boolean.parseBoolean(System.getProperty(WanakuTestConstants.PROP_MCP_ID_FILTER, "false")))
+                .forwardHeaders(System.getProperty(WanakuTestConstants.PROP_FORWARD_HEADERS))
                 .build();
     }
 
@@ -173,6 +176,17 @@ public class TestConfiguration {
         return mcpIdFilterEnabled;
     }
 
+    /**
+     * Comma-separated allowlist of request header names the server may forward to downstream MCP
+     * servers, exposed as the {@code WANAKU_FORWARD_HEADERS} environment variable. Header forwarding
+     * is default-deny (wanaku-ai/wanaku#873): nothing is forwarded unless a header is named here (or
+     * via a per-tool {@code wanaku.forward_headers} label). Returns {@code null} when unset, in which
+     * case the server keeps its default-deny posture and the environment variable is not set.
+     */
+    public String getForwardHeaders() {
+        return forwardHeaders;
+    }
+
     public static class Builder {
         private Path serverBinaryPath;
         private Path camelCapabilityJarPath;
@@ -181,6 +195,7 @@ public class TestConfiguration {
         private Path evaluatorWasmPath;
         private Duration defaultTimeout = WanakuTestConstants.DEFAULT_TIMEOUT;
         private boolean mcpIdFilterEnabled;
+        private String forwardHeaders;
 
         public Builder serverBinaryPath(Path serverBinaryPath) {
             this.serverBinaryPath = serverBinaryPath;
@@ -214,6 +229,11 @@ public class TestConfiguration {
 
         public Builder mcpIdFilterEnabled(boolean mcpIdFilterEnabled) {
             this.mcpIdFilterEnabled = mcpIdFilterEnabled;
+            return this;
+        }
+
+        public Builder forwardHeaders(String forwardHeaders) {
+            this.forwardHeaders = forwardHeaders;
             return this;
         }
 

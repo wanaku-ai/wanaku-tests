@@ -50,6 +50,7 @@ wanaku-tests/
 - `wanaku.test.timeout` - global timeout in seconds (default: 60)
 - `wanaku.test.skip.threshold` - max allowed skip percentage before build fails (default: 30)
 - `wanaku.test.server.mcp-id-filter` - add the `wanaku_mcp_id` filter to the generated server pipeline (default: false). Enable for servers that include wanaku-ai/wanaku#1849; older servers abort on the unknown filter type. The `full-integration-test` workflow sets this automatically by inspecting the built server's `default.yaml`.
+- `wanaku.test.server.forward-headers` - comma-separated allowlist of request headers the server may forward to downstream MCP servers, set as the `WANAKU_FORWARD_HEADERS` env var (default: unset). Header forwarding is default-deny (wanaku-ai/wanaku#873); the `mcp-forwarding-tests` module sets this to `Authorization` so `McpHeaderForwardingITCase` can verify forwarding. Left unset, the server keeps its default-deny posture.
 - `wanaku.test.external.mgmt.port` - connect to an already-running server management API on this port (skip launching server)
 - `wanaku.test.external.mcp.port` - connect to an already-running server MCP endpoint on this port (requires mgmt.port too)
 - `wanaku.test.external.cic.url` - connect to an already-running CIC MCP endpoint at this URL (skip launching CIC)
@@ -66,6 +67,8 @@ mvn verify -pl camel-integration-capability-tests \
 ```
 
 You can also use only the server properties (the framework will still launch CIC) or only the CIC property (the framework will still launch the server).
+
+When debugging the `mcp-forwarding-tests` against an external server, the framework does not launch the server and therefore cannot set `WANAKU_FORWARD_HEADERS`. Start your external server with `WANAKU_FORWARD_HEADERS=Authorization` yourself, otherwise `McpHeaderForwardingITCase` fails with "Missing required argument: authorization".
 
 ## Test Lifecycle
 

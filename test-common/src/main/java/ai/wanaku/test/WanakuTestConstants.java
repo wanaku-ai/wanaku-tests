@@ -15,6 +15,7 @@ public final class WanakuTestConstants {
     public static final String PROP_SKIP_THRESHOLD = "wanaku.test.skip.threshold";
     public static final String PROP_EVALUATOR_WASM = "wanaku.test.evaluator.wasm";
     public static final String PROP_MCP_ID_FILTER = "wanaku.test.server.mcp-id-filter";
+    public static final String PROP_FORWARD_HEADERS = "wanaku.test.server.forward-headers";
 
     // Default values
     public static final String DEFAULT_ARTIFACTS_DIR = "artifacts";

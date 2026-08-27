@@ -35,6 +35,7 @@ public class SharedInfrastructure implements ExtensionContext.Store.CloseableRes
                 .tempDataDir(tempDataDir)
                 .defaultTimeout(baseConfig.getDefaultTimeout())
                 .mcpIdFilterEnabled(baseConfig.isMcpIdFilterEnabled())
+                .forwardHeaders(baseConfig.getForwardHeaders())
                 .build();
 
         LOG.debug("Server binary: {}", config.getServerBinaryPath());

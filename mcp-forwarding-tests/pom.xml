@@ -84,6 +84,9 @@
                     <runOrder>random</runOrder>
                     <systemPropertyVariables>
                         <wanaku.test.artifacts.dir>${project.basedir}/../artifacts</wanaku.test.artifacts.dir>
+                        <!-- Opt in to Authorization header forwarding (wanaku-ai/wanaku#873); the
+                             server is default-deny, so McpHeaderForwardingITCase needs this. -->
+                        <wanaku.test.server.forward-headers>Authorization</wanaku.test.server.forward-headers>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>

@@ -48,6 +48,15 @@ public class WanakuServerManager extends ProcessManager {
         addEnvironmentVariable("WANAKU_MGMT_LISTEN", "0.0.0.0:" + mgmtPort);
         addEnvironmentVariable("WANAKU_PERSIST_BACKEND", "file");
 
+        // Header forwarding is default-deny (wanaku-ai/wanaku#873): the server forwards a request
+        // header to downstream MCP servers only when it appears in this allowlist. Left unset, the
+        // variable is omitted and the server keeps its default-deny posture, so only modules that
+        // explicitly opt in (currently mcp-forwarding-tests) get header forwarding.
+        String forwardHeaders = config.getForwardHeaders();
+        if (forwardHeaders != null && !forwardHeaders.isBlank()) {
+            addEnvironmentVariable("WANAKU_FORWARD_HEADERS", forwardHeaders);
+        }
+
         try {
             persistDir = Files.createTempDirectory("wanaku-server-data-");
             addEnvironmentVariable(
