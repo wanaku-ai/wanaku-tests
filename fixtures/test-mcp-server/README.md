@@ -47,16 +47,24 @@ podman run --rm -p 8181:8181 test-mcp-server:local
 
 Docker can be used in place of Podman. The container listens on port 8181.
 
-The `fixture-container.yml` GitHub Actions workflow builds the container for pull
-requests and publishes `quay.io/wanaku/test-mcp-server:latest` from pushes to
-`main` in `wanaku-ai/wanaku-tests`. It can also be triggered manually:
+The `fixture-container.yml` GitHub Actions workflow builds the container on both
+AMD64 and ARM64 runners. Pull requests and fork builds only build the images locally;
+publishing is restricted to pushes and manual runs on the upstream `main` branch.
+
+For upstream `main` builds, the workflow first publishes architecture-specific
+images and then creates multi-architecture manifests:
+
+- `quay.io/wanaku/test-mcp-server:latest`
+- `quay.io/wanaku/test-mcp-server:sha-<full Git commit SHA>`
+
+The underlying architecture-specific tags are `latest-amd64`, `latest-arm64`,
+`sha-<full Git commit SHA>-amd64`, and `sha-<full Git commit SHA>-arm64`.
+
+It can also be triggered manually:
 
 ```shell
 gh workflow run fixture-container.yml --ref main -R wanaku-ai/wanaku-tests
 ```
-
-Each published build also has an immutable `sha-<full Git commit SHA>` tag. Manual
-runs on other branches and runs in forks build the image without publishing it.
 
 Publishing requires repository secrets `QUAY_USERNAME` and `QUAY_PASSWORD` for an
 account with write access to `quay.io/wanaku/test-mcp-server`.
