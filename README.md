@@ -96,6 +96,26 @@ skipped because these scenarios change configuration, restart processes, and inj
 The `full-integration-test` workflow builds these prerequisites from source and runs the audit tests
 in managed mode.
 
+### Action-policy lifecycle
+
+The lifecycle scenario in `governance-tests` exercises the public management and MCP boundaries as one
+persisted workflow: startup with an allow posture, runtime deny activation, rejected candidate retention,
+immutable rollback, and process restart. It uses the local governance capture fixture and reuses the
+focused selector/precedence/validation suites for their specialized matrices.
+
+```bash
+mvn -DskipTests package -f fixtures/governance-capture-server/pom.xml
+mvn verify -pl governance-tests -am -Dit.test='ActionPolicyLifecycleITCase' -Dfailsafe.failIfNoSpecifiedTests=false \
+  -Dwanaku.test.server.binary=/path/to/wanaku/target/debug/wanaku-server
+```
+
+The lifecycle test requires a managed Wanaku server and the governance capture fixture. It deliberately
+does not support external-server mode because the scenario changes live action-policy state, restarts
+the process while retaining the persistence directory, and verifies the revision history after restart.
+The capture fixture remains alive across the managed server restart; the test refreshes or recreates its
+forward before the final post-restart MCP requests.
+
+
 ```bash
 # Recommended: build and run all tests with CLI JAR and debug logging
 mvn clean install -Dwanaku.test.cli.path=../artifacts/wanaku-cli-0.1.0/quarkus-run.jar -Dwanaku.log.level=DEBUG
