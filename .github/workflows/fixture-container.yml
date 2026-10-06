@@ -52,7 +52,6 @@ jobs:
         env:
           PUSH_IMAGE: ${{ github.event_name != 'pull_request' && github.repository == 'wanaku-ai/wanaku-tests' && github.ref == 'refs/heads/main' }}
           IMAGE_TAG: sha-${{ github.sha }}-${{ matrix.architecture }}
-          LATEST_TAG: latest-${{ matrix.architecture }}
         run: |
           ./mvnw --batch-mode --no-transfer-progress clean verify \
             -Dquarkus.container-image.build=true \
@@ -61,7 +60,6 @@ jobs:
             -Dquarkus.container-image.group=wanaku \
             -Dquarkus.container-image.name=test-mcp-server \
             -Dquarkus.container-image.tag="$IMAGE_TAG" \
-            -Dquarkus.container-image.additional-tags="$LATEST_TAG" \
             -Dquarkus.jib.platforms="${{ matrix.platform }}"
 
   create-manifests:
@@ -75,32 +73,7 @@ jobs:
           registry: quay.io
           username: ${{ secrets.QUAY_USERNAME }}
           password: ${{ secrets.QUAY_PASSWORD }}
-      - name: Create multi-architecture manifests
+      - name: Create and verify multi-architecture manifests
         env:
           IMAGE_TAG: sha-${{ github.sha }}
-        run: |
-          docker buildx imagetools create \
-            --tag "$IMAGE:$IMAGE_TAG" \
-            "$IMAGE:$IMAGE_TAG-amd64" \
-            "$IMAGE:$IMAGE_TAG-arm64"
-
-          docker buildx imagetools create \
-            --tag "$IMAGE:latest" \
-            "$IMAGE:latest-amd64" \
-            "$IMAGE:latest-arm64"
-      - name: Verify multi-architecture manifests
-        env:
-          IMAGE_TAG: sha-${{ github.sha }}
-        run: |
-          set -euo pipefail
-
-          for tag in "$IMAGE_TAG" "latest"; do
-            output="$(docker buildx imagetools inspect "$IMAGE:$tag")"
-            printf '%s\n' "$output"
-
-            # Do not treat a successfully published single-architecture image
-            # as a valid result. Both required platforms must be present in the
-            # manifest list before the workflow can succeed.
-            grep -q 'linux/amd64' <<< "$output"
-            grep -q 'linux/arm64' <<< "$output"
-          done
+        run: bash ./build-manifests.sh "$IMAGE" "$IMAGE_TAG"
