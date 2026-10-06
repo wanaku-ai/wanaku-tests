@@ -51,14 +51,18 @@ The `fixture-container.yml` GitHub Actions workflow builds the container on both
 AMD64 and ARM64 runners. Pull requests and fork builds only build the images locally;
 publishing is restricted to pushes and manual runs on the upstream `main` branch.
 
-For upstream `main` builds, the workflow first publishes architecture-specific
-images and then creates multi-architecture manifests:
+For upstream `main` builds, the workflow first publishes immutable
+architecture-specific images for the current commit and then creates both
+multi-architecture manifests from those same images:
 
 - `quay.io/wanaku/test-mcp-server:latest`
 - `quay.io/wanaku/test-mcp-server:sha-<full Git commit SHA>`
 
-The underlying architecture-specific tags are `latest-amd64`, `latest-arm64`,
-`sha-<full Git commit SHA>-amd64`, and `sha-<full Git commit SHA>-arm64`.
+The architecture-specific source images for each run are
+`sha-<full Git commit SHA>-amd64` and
+`sha-<full Git commit SHA>-arm64`. Both the commit-SHA manifest and
+`latest` are assembled from that same pair, so overlapping workflow runs
+cannot mix architecture images from different commits.
 
 It can also be triggered manually:
 
