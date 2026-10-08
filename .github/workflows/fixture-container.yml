@@ -5,11 +5,13 @@ on:
     paths:
       - fixtures/test-mcp-server/**
       - .github/workflows/fixture-container.yml
+      - build-manifests.sh
   push:
     branches: [main]
     paths:
       - fixtures/test-mcp-server/**
       - .github/workflows/fixture-container.yml
+      - build-manifests.sh
   workflow_dispatch:
 
 permissions:
