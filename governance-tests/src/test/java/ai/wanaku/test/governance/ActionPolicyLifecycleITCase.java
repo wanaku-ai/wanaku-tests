@@ -29,19 +29,20 @@ class ActionPolicyLifecycleITCase extends GovernanceTestBase {
     @Test
     void runsCompletePolicyLifecycleAcrossProcessRestart() throws Exception {
         startGovernedServer(GovernancePolicies.policy(), GovernancePolicies.enforce("allow"));
-        registerCaptureForward(NAMESPACE);
 
         try (ActionPolicyClient policies = new ActionPolicyClient(server.getBaseUrl())) {
-            McpTestClient client = connect(NAMESPACE);
-
             JsonNode baselinePolicy = MAPPER.readTree(GovernancePolicies.policy());
-            ActionPolicyClient.Response baseline = policies.updatePolicy(baselinePolicy);
+            ActionPolicyClient.Response baseline = policies.getActiveRevision();
             assertThat(baseline.statusCode())
-                    .as("Initial policy activation: %s", baseline.body())
+                    .as("Startup policy activation: %s", baseline.body())
                     .isEqualTo(200);
+            assertThat(baseline.body().path("policy"))
+                    .as("Startup active revision must contain the configured policy")
+                    .isEqualTo(baselinePolicy);
             long baselineRevision = revisionId(baseline.body());
-            assertThat(revisionId(policies.getActiveRevision().body()))
-                    .isEqualTo(baselineRevision);
+
+            registerCaptureForward(NAMESPACE);
+            McpTestClient client = connect(NAMESPACE);
 
             assertAllowedOperations(client);
             CaptureCounts afterAllow = captureCounts();
