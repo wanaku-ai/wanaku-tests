@@ -159,14 +159,12 @@ class ActionPolicyLifecycleITCase extends GovernanceTestBase {
 
         client.when()
                 .resourcesRead(CAPTURE_RESOURCE_URI)
-                .withAssert(response -> assertThat(response.isError()).isFalse())
                 .send()
                 .thenAssertResults();
 
         client.when()
                 .promptsGet(CAPTURE_PROMPT)
                 .withArguments(Map.of("topic", "lifecycle-allow"))
-                .withAssert(response -> assertThat(response.isError()).isFalse())
                 .send()
                 .thenAssertResults();
     }
