@@ -31,7 +31,7 @@ jobs:
     - name: Save PR number
       run: echo "${{ github.event.pull_request.number }}" > pr-number.txt
     - name: Upload PR number
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: pr-number
         path: pr-number.txt
@@ -47,7 +47,7 @@ jobs:
         python3 .github/scripts/generate-static-analysis-report.py
     - name: Upload Analysis Report
       if: steps.analysis.outcome == 'failure'
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: static-analysis-report
         path: static-analysis-report.md
@@ -55,7 +55,7 @@ jobs:
         if-no-files-found: ignore
     - name: Upload PMD Reports
       if: always()
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: pmd-reports
         path: '**/target/pmd.xml'
@@ -63,7 +63,7 @@ jobs:
         if-no-files-found: ignore
     - name: Upload SpotBugs Reports
       if: always()
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: spotbugs-reports
         path: '**/target/spotbugsXml.xml'
