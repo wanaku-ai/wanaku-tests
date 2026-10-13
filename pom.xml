@@ -36,7 +36,7 @@
         <testcontainers.version>2.0.5</testcontainers.version>
         <keycloak-testcontainer.version>4.3.1</keycloak-testcontainer.version>
         <jackson.version>2.22.3</jackson.version>
-        <slf4j.version>2.0.18</slf4j.version>
+        <slf4j.version>2.0.20</slf4j.version>
         <logback.version>1.6.5</logback.version>
         <assertj.version>3.27.7</assertj.version>
         <awaitility.version>4.3.0</awaitility.version>
