@@ -51,14 +51,26 @@ docker build -f saci/Containerfile \
   -t localhost/wanaku-saci-worker:latest saci
 ```
 
+## Published image
+
+The `Saci Worker Container` workflow
+([`saci-container.yml`](../.github/workflows/saci-container.yml)) builds the
+image on x86_64 and AArch64 runners. Each build starts `wanaku-server` and
+runs the CLI in the image as UID 123456. After a push to `main`, the workflow
+publishes `quay.io/wanaku/wanaku-saci-worker:latest` and a
+`sha-<commit>` tag. Each tag is a multi-architecture manifest. Pull requests
+build and check the image but do not publish it.
+
 ## Use the image
 
 Set `worker.image` in the Saci configuration:
 
 ```yaml
 worker:
-  image: localhost/wanaku-saci-worker:latest
+  image: quay.io/wanaku/wanaku-saci-worker:latest
 ```
+
+For a local build, use `localhost/wanaku-saci-worker:latest`.
 
 The shell session of a run keeps background processes between steps. A
 setup step can start the server, and later steps can use it:
