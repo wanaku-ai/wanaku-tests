@@ -321,6 +321,7 @@ local deterministic model fixture; no external model service or API key is requi
 - [Resources Tests](resources-tests/README.md) — file resource management via REST API, MCP, and CLI
 - [Cross-Capability Tests](cross-capability-tests/README.md) — router restart and mixed-capability scenarios
 - [Camel Integration Capability Tests](camel-integration-capability-tests/README.md) — CIC tools, resources, PostgreSQL, multi-instance
+- [Saci test image](saci/README.md) — a [Midnight Saci](https://github.com/orpiske/midnight-saci) worker image with `wanaku-server` and the `wanaku` CLI, for Saci test plans
 
 ### A2A integration tests
 
