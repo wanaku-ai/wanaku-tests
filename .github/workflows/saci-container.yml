@@ -48,6 +48,11 @@ jobs:
           docker run --rm --user 123456:0 --entrypoint bash "$IMAGE_REF" -c '
             set -eu
             wanaku --version
+            oc version --client
+            kubectl version --client
+            helm version --short
+            openssl version
+            jq --version
             wanaku-server >wanaku-server.log 2>&1 &
             for _ in $(seq 1 50); do
               curl -fsS -o /dev/null http://127.0.0.1:8080/healthz && break

@@ -25,6 +25,9 @@ FROM ${SACI_IMAGE}
 ARG TARGETARCH
 ARG WANAKU_CLI_RELEASE=early-access
 ARG WANAKU_CLI_VERSION=0.3.0-SNAPSHOT
+# A version directory under mirror.openshift.com, for example stable-4.19 or 4.19.10.
+ARG OC_VERSION=stable
+ARG HELM_VERSION=v3.19.0
 
 USER root
 COPY --from=wanaku /usr/local/bin/wanaku-server /usr/local/bin/wanaku-server
@@ -39,7 +42,7 @@ RUN printf '#!/bin/sh\nexec java -jar /opt/test-mcp-server/quarkus-run.jar "$@"\
 # /usr/local/bin/wanaku is a wrapper, not a link.
 RUN --mount=type=bind,from=busybox,source=/bin/busybox,target=/tmp/busybox \
     set -eu; \
-    programs_to_install="nodejs npm java-headless"; \
+    programs_to_install="nodejs npm java-headless openssl"; \
     base="https://github.com/wanaku-ai/wanaku-barn/releases/download/${WANAKU_CLI_RELEASE}"; \
     case "${TARGETARCH:-$(uname -m)}" in \
         amd64|x86_64) archive="wanaku-cli-${WANAKU_CLI_VERSION}-linux-x86_64.zip"; launcher=bin/wanaku; programs="bin/wanaku bin/wanaku-cli" ;; \
@@ -61,9 +64,36 @@ RUN --mount=type=bind,from=busybox,source=/bin/busybox,target=/tmp/busybox \
     printf '#!/bin/sh\nexec /opt/wanaku-cli/%s "$@"\n' "$launcher" >/usr/local/bin/wanaku; \
     chmod 0755 /usr/local/bin/wanaku; \
     rm -rf "$tmp"
+
+# The OpenShift and Helm clients, for plans that deploy to a cluster. The
+# OpenShift archive also contains kubectl.
+RUN set -eu; \
+    case "${TARGETARCH:-$(uname -m)}" in \
+        amd64|x86_64) oc_arch=x86_64; helm_arch=amd64 ;; \
+        arm64|aarch64) oc_arch=aarch64; helm_arch=arm64 ;; \
+        *) echo "unsupported architecture" >&2; exit 1 ;; \
+    esac; \
+    tmp=$(mktemp -d); \
+    oc_base="https://mirror.openshift.com/pub/openshift-v4/${oc_arch}/clients/ocp/${OC_VERSION}"; \
+    curl -fsSL -o "$tmp/openshift-client-linux.tar.gz" "$oc_base/openshift-client-linux.tar.gz"; \
+    curl -fsSL -o "$tmp/oc-sha256sum.txt" "$oc_base/sha256sum.txt"; \
+    (cd "$tmp" && grep -E "  openshift-client-linux\.tar\.gz$" oc-sha256sum.txt | sha256sum -c -); \
+    tar -xzf "$tmp/openshift-client-linux.tar.gz" -C /usr/local/bin oc kubectl; \
+    helm_archive="helm-${HELM_VERSION}-linux-${helm_arch}.tar.gz"; \
+    curl -fsSL -o "$tmp/$helm_archive" "https://get.helm.sh/$helm_archive"; \
+    curl -fsSL -o "$tmp/$helm_archive.sha256sum" "https://get.helm.sh/$helm_archive.sha256sum"; \
+    (cd "$tmp" && sha256sum -c "$helm_archive.sha256sum"); \
+    tar -xzf "$tmp/$helm_archive" -C "$tmp"; \
+    install -m 0755 "$tmp/linux-${helm_arch}/helm" /usr/local/bin/helm; \
+    chown 0:0 /usr/local/bin/oc /usr/local/bin/kubectl; \
+    chmod 0755 /usr/local/bin/oc /usr/local/bin/kubectl; \
+    rm -rf "$tmp"; \
+    oc version --client; \
+    helm version --short; \
+    openssl version
 USER 10001:0
 
 LABEL org.opencontainers.image.title="wanaku-saci-worker" \
-      org.opencontainers.image.description="Saci worker with wanaku-server, the wanaku CLI and the test MCP server" \
+      org.opencontainers.image.description="Saci worker with wanaku-server, the wanaku CLI, the test MCP server, oc and helm" \
       org.opencontainers.image.source="https://github.com/wanaku-ai/wanaku" \
       org.opencontainers.image.licenses="Apache-2.0"

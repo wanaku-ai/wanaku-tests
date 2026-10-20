@@ -15,6 +15,9 @@ The image is `quay.io/orpiske/saci-worker` with these additions:
 | `wanaku-server` | `/usr/local/bin/wanaku-server` | `/usr/local/bin/wanaku-server` of `WANAKU_IMAGE` |
 | `wanaku` | `/usr/local/bin/wanaku` | The `wanaku-cli` archive of a [wanaku-barn release](https://github.com/wanaku-ai/wanaku-barn/releases/tag/early-access) |
 | `test-mcp-server` | `/usr/local/bin/test-mcp-server` | `/deployments` of `FIXTURE_IMAGE`, the [`fixtures/test-mcp-server`](../fixtures/test-mcp-server) image |
+| `oc`, `kubectl` | `/usr/local/bin/oc`, `/usr/local/bin/kubectl` | The OpenShift client archive for `OC_VERSION` from [mirror.openshift.com](https://mirror.openshift.com/pub/openshift-v4/clients/ocp/) |
+| `helm` | `/usr/local/bin/helm` | The Helm `HELM_VERSION` archive from [get.helm.sh](https://get.helm.sh) |
+| `openssl` | `/usr/bin/openssl` | The Fedora `openssl` package |
 
 On Linux x86_64, the image contains the native CLI. On other architectures,
 the image contains the JVM CLI. The image also contains a Java runtime for
@@ -48,8 +51,10 @@ the build context.
 | `WANAKU_CLI_RELEASE` | `early-access` | The wanaku-barn release that supplies the CLI. |
 | `WANAKU_CLI_VERSION` | `0.3.0-SNAPSHOT` | The CLI version in the release archive names. |
 | `FIXTURE_IMAGE` | `quay.io/wanaku/test-mcp-server:latest` | The image that supplies the test MCP server. |
+| `OC_VERSION` | `stable` | The OpenShift client version directory, for example `stable-4.19` or `4.19.10`. |
+| `HELM_VERSION` | `v3.19.0` | The Helm version. |
 
-The build verifies the SHA-256 checksum of the CLI archive.
+The build verifies the SHA-256 checksums of the Wanaku CLI, OpenShift client and Helm archives.
 
 To test a server that you built from source, build the server image in your
 Wanaku checkout first. Then give that image to the build:
