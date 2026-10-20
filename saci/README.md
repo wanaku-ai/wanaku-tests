@@ -2,8 +2,9 @@
 
 [Midnight Saci](https://github.com/orpiske/midnight-saci) runs Markdown test
 plans in a worker container. The [`Containerfile`](Containerfile) in this
-directory extends the Saci worker image with the Wanaku binaries, so a plan
-can start a Wanaku server and test it with the CLI.
+directory extends the Saci worker image with the Wanaku binaries and the test
+MCP server fixture, so a plan can start a Wanaku server, connect it to an MCP
+server and test it with the CLI.
 
 ## Contents
 
@@ -13,9 +14,17 @@ The image is `quay.io/orpiske/saci-worker` with these additions:
 | --- | --- | --- |
 | `wanaku-server` | `/usr/local/bin/wanaku-server` | `/usr/local/bin/wanaku-server` of `WANAKU_IMAGE` |
 | `wanaku` | `/usr/local/bin/wanaku` | The `wanaku-cli` archive of a [wanaku-barn release](https://github.com/wanaku-ai/wanaku-barn/releases/tag/early-access) |
+| `test-mcp-server` | `/usr/local/bin/test-mcp-server` | `/deployments` of `FIXTURE_IMAGE`, the [`fixtures/test-mcp-server`](../fixtures/test-mcp-server) image |
 
 On Linux x86_64, the image contains the native CLI. On other architectures,
-the image contains the JVM CLI and a Java runtime.
+the image contains the JVM CLI. The image also contains a Java runtime for
+the test MCP server, and Node.js with `npm`.
+
+`test-mcp-server` listens on port 8181 and serves MCP at
+`http://127.0.0.1:8181/mcp`. The
+[fixture README](../fixtures/test-mcp-server/README.md) lists its tools and
+resources. To use a different port, run
+`QUARKUS_HTTP_PORT=<port> test-mcp-server`.
 
 The base image also supplies `bash`, `curl`, `jq`, `git` and the other
 [worker utilities](https://github.com/orpiske/midnight-saci/blob/main/docs/worker.md#the-image).
@@ -38,6 +47,7 @@ the build context.
 | `WANAKU_IMAGE` | `quay.io/wanaku/wanaku-server:early-access` | The image that supplies `wanaku-server`. |
 | `WANAKU_CLI_RELEASE` | `early-access` | The wanaku-barn release that supplies the CLI. |
 | `WANAKU_CLI_VERSION` | `0.3.0-SNAPSHOT` | The CLI version in the release archive names. |
+| `FIXTURE_IMAGE` | `quay.io/wanaku/test-mcp-server:latest` | The image that supplies the test MCP server. |
 
 The build verifies the SHA-256 checksum of the CLI archive.
 
@@ -51,12 +61,18 @@ docker build -f saci/Containerfile \
   -t localhost/wanaku-saci-worker:latest saci
 ```
 
+To test a changed fixture, build its image as the
+[fixture README](../fixtures/test-mcp-server/README.md#container) shows. Then
+set `FIXTURE_IMAGE` to that image.
+
 ## Published image
 
 The `Saci Worker Container` workflow
 ([`saci-container.yml`](../.github/workflows/saci-container.yml)) builds the
 image on x86_64 and AArch64 runners. Each build starts `wanaku-server` and
-runs the CLI in the image as UID 123456. After a push to `main`, the workflow
+`test-mcp-server` and runs the CLI in the image as UID 123456. The workflow
+also runs after the `Test MCP Server Container` workflow succeeds on `main`,
+so the image uses the newest published fixture. After a push to `main`, the workflow
 publishes `quay.io/wanaku/wanaku-saci-worker:latest` and a
 `sha-<commit>` tag. Each tag is a multi-architecture manifest. Pull requests
 build and check the image but do not publish it.

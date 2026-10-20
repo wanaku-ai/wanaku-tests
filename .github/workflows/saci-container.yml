@@ -12,6 +12,11 @@ on:
       - saci/**
       - .github/workflows/saci-container.yml
       - build-manifests.sh
+  # Rebuild after a new test MCP server image is published.
+  workflow_run:
+    workflows: [Test MCP Server Container]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -22,6 +27,7 @@ env:
 
 jobs:
   build:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     strategy:
       fail-fast: false
       matrix:
@@ -37,7 +43,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build container
         run: docker build -f saci/Containerfile -t "$IMAGE_REF" saci
-      - name: Check the server and the CLI
+      - name: Check the servers and the CLI
         run: |
           docker run --rm --user 123456:0 --entrypoint bash "$IMAGE_REF" -c '
             set -eu
@@ -48,7 +54,17 @@ jobs:
               sleep 0.2
             done
             curl -fsS http://127.0.0.1:8080/healthz || { cat wanaku-server.log; exit 1; }
-            wanaku tools list --no-auth'
+            wanaku tools list --no-auth
+            test-mcp-server >test-mcp-server.log 2>&1 &
+            for _ in $(seq 1 100); do
+              curl -sS -o /dev/null http://127.0.0.1:8181/mcp 2>/dev/null && break
+              sleep 0.2
+            done
+            curl -fsS http://127.0.0.1:8181/mcp \
+              -H "Content-Type: application/json" \
+              -H "Accept: application/json, text/event-stream" \
+              -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"ci\",\"version\":\"1\"}}}" \
+              | grep infra-auto-remediation || { cat test-mcp-server.log; exit 1; }'
       - name: Login to Container Registry
         if: github.event_name != 'pull_request' && github.repository == 'wanaku-ai/wanaku-tests' && github.ref == 'refs/heads/main'
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0

@@ -1,21 +1,25 @@
 # Saci worker image for Wanaku test plans (saci/README.md).
 #
 # It extends the Saci worker image (https://github.com/orpiske/midnight-saci)
-# with `wanaku-server` and the `wanaku` CLI, so a Saci test plan can start
-# the server and drive it with the CLI, `curl` and `jq`.
+# with `wanaku-server`, the `wanaku` CLI and the test MCP server fixture
+# (fixtures/test-mcp-server), so a Saci test plan can start the servers and
+# drive them with the CLI, `curl` and `jq`. Run from the repository root:
 #
 #   docker build -f saci/Containerfile -t localhost/wanaku-saci-worker:latest saci
 #
-# WANAKU_IMAGE supplies `wanaku-server`. The CLI comes from a wanaku-barn
-# release.
+# WANAKU_IMAGE supplies `wanaku-server` and FIXTURE_IMAGE supplies the test
+# MCP server. The CLI comes from a wanaku-barn release.
 
 ARG SACI_IMAGE=quay.io/orpiske/saci-worker:latest
 ARG WANAKU_IMAGE=quay.io/wanaku/wanaku-server:early-access
 # A static busybox, used only to extract the CLI archive.
 ARG BUSYBOX_IMAGE=docker.io/library/busybox:1.37-musl
+ARG FIXTURE_IMAGE=quay.io/wanaku/test-mcp-server:latest
 
 FROM ${WANAKU_IMAGE} AS wanaku
 FROM ${BUSYBOX_IMAGE} AS busybox
+
+FROM ${FIXTURE_IMAGE} AS fixture
 
 FROM ${SACI_IMAGE}
 ARG TARGETARCH
@@ -24,23 +28,28 @@ ARG WANAKU_CLI_VERSION=0.3.0-SNAPSHOT
 
 USER root
 COPY --from=wanaku /usr/local/bin/wanaku-server /usr/local/bin/wanaku-server
+# The test MCP server listens on port 8181 and serves MCP at /mcp.
+COPY --from=fixture --chown=0:0 /deployments/ /opt/test-mcp-server/
+RUN printf '#!/bin/sh\nexec java -jar /opt/test-mcp-server/quarkus-run.jar "$@"\n' >/usr/local/bin/test-mcp-server \
+    && chmod 0755 /usr/local/bin/test-mcp-server
 
 # The CLI has a native build for Linux x86_64 only. Other architectures use
-# the JVM build, which needs Java 21 or later. The launcher finds its files
-# relative to its own path, so /usr/local/bin/wanaku is a wrapper, not a link.
+# the JVM build. The JVM CLI and the test MCP server need Java 21 or later.
+# The launcher finds its files relative to its own path, so
+# /usr/local/bin/wanaku is a wrapper, not a link.
 RUN --mount=type=bind,from=busybox,source=/bin/busybox,target=/tmp/busybox \
     set -eu; \
-    programs_to_install="nodejs npm"; \
+    programs_to_install="nodejs npm java-headless"; \
     base="https://github.com/wanaku-ai/wanaku-barn/releases/download/${WANAKU_CLI_RELEASE}"; \
     case "${TARGETARCH:-$(uname -m)}" in \
         amd64|x86_64) archive="wanaku-cli-${WANAKU_CLI_VERSION}-linux-x86_64.zip"; launcher=bin/wanaku; programs="bin/wanaku bin/wanaku-cli" ;; \
-        *) archive="wanaku-cli-${WANAKU_CLI_VERSION}.zip"; launcher=wanaku; programs=wanaku; \
-           programs_to_install="$programs_to_install java-headless" ;; \
+        *) archive="wanaku-cli-${WANAKU_CLI_VERSION}.zip"; launcher=wanaku; programs=wanaku ;; \
     esac; \
     dnf install --assumeyes --setopt=install_weak_deps=False $programs_to_install; \
     dnf clean all; \
     node --version; \
     npx --version; \
+    java -version; \
     tmp=$(mktemp -d); \
     curl -fsSL -o "$tmp/$archive" "$base/$archive"; \
     curl -fsSL -o "$tmp/checksums_sha256.txt" "$base/checksums_sha256.txt"; \
@@ -55,6 +64,6 @@ RUN --mount=type=bind,from=busybox,source=/bin/busybox,target=/tmp/busybox \
 USER 10001:0
 
 LABEL org.opencontainers.image.title="wanaku-saci-worker" \
-      org.opencontainers.image.description="Saci worker with wanaku-server and the wanaku CLI" \
+      org.opencontainers.image.description="Saci worker with wanaku-server, the wanaku CLI and the test MCP server" \
       org.opencontainers.image.source="https://github.com/wanaku-ai/wanaku" \
       org.opencontainers.image.licenses="Apache-2.0"
