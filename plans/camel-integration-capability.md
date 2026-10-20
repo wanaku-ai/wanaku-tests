@@ -1147,8 +1147,9 @@ oc delete service cic-manual -n "${WANAKU_NAMESPACE}" --ignore-not-found=true
 
 ## Phase 9: WanakuIntegration Negative Tests
 
-Each test creates an invalid resource, verifies `Reconciled=False` with the reason `ValidationError` and the expected
-message, verifies that no Deployment is created, and deletes the resource.
+The operator unit tests cover the field validation of `WanakuIntegration`. This phase keeps two checks that need a
+live cluster. Each test creates an invalid resource, verifies `Reconciled=False` with the reason `ValidationError`
+and the expected message, verifies that no Deployment is created, and deletes the resource.
 
 ### Step 9.0: Define the negative test helper
 
@@ -1210,121 +1211,6 @@ EOF
 **Expected result:**
 
 - The invalid resource `bad-missing-router has `Reconciled=False` with reason `ValidationError`, its message contains `does not exist`, and it creates no Deployment.
-
-### Test 9.3: No routes source, and two routes sources
-
-```bash run
-expect_integration_invalid bad-no-routes "Set exactly one of" <<EOF
-apiVersion: "wanaku.ai/v1alpha1"
-kind: WanakuIntegration
-metadata:
-  name: bad-no-routes
-spec:
-  routerRef: ${WANAKU_ROUTER_NAME}
-EOF
-
-expect_integration_invalid bad-two-routes "Set exactly one of" <<EOF
-apiVersion: "wanaku.ai/v1alpha1"
-kind: WanakuIntegration
-metadata:
-  name: bad-two-routes
-spec:
-  routerRef: ${WANAKU_ROUTER_NAME}
-  routes:
-    routesRef: datastore://orders.camel.yaml
-    serviceCatalog:
-      name: ${CIC_CATALOG}
-      system: ${CIC_CATALOG_SYSTEM}
-EOF
-```
-
-**Expected result:**
-
-- The invalid resource `bad-no-routes has `Reconciled=False` with reason `ValidationError`, its message contains `Set exactly one of`, and it creates no Deployment.
-- The invalid resource `bad-two-routes has `Reconciled=False` with reason `ValidationError`, its message contains `Set exactly one of`, and it creates no Deployment.
-
-### Test 9.4: Route ConfigMap does not exist, and configMapRef without main
-
-```bash run
-expect_integration_invalid bad-missing-configmap "ConfigMap this-configmap-does-not-exist does not exist" <<EOF
-apiVersion: "wanaku.ai/v1alpha1"
-kind: WanakuIntegration
-metadata:
-  name: bad-missing-configmap
-spec:
-  routerRef: ${WANAKU_ROUTER_NAME}
-  routes:
-    configMapRef:
-      name: this-configmap-does-not-exist
-      main: routes.camel.yaml
-EOF
-
-expect_integration_invalid bad-configmap-no-main "requires name and main" <<EOF
-apiVersion: "wanaku.ai/v1alpha1"
-kind: WanakuIntegration
-metadata:
-  name: bad-configmap-no-main
-spec:
-  routerRef: ${WANAKU_ROUTER_NAME}
-  routes:
-    configMapRef:
-      name: cic-echo-routes
-EOF
-```
-
-**Expected result:**
-
-- The invalid resource `bad-missing-configmap has `Reconciled=False` with reason `ValidationError`, its message contains `ConfigMap this-configmap-does-not-exist does not exist`, and it creates no Deployment.
-- The invalid resource `bad-configmap-no-main has `Reconciled=False` with reason `ValidationError`, its message contains `requires name and main`, and it creates no Deployment.
-
-### Test 9.5: Service catalog without system, invalid port, and missing token Secret
-
-```bash run
-expect_integration_invalid bad-catalog-no-system "requires name and system" <<EOF
-apiVersion: "wanaku.ai/v1alpha1"
-kind: WanakuIntegration
-metadata:
-  name: bad-catalog-no-system
-spec:
-  routerRef: ${WANAKU_ROUTER_NAME}
-  routes:
-    serviceCatalog:
-      name: ${CIC_CATALOG}
-EOF
-
-expect_integration_invalid bad-port "spec.mcp.port must be between 1 and 65535" <<EOF
-apiVersion: "wanaku.ai/v1alpha1"
-kind: WanakuIntegration
-metadata:
-  name: bad-port
-spec:
-  routerRef: ${WANAKU_ROUTER_NAME}
-  routes:
-    routesRef: datastore://orders.camel.yaml
-  mcp:
-    port: 70000
-EOF
-
-expect_integration_invalid bad-token-secret "Secret missing-token-secret does not exist" <<EOF
-apiVersion: "wanaku.ai/v1alpha1"
-kind: WanakuIntegration
-metadata:
-  name: bad-token-secret
-spec:
-  routerRef: ${WANAKU_ROUTER_NAME}
-  routes:
-    routesRef: datastore://orders.camel.yaml
-  registration:
-    tokenSecretRef:
-      name: missing-token-secret
-EOF
-```
-
-**Expected result:**
-
-- The invalid resource `bad-catalog-no-system has `Reconciled=False` with reason `ValidationError`, its message contains `requires name and system`, and it creates no Deployment.
-- The invalid resource `bad-port has `Reconciled=False` with reason `ValidationError`, its message contains `spec.mcp.port must be between 1 and 65535`, and it creates no Deployment.
-- The invalid resource `bad-token-secret has `Reconciled=False` with reason `ValidationError`, its message contains `Secret missing-token-secret does not exist`, and it creates no Deployment.
 
 ---
 
@@ -1468,7 +1354,7 @@ Follow [common/cleanup.md](common/cleanup.md).
 | 8 | 8.1-8.2 | Plain Deployment registered with `wanaku forwards add` | High |
 | 8 | 8.3 | Unreachable forward marked unavailable | Medium |
 | 8 | 8.4 | Forward removal removes its tools | High |
-| 9 | 9.1-9.5 | WanakuIntegration validation errors | High |
+| 9 | 9.1-9.2 | WanakuIntegration validation errors | High |
 | 10 | 10.1-10.2 | Deletion removes the runtimes and their forwards | Critical |
 | 11 | 11.1 | Operator health and logs | Medium |
 | 12 | — | Cleanup | Critical |

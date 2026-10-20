@@ -1,23 +1,35 @@
-# Test Plan: CLI Service Catalog and Service Template Lifecycle
+# Test Plan: Wanaku Barn Service Catalog End to End
 
 ## Overview
 
-This test plan verifies the lifecycle of service catalogs and service templates with the `wanaku` CLI against a local
-Wanaku Barn (no authentication). It covers initialization, route authoring, rule generation, validation, packaging,
-deployment, listing, removal and restore, version history, template listing and instantiation, deployment
-instructions and negative tests. An optional phase serves the deployed catalog through a Camel Integration Capability
-(CIC) runtime and calls its tool through Wanaku Server.
+This test plan is the end-to-end plan for Wanaku Barn. It uses the `wanaku` CLI against a local Wanaku Barn (no
+authentication) and follows a service catalog from its source files to an MCP tool call through Wanaku Server. It
+covers initialization, route authoring, rule generation, validation, packaging, deployment and listing, a removal and
+restore round trip, template listing and instantiation, local deployment instructions and negative tests. Two phases
+serve catalogs through a Camel Integration Capability (CIC) runtime and call their tools through Wanaku Server: the
+catalog that this plan writes (Phase 11), and a catalog instantiated from the built-in `camel-qdrant-search-tool`
+template against a local Qdrant vector database (Phase 12).
+
+The detailed checks for catalog versioning and removal (stale versions, unknown versions, a second removal, a deploy
+with a removed name, version restore) are in the Barn unit tests `CatalogVersioningTest` and `CatalogRemovalTest`.
+This plan does not repeat them.
 
 A deployed catalog does not create tools by itself. Barn only stores it. Tools appear in Wanaku Server when a CIC
-runtime serves the catalog and is registered as a forward (Phase 12).
+runtime serves the catalog and is registered as a forward (Phases 11 and 12):
+
+```text
+catalog or template (Barn) --deploy/instantiate--> catalog (Barn) --CIC downloads--> CIC runtime :9190/mcp
+    --forward--> Wanaku Server --MCP--> ${WANAKU_MCP_BASE_URL}/${CIC_NAMESPACE}/mcp
+```
 
 ### Components under test
 
 | Component | Needed for | Common procedure |
 |-----------|------------|------------------|
-| Wanaku Barn | Phases 2 to 11 and 13 (`wanaku service ...`) | [common/start-barn.md](common/start-barn.md) |
-| Wanaku Server | Phase 12 only | [common/start-server.md](common/start-server.md) |
-| CIC runtime (container) | Phase 12 only | [common/start-cic.md](common/start-cic.md) |
+| Wanaku Barn | Phases 2 to 13 (`wanaku service ...`) | [common/start-barn.md](common/start-barn.md) |
+| Wanaku Server | Phases 11, 12 and 13 | [common/start-server.md](common/start-server.md) |
+| CIC runtime (container) | Phases 11 and 12 | [common/start-cic.md](common/start-cic.md) |
+| Qdrant (container or Qdrant Cloud) | Phase 12 only (skippable) | Phase 12 of this plan |
 
 All `wanaku service` commands use `--host "${WANAKU_BARN_URL}"`. The CLI default host is `http://localhost:8080`,
 which is Wanaku Server. Wanaku Server does not serve the service catalog API, so always pass `--host`.
@@ -30,9 +42,22 @@ which is Wanaku Server. Wanaku Server does not serve the service catalog API, so
 |------|-----------------|----------------|
 | `java` | 21+ | `java --version` |
 | `jq` | 1.6+ | `jq --version` |
+| `curl` | any | `curl --version` |
 | `unzip` | any | `unzip -v` |
 | `base64` | any (coreutils) | `base64 --version` |
-| `docker` or `podman` | 20+ | `docker --version` or `podman --version` (Phase 12 only) |
+| `docker` or `podman` | 20+ | `docker --version` or `podman --version` |
+
+### Container images and ports
+
+| Item | Value | Needed for |
+|------|-------|------------|
+| CIC image | `quay.io/wanaku/camel-integration-capability:latest` (`CIC_IMAGE`) | Phases 11 and 12 |
+| Qdrant image | `docker.io/qdrant/qdrant:latest` (`QDRANT_IMAGE`) | Phase 12 |
+| Port `8081` | Wanaku Server MCP listener | Phases 11 to 13 |
+| Port `9190` | CIC MCP port (`CIC_PORT`), host networking | Phases 11 and 12 |
+| Ports `6333` and `6334` | Qdrant REST and gRPC (`QDRANT_REST_PORT`, `QDRANT_GRPC_PORT`) | Phase 12 |
+
+The CIC runtime of Phase 11 stops before Phase 12 starts, so both phases use the same CIC port.
 
 ### Prerequisite check
 
@@ -54,11 +79,23 @@ The executable block is in Step S.2 below.
 | `TEST_CATALOG_NAME` | `test-catalog` | Name of the catalog that this plan creates |
 | `TEST_PACKAGE_OUTPUT` | `${TEST_WORK_DIR}/test-catalog.b64` | Output of `wanaku service package` |
 | `TEST_ECHO_CATALOG` | `${TEST_CATALOG_NAME}-echo` | Catalog created from the `echo-tool` template |
-| `CIC_NAME` | `cic-test-catalog` | CIC container name and forward name (Phase 12) |
-| `CIC_NAMESPACE` | `default` | Wanaku namespace of the forward (Phase 12) |
+| `CIC_NAME` | `cic-test-catalog` | CIC container name and forward name (Phase 11) |
+| `CIC_NAMESPACE` | `default` | Wanaku namespace of the forwards (Phases 11 and 12) |
+| `WANAKU_TEST_GOVERNED_NAMESPACES` | `${CIC_NAMESPACE}` | Namespaces where the test governance allows tool calls |
+| `TEMPLATE_CATALOG` | `qdrant-search-test` | Catalog created from the `camel-qdrant-search-tool` template (Phase 12) |
+| `TEMPLATE_PROPS_FILE` | `${TEST_WORK_DIR}/qdrant-search.properties` | Properties file for the instantiation (Phase 12) |
+| `QDRANT_CIC_NAME` | `cic-qdrant` | CIC container name and forward name (Phase 12) |
+| `QDRANT_IMAGE` | `docker.io/qdrant/qdrant:latest` | Qdrant container image |
+| `QDRANT_CONTAINER` | `qdrant-test` | Qdrant container name |
+| `QDRANT_HOST` | `localhost` | Qdrant host, as the CIC container sees it |
+| `QDRANT_GRPC_PORT` | `6334` | Qdrant gRPC port (used by `camel-qdrant`) |
+| `QDRANT_REST_PORT` | `6333` | Qdrant REST port (used to seed the test data) |
+| `QDRANT_API_KEY` | _(empty)_ | Qdrant API key. Empty for a local container. |
+| `QDRANT_COLLECTION` | `wanaku-test-collection` | Test collection |
+| `QDRANT_VECTOR_DIMENSION` | `4` | Vector size of the test collection |
 
-Barn reserves the name of a removed catalog (see Phase 8). Use a fresh Barn home per run (the default of
-[common/start-barn.md](common/start-barn.md)), or set unique catalog names when you run against a shared Barn.
+Barn reserves the name of a removed catalog until a restore (see Phase 8). Use a fresh Barn home per run (the default
+of [common/start-barn.md](common/start-barn.md)), or set unique catalog names when you run against a shared Barn.
 
 ---
 
@@ -70,7 +107,7 @@ Run this block as a separate `bash` script, not in the shared session.
 
 ```bash
 FAIL=0
-for CMD in java jq unzip base64; do
+for CMD in java jq curl unzip base64; do
   if command -v "${CMD}" > /dev/null 2>&1; then
     echo "PASS: ${CMD} found at $(command -v "${CMD}")"
   else
@@ -78,6 +115,12 @@ for CMD in java jq unzip base64; do
     FAIL=1
   fi
 done
+if command -v docker > /dev/null 2>&1 || command -v podman > /dev/null 2>&1; then
+  echo "PASS: container runtime found"
+else
+  echo "FAIL: neither docker nor podman is installed"
+  FAIL=1
+fi
 [ "${FAIL}" -eq 0 ] && echo "PASS: all prerequisites met" || { echo "FAIL: prerequisites missing"; exit 1; }
 ```
 
@@ -85,8 +128,10 @@ done
 
 - The output includes `PASS: java found at`.
 - The output includes `PASS: jq found at`.
+- The output includes `PASS: curl found at`.
 - The output includes `PASS: unzip found at`.
 - The output includes `PASS: base64 found at`.
+- The output includes `PASS: container runtime found`.
 - The output includes `PASS: all prerequisites met`.
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
@@ -102,6 +147,18 @@ export TEST_ECHO_CATALOG="${TEST_ECHO_CATALOG:-${TEST_CATALOG_NAME}-echo}"
 export CIC_NAME="${CIC_NAME:-cic-test-catalog}"
 export CIC_NAMESPACE="${CIC_NAMESPACE:-default}"
 export WANAKU_TEST_GOVERNED_NAMESPACES="${WANAKU_TEST_GOVERNED_NAMESPACES:-${CIC_NAMESPACE}}"
+
+export TEMPLATE_CATALOG="${TEMPLATE_CATALOG:-qdrant-search-test}"
+export TEMPLATE_PROPS_FILE="${TEMPLATE_PROPS_FILE:-${TEST_WORK_DIR}/qdrant-search.properties}"
+export QDRANT_CIC_NAME="${QDRANT_CIC_NAME:-cic-qdrant}"
+export QDRANT_IMAGE="${QDRANT_IMAGE:-docker.io/qdrant/qdrant:latest}"
+export QDRANT_CONTAINER="${QDRANT_CONTAINER:-qdrant-test}"
+export QDRANT_HOST="${QDRANT_HOST:-localhost}"
+export QDRANT_GRPC_PORT="${QDRANT_GRPC_PORT:-6334}"
+export QDRANT_REST_PORT="${QDRANT_REST_PORT:-6333}"
+export QDRANT_API_KEY="${QDRANT_API_KEY:-}"
+export QDRANT_COLLECTION="${QDRANT_COLLECTION:-wanaku-test-collection}"
+export QDRANT_VECTOR_DIMENSION="${QDRANT_VECTOR_DIMENSION:-4}"
 ```
 
 **Expected result:**
@@ -131,11 +188,19 @@ export CLI_JAR
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
-### Step 1.2: Start Wanaku Server (Phase 12 only)
+### Step 1.2: Start Wanaku Server with the test governance configuration
 
-Skip this step if you do not run Phase 12. Follow [common/start-server.md](common/start-server.md) and run step 2b,
-so that the tool call of Phase 12 is permitted. After completion, `WANAKU_SERVER_URL` and `WANAKU_MCP_BASE_URL` must
-be set. Then follow [common/container-runtime.md](common/container-runtime.md) to set `CONTAINER_RUNTIME`.
+Follow [common/start-server.md](common/start-server.md) and run step 2b, so that the tool calls of Phases 11 and 12
+are permitted in `${CIC_NAMESPACE}`. After completion, `WANAKU_SERVER_URL`, `WANAKU_MCP_BASE_URL` and
+`WANAKU_SERVER_PID` must be set.
+
+**Expected result:**
+
+- The invoked procedure completes successfully (inferred).
+
+### Step 1.3: Detect the container runtime
+
+Follow [common/container-runtime.md](common/container-runtime.md). After completion, `CONTAINER_RUNTIME` must be set.
 
 **Expected result:**
 
@@ -229,7 +294,7 @@ done
 ## Phase 3: Service Catalog -- Write the Routes
 
 The CIC serves a route as an MCP tool when the route starts from `ai-tool:<name>`. The tool arguments arrive as
-message headers. These routes return the `message` argument with a prefix, so that Phase 12 can check the result
+message headers. These routes return the `message` argument with a prefix, so that Phase 11 can check the result
 without an external system.
 
 ### Step 3.1: Write the system-a route
@@ -440,7 +505,8 @@ echo "${OUTPUT}" | grep -q "^${TEST_CATALOG_NAME}[[:space:]]" \
 
 ## Phase 8: Service Catalog -- Remove and Restore
 
-Barn does not delete a removed catalog. It hides it, keeps its versions and reserves its name until a restore.
+Barn does not delete a removed catalog. It hides it, keeps its versions and reserves its name until a restore. This
+phase runs one round trip. The Barn unit tests `CatalogRemovalTest` and `CatalogVersioningTest` cover the other cases.
 
 ### Test 8.1: Remove the catalog
 
@@ -475,35 +541,7 @@ java -jar "${CLI_JAR}" service removed --plain --host "${WANAKU_BARN_URL}" --no-
 - The output includes `PASS: catalog is in the removed list`.
 - The output contains no line starting with `FAIL:`.
 
-### Test 8.3: A deploy with a removed name is rejected (negative)
-
-```bash run
-OUTPUT=$(java -jar "${CLI_JAR}" service deploy --plain --path="${CATALOG_DIR}" --host "${WANAKU_BARN_URL}" --no-auth 2>&1)
-EXIT_CODE=$?
-echo "${OUTPUT}"
-[ "${EXIT_CODE}" -ne 0 ] && echo "${OUTPUT}" | grep -q "409" \
-  && echo "PASS: deploy of a removed name returns 409" || echo "FAIL: deploy of a removed name was not rejected"
-```
-
-**Expected result:**
-
-- The output includes `PASS: deploy of a removed name returns 409`.
-- The output contains no line starting with `FAIL:`.
-
-### Test 8.4: A second removal fails (negative)
-
-```bash run
-java -jar "${CLI_JAR}" service catalog remove --plain --host "${WANAKU_BARN_URL}" --no-auth \
-  --name="${TEST_CATALOG_NAME}" > /dev/null 2>&1
-[ $? -ne 0 ] && echo "PASS: second removal rejected" || echo "FAIL: second removal accepted"
-```
-
-**Expected result:**
-
-- The output includes `PASS: second removal rejected`.
-- The output contains no line starting with `FAIL:`.
-
-### Test 8.5: Restore the catalog
+### Test 8.3: Restore the catalog
 
 ```bash run
 OUTPUT=$(java -jar "${CLI_JAR}" service restore --plain --host "${WANAKU_BARN_URL}" --no-auth \
@@ -522,81 +560,9 @@ java -jar "${CLI_JAR}" service catalog list --plain --host "${WANAKU_BARN_URL}" 
 - The output includes `PASS: restored catalog is listed`.
 - The output contains no line starting with `FAIL:`.
 
-## Phase 9: Service Catalog -- Version History
+## Phase 9: Service Templates
 
-`wanaku service versions list` is not used here. It cannot print the version timestamps in the tested CLI build. The
-steps use `versions download` to check that a version exists.
-
-### Test 9.1: A new deploy creates version 2
-
-```bash run
-sed 's/system-a: /system-a v2: /' "${CATALOG_DIR}/system-a/system-a.camel.yaml" > "${TEST_WORK_DIR}/v2.yaml" \
-  && mv "${TEST_WORK_DIR}/v2.yaml" "${CATALOG_DIR}/system-a/system-a.camel.yaml"
-java -jar "${CLI_JAR}" service deploy --plain --path="${CATALOG_DIR}" --host "${WANAKU_BARN_URL}" --no-auth > /dev/null 2>&1
-
-java -jar "${CLI_JAR}" service versions download --plain --host "${WANAKU_BARN_URL}" --no-auth \
-  --name="${TEST_CATALOG_NAME}" --version=2 --output="${TEST_WORK_DIR}/v2.zip" > /dev/null 2>&1
-unzip -p "${TEST_WORK_DIR}/v2.zip" system-a/system-a.camel.yaml | grep -q "system-a v2: " \
-  && echo "PASS: version 2 has the new route" || echo "FAIL: version 2 not found or not changed"
-```
-
-**Expected result:**
-
-- The output includes `PASS: version 2 has the new route`.
-- The output contains no line starting with `FAIL:`.
-
-### Test 9.2: Restore version 1 as version 3
-
-```bash run
-OUTPUT=$(java -jar "${CLI_JAR}" service versions restore --plain --host "${WANAKU_BARN_URL}" --no-auth \
-  --name="${TEST_CATALOG_NAME}" --version=1 2>&1)
-echo "${OUTPUT}"
-echo "${OUTPUT}" | grep -q "Restored version 1 of '${TEST_CATALOG_NAME}' as version 3" \
-  && echo "PASS: version 1 restored as version 3" || echo "FAIL: restore of version 1 failed"
-
-java -jar "${CLI_JAR}" service versions download --plain --host "${WANAKU_BARN_URL}" --no-auth \
-  --name="${TEST_CATALOG_NAME}" --version=3 --output="${TEST_WORK_DIR}/v3.zip" > /dev/null 2>&1
-unzip -p "${TEST_WORK_DIR}/v3.zip" system-a/system-a.camel.yaml | grep -q "system-a v2: " \
-  && echo "FAIL: version 3 has the version 2 content" || echo "PASS: version 3 has the version 1 content"
-```
-
-**Expected result:**
-
-- The output includes `PASS: version 1 restored as version 3`.
-- The output includes `PASS: version 3 has the version 1 content`.
-- The output contains no line starting with `FAIL:`.
-
-### Test 9.3: A stale expected version is rejected (negative)
-
-```bash run
-OUTPUT=$(java -jar "${CLI_JAR}" service versions restore --plain --host "${WANAKU_BARN_URL}" --no-auth \
-  --name="${TEST_CATALOG_NAME}" --version=2 --expected-version=1 2>&1)
-EXIT_CODE=$?
-[ "${EXIT_CODE}" -ne 0 ] && echo "${OUTPUT}" | grep -q "409" \
-  && echo "PASS: stale expected version returns 409" || echo "FAIL: stale expected version accepted"
-```
-
-**Expected result:**
-
-- The output includes `PASS: stale expected version returns 409`.
-- The output contains no line starting with `FAIL:`.
-
-### Test 9.4: An unknown version is not found (negative)
-
-```bash run
-java -jar "${CLI_JAR}" service versions download --plain --host "${WANAKU_BARN_URL}" --no-auth \
-  --name="${TEST_CATALOG_NAME}" --version=99 --output="${TEST_WORK_DIR}/v99.zip" > /dev/null 2>&1
-[ $? -ne 0 ] && echo "PASS: unknown version rejected" || echo "FAIL: unknown version accepted"
-```
-
-**Expected result:**
-
-- The output includes `PASS: unknown version rejected`.
-- The output contains no line starting with `FAIL:`.
-
-## Phase 10: Service Templates
-
-### Test 10.1: List the templates
+### Test 9.1: List the templates
 
 ```bash run
 OUTPUT=$(java -jar "${CLI_JAR}" service template list --plain --host "${WANAKU_BARN_URL}" --no-auth 2>&1)
@@ -617,23 +583,7 @@ done
 - The output includes `PASS: built-in template github-pullrequest-source-tool listed`.
 - The output contains no line starting with `FAIL:`.
 
-### Test 10.2: Filter the templates
-
-```bash run
-OUTPUT=$(java -jar "${CLI_JAR}" service template list --plain --host "${WANAKU_BARN_URL}" --no-auth --search kafka 2>&1)
-echo "${OUTPUT}" | grep -q "^kafka-tool[[:space:]]" && echo "PASS: search 'kafka' finds kafka-tool" \
-  || echo "FAIL: search 'kafka' does not find kafka-tool"
-echo "${OUTPUT}" | grep -q "^echo-tool[[:space:]]" && echo "FAIL: search 'kafka' returns echo-tool" \
-  || echo "PASS: search 'kafka' excludes echo-tool"
-```
-
-**Expected result:**
-
-- The output includes `PASS: search 'kafka' finds kafka-tool`.
-- The output includes `PASS: search 'kafka' excludes echo-tool`.
-- The output contains no line starting with `FAIL:`.
-
-### Test 10.3: Instantiate the echo-tool template
+### Test 9.2: Instantiate the echo-tool template
 
 ```bash run
 OUTPUT=$(java -jar "${CLI_JAR}" service template instantiate --plain --host "${WANAKU_BARN_URL}" --no-auth \
@@ -654,7 +604,7 @@ java -jar "${CLI_JAR}" service catalog list --plain --host "${WANAKU_BARN_URL}" 
 - The output includes `PASS: <TEST_ECHO_CATALOG> is listed`. Replace each `<VARIABLE>` placeholder with that variable’s run-time value.
 - The output contains no line starting with `FAIL:`.
 
-### Test 10.4: The instantiated catalog has the supplied value
+### Test 9.3: The instantiated catalog has the supplied value
 
 ```bash run
 java -jar "${CLI_JAR}" service versions download --plain --host "${WANAKU_BARN_URL}" --no-auth \
@@ -669,16 +619,16 @@ unzip -p "${TEST_WORK_DIR}/echo.zip" echo/service.properties | grep -q '^echo.se
 - The output includes `PASS: echo.separator has the supplied value`.
 - The output contains no line starting with `FAIL:`.
 
-## Phase 11: Deployment Instructions
+## Phase 10: Deployment Instructions
 
-`wanaku service instructions` supports the models `local` and `docker`.
+`wanaku service instructions` supports the models `local` and `docker`. This plan checks the `local` model.
 
 > [!NOTE]
 > The generated instructions still use the options of the gRPC-based capability (`--registration-url` of the router,
 > `--grpc-port`, client credentials). They do not match the current CIC contract (see
-> [common/start-cic.md](common/start-cic.md)). The tests check only the catalog and system names.
+> [common/start-cic.md](common/start-cic.md)). The test checks only the catalog and system names.
 
-### Test 11.1: Local instructions
+### Test 10.1: Local instructions
 
 ```bash run
 OUTPUT=$(java -jar "${CLI_JAR}" service instructions --plain --host "${WANAKU_BARN_URL}" --no-auth \
@@ -703,55 +653,27 @@ echo "${OUTPUT}" | grep -q -- "--service-catalog ${TEST_CATALOG_NAME}" \
 - The output includes `PASS: instructions name the catalog`.
 - The output contains no line starting with `FAIL:`.
 
-### Test 11.2: Docker instructions
+## Phase 11: Serve the Catalog through the CIC
 
-```bash run
-OUTPUT=$(java -jar "${CLI_JAR}" service instructions --plain --host "${WANAKU_BARN_URL}" --no-auth \
-  --name="${TEST_CATALOG_NAME}" --model=docker 2>&1)
-EXIT_CODE=$?
-[ "${EXIT_CODE}" -eq 0 ] && echo "${OUTPUT}" | grep -q "SERVICE_CATALOG=${TEST_CATALOG_NAME}" \
-  && echo "PASS: docker instructions returned" || echo "FAIL: docker instructions failed (exit code ${EXIT_CODE})"
-```
+This phase is required. It needs Wanaku Server (Step 1.2) and a container runtime (Step 1.3). It serves only
+`system-a`.
 
-**Expected result:**
-
-- The output includes `PASS: docker instructions returned`.
-- The output contains no line starting with `FAIL:`.
-
-### Test 11.3: An unsupported model is rejected (negative)
-
-```bash run
-OUTPUT=$(java -jar "${CLI_JAR}" service instructions --plain --host "${WANAKU_BARN_URL}" --no-auth \
-  --name="${TEST_CATALOG_NAME}" --model=kubernetes 2>&1)
-EXIT_CODE=$?
-[ "${EXIT_CODE}" -ne 0 ] && echo "${OUTPUT}" | grep -q "Unsupported deployment model: kubernetes" \
-  && echo "PASS: unsupported model rejected" || echo "FAIL: unsupported model not rejected"
-```
-
-**Expected result:**
-
-- The output includes `PASS: unsupported model rejected`.
-- The output contains no line starting with `FAIL:`.
-
-## Phase 12: Serve the Catalog through the CIC (optional)
-
-This phase needs Wanaku Server (Step 1.2) and a container runtime. It serves only `system-a`.
-
-### Test 12.0: Pre-flight check
+### Test 11.0: Pre-flight check
 
 ```bash run
 if [ -n "${CONTAINER_RUNTIME}" ] && [ -n "${WANAKU_SERVER_URL}" ]; then
-  echo "PASS: Phase 12 pre-flight checks passed"
+  echo "PASS: Phase 11 pre-flight checks passed"
 else
-  echo "SKIP: Wanaku Server or container runtime not available -- skip Phase 12"
+  echo "FAIL: Wanaku Server or container runtime not available -- run Steps 1.2 and 1.3"
 fi
 ```
 
 **Expected result:**
 
-- The output includes `PASS: Phase 12 pre-flight checks passed` or `SKIP: Wanaku Server or container runtime not available -- skip Phase 12`.
+- The output includes `PASS: Phase 11 pre-flight checks passed`.
+- The output contains no line starting with `FAIL:`.
 
-### Step 12.1a: Set the CIC runtime inputs
+### Step 11.1: Set the CIC runtime inputs
 
 ```bash run
 export CIC_CATALOG="${TEST_CATALOG_NAME}"
@@ -762,9 +684,9 @@ export CIC_CATALOG_SYSTEM="system-a"
 
 - The block exports `CIC_CATALOG` and `CIC_CATALOG_SYSTEM` without errors (inferred).
 
-### Step 12.1: Start the CIC runtime
+### Step 11.2: Start the CIC runtime
 
-Use the values set in Step 12.1a.
+Use the values set in Step 11.1.
 
 Follow [common/start-cic.md](common/start-cic.md).
 
@@ -774,7 +696,7 @@ After completion, the forward `${CIC_NAME}` is registered in `${CIC_NAMESPACE}`.
 
 - The forward `<CIC_NAME>` is registered in `<CIC_NAMESPACE>`.
 
-### Test 12.2: Only the tool of the served system is registered
+### Test 11.3: Only the tool of the served system is registered
 
 ```bash run
 OUTPUT=$(java -jar "${CLI_JAR}" tools list --host "${WANAKU_SERVER_URL}" --no-auth --plain 2>&1)
@@ -790,9 +712,9 @@ echo "${OUTPUT}" | grep -q "^get-system-b-data[[:space:]]" && echo "FAIL: get-sy
 - The output includes `PASS: get-system-b-data not registered (system-b is not served)`.
 - The output contains no line starting with `FAIL:`.
 
-### Test 12.3: Call the tool through Wanaku Server
+### Test 11.4: Call the tool through Wanaku Server
 
-The active catalog version is version 3, which has the version 1 route.
+The restored catalog of Phase 8 has the route of Step 3.1.
 
 ```bash run
 OUTPUT=$(java -jar "${CLI_JAR}" mcp tool --uri "${WANAKU_MCP_BASE_URL}/${CIC_NAMESPACE}/mcp" --no-auth --plain \
@@ -808,7 +730,7 @@ echo "${OUTPUT}"
 - The output includes `PASS: tool returned 'system-a: hello'`.
 - The output contains no line starting with `FAIL:`.
 
-### Step 12.4: Stop the CIC runtime
+### Step 11.5: Stop the CIC runtime
 
 Run the Shutdown section of [common/start-cic.md](common/start-cic.md). Then verify that the tool is gone:
 
@@ -831,6 +753,272 @@ java -jar "${CLI_JAR}" tools list --host "${WANAKU_SERVER_URL}" --no-auth --plai
 - The output includes `PASS: CIC runtime stopped and its forward removed`.
 - The output includes `PASS: tool removed with its forward`.
 - The output contains no line starting with `FAIL:`.
+
+## Phase 12: Service Template End to End: Qdrant Search
+
+This phase instantiates the built-in `camel-qdrant-search-tool` template, serves the catalog through a CIC runtime
+and calls the `qdrant-similarity-search` tool through Wanaku Server against a seeded Qdrant collection. It reuses
+sections C and D of [common/service-template-checks.md](common/service-template-checks.md). The template source and
+listing checks are not part of this plan.
+
+The phase needs a container runtime for Qdrant (Option A) and for the CIC. If Test 12.0 or Test 12.9 prints `SKIP:`,
+skip the remaining steps of this phase and go to Phase 13. Step 14.3 removes the Qdrant data in all cases.
+
+> [!IMPORTANT]
+> Qdrant similarity search needs a query vector. The template route sends the message body to Qdrant without an
+> embedding step, and the tool parameter `query` is a string. Test 12.11 records whether the route returns search
+> results. Until the template converts the query into a vector, expect Test 12.11 to fail. Test 12.10 checks the
+> plumbing (Wanaku Server, CIC and Qdrant connection) independently of the search result.
+
+### Test 12.0: Pre-flight check
+
+```bash run
+[ -n "${CONTAINER_RUNTIME}" ] && echo "PASS: container runtime ${CONTAINER_RUNTIME} is available" \
+  || echo "SKIP: no container runtime -- skip Phase 12"
+```
+
+**Expected result:**
+
+- The output includes `PASS: container runtime <CONTAINER_RUNTIME> is available` or `SKIP: no container runtime -- skip Phase 12`.
+
+### Step 12.1: Set the template variables
+
+These values are fixed by the template. `TEMPLATE_PROPS_PATH` is the `catalog.properties.qdrant-search` entry of the
+template `index.properties`.
+
+```bash run
+export TEMPLATE_NAME="camel-qdrant-search-tool"
+export TEMPLATE_SYSTEM="qdrant-search"
+export TEMPLATE_TOOL="qdrant-similarity-search"
+export TEMPLATE_TOOL_PARAMS="query"
+export TEMPLATE_SEARCH="qdrant"
+export TEMPLATE_PROPS_PATH="qdrant-search/service.properties"
+export TEMPLATE_WORK_DIR="${TEST_WORK_DIR}/qdrant"
+mkdir -p "${TEMPLATE_WORK_DIR}"
+```
+
+**Expected result:**
+
+- The commands exit with code 0 (inferred).
+
+### Step 12.2: Start Qdrant
+
+Choose the applicable backend option below; run only that option.
+
+Use a local container (Option A) or Qdrant Cloud (Option B). `curl` is used here because Qdrant is not a Wanaku
+component.
+
+#### Option A: Local container
+
+Run this block as a separate `bash` script, not in the shared session.
+
+```bash
+${CONTAINER_RUNTIME} run -d --name "${QDRANT_CONTAINER}" \
+  -p "${QDRANT_REST_PORT}:6333" -p "${QDRANT_GRPC_PORT}:6334" "${QDRANT_IMAGE}" > /dev/null
+
+for i in $(seq 1 20); do
+  curl -sf "http://${QDRANT_HOST}:${QDRANT_REST_PORT}/healthz" > /dev/null 2>&1 && break
+  sleep 2
+done
+curl -sf "http://${QDRANT_HOST}:${QDRANT_REST_PORT}/healthz" > /dev/null \
+  && echo "PASS: Qdrant is healthy" || { echo "FAIL: Qdrant is not healthy"; exit 1; }
+```
+
+#### Option B: Qdrant Cloud
+
+1. Create a cluster at <https://cloud.qdrant.io>.
+2. Set `QDRANT_HOST` to the cluster host and `QDRANT_API_KEY` to the API key.
+
+**Expected result:**
+
+- For the local backend option, the output includes `PASS: Qdrant is healthy`; for the cloud/API alternative, the specified backend settings are configured (inferred).
+- The commands exit with code 0.
+
+### Step 12.3: Seed the test collection
+
+Run this block as a separate `bash` script, not in the shared session.
+
+```bash
+QDRANT_REST="http://${QDRANT_HOST}:${QDRANT_REST_PORT}"
+
+curl -sf -X PUT "${QDRANT_REST}/collections/${QDRANT_COLLECTION}" -H "Content-Type: application/json" \
+  ${QDRANT_API_KEY:+-H "api-key: ${QDRANT_API_KEY}"} \
+  -d '{"vectors": {"size": '"${QDRANT_VECTOR_DIMENSION}"', "distance": "Cosine"}}' > /dev/null \
+  && echo "PASS: collection created" || { echo "FAIL: collection not created"; exit 1; }
+
+curl -sf -X PUT "${QDRANT_REST}/collections/${QDRANT_COLLECTION}/points?wait=true" \
+  -H "Content-Type: application/json" ${QDRANT_API_KEY:+-H "api-key: ${QDRANT_API_KEY}"} \
+  -d '{"points": [
+        {"id": 1, "vector": [0.1, 0.2, 0.3, 0.4], "payload": {"content": "Apache Camel integration framework"}},
+        {"id": 2, "vector": [0.5, 0.6, 0.7, 0.8], "payload": {"content": "Qdrant vector database"}},
+        {"id": 3, "vector": [0.9, 0.1, 0.2, 0.3], "payload": {"content": "Wanaku governed action proxy"}}
+      ]}' > /dev/null \
+  && echo "PASS: test vectors inserted" || { echo "FAIL: test vectors not inserted"; exit 1; }
+
+POINTS=$(curl -sf "${QDRANT_REST}/collections/${QDRANT_COLLECTION}" ${QDRANT_API_KEY:+-H "api-key: ${QDRANT_API_KEY}"} \
+  | jq '.result.points_count')
+[ "${POINTS:-0}" -ge 3 ] && echo "PASS: collection has ${POINTS} points" || echo "FAIL: expected 3 points, got ${POINTS}"
+```
+
+**Expected result:**
+
+- The output includes `PASS: collection created`.
+- The output includes `PASS: test vectors inserted`.
+- The output includes `PASS: collection has <POINTS> points`.
+- The output contains no line starting with `FAIL:`.
+- The commands exit with code 0.
+
+### Step 12.4: Write the instantiation properties
+
+Barn substitutes values by property key. The keys must match the keys in `service.properties`.
+
+```bash run
+cat > "${TEMPLATE_PROPS_FILE}" <<EOF
+qdrant.host=${QDRANT_HOST}
+qdrant.port=${QDRANT_GRPC_PORT}
+qdrant.collection=${QDRANT_COLLECTION}
+qdrant.api.key=${QDRANT_API_KEY}
+EOF
+[ -s "${TEMPLATE_PROPS_FILE}" ] && echo "PASS: properties written" || echo "FAIL: properties file is empty"
+```
+
+**Expected result:**
+
+- The output includes `PASS: properties written`.
+- The output contains no line starting with `FAIL:`.
+
+### Test 12.5: Instantiate the template
+
+Run Step S.1 and Tests C.1 to C.3 of [common/service-template-checks.md](common/service-template-checks.md).
+
+**Expected result:**
+
+- Every line of the invoked steps starts with `PASS:`.
+- The catalog `<TEMPLATE_CATALOG>` is in the catalog list.
+- The catalog `<TEMPLATE_CATALOG>` contains the supplied Qdrant host, port, collection and API key.
+- The output contains no line starting with `FAIL:`.
+
+### Step 12.6: Set the CIC runtime inputs
+
+The CIC of this phase uses its own container name and forward name. `CATALOG_CIC_NAME` keeps the name of the Phase 11
+runtime for the cleanup.
+
+```bash run
+export CATALOG_CIC_NAME="${CIC_NAME}"
+export CIC_NAME="${QDRANT_CIC_NAME}"
+export CIC_CATALOG="${TEMPLATE_CATALOG}"
+export CIC_CATALOG_SYSTEM="${TEMPLATE_SYSTEM}"
+```
+
+**Expected result:**
+
+- The commands exit with code 0 (inferred).
+
+### Step 12.7: Start the CIC runtime
+
+Use the values set in Step 12.6.
+
+Follow [common/start-cic.md](common/start-cic.md).
+
+The CIC uses host networking, so `QDRANT_HOST=localhost` reaches the Qdrant container of Step 12.2.
+
+**Expected result:**
+
+- The forward `<CIC_NAME>` is registered in `<CIC_NAMESPACE>`.
+
+### Test 12.8: The tool is registered in Wanaku Server
+
+Run Tests D.1 to D.3 of [common/service-template-checks.md](common/service-template-checks.md).
+
+**Expected result:**
+
+- `qdrant-similarity-search` is in `wanaku tools list` with the type `mcp-forward` and the input schema property
+  `query`.
+- `qdrant-similarity-search` is listed at `<WANAKU_MCP_BASE_URL>/<CIC_NAMESPACE>/mcp`.
+- The output contains no line starting with `FAIL:`.
+
+### Test 12.9: Pre-flight check for the tool call
+
+```bash run
+PHASE12_SKIP=0
+curl -sf "http://${QDRANT_HOST}:${QDRANT_REST_PORT}/healthz" > /dev/null 2>&1 \
+  || { echo "SKIP: Qdrant is not reachable"; PHASE12_SKIP=1; }
+[ "${PHASE12_SKIP}" -eq 0 ] && echo "PASS: Qdrant tool call pre-flight checks passed"
+```
+
+**Expected result:**
+
+- The output includes `PASS: Qdrant tool call pre-flight checks passed` or `SKIP: Qdrant is not reachable`.
+
+### Test 12.10: The call reaches Qdrant through Wanaku Server
+
+The check passes when Wanaku Server forwards the call and the CIC runs the route. A Qdrant error about the query
+format proves the same path. A governance denial, a connection error or an unknown tool fails the check.
+
+```bash run
+OUTPUT=$(java -jar "${CLI_JAR}" mcp tool --uri "${WANAKU_MCP_BASE_URL}/${CIC_NAMESPACE}/mcp" --no-auth --plain \
+  --name "${TEMPLATE_TOOL}" --param "query=vector database" 2>&1)
+echo "${OUTPUT}"
+if echo "${OUTPUT}" | grep -Eqi "governance|no_match|unable to connect|tool not found|unknown tool"; then
+  echo "FAIL: the call did not reach the CIC route"
+else
+  echo "PASS: the call reached the CIC route"
+fi
+```
+
+**Expected result:**
+
+- The output includes `PASS: the call reached the CIC route`.
+- The output contains no line starting with `FAIL:`.
+
+### Test 12.11: The search returns the seeded payloads
+
+```bash run
+OUTPUT=$(java -jar "${CLI_JAR}" mcp tool --uri "${WANAKU_MCP_BASE_URL}/${CIC_NAMESPACE}/mcp" --no-auth --plain \
+  --name "${TEMPLATE_TOOL}" --param "query=[0.5 0.6 0.7 0.8]" 2>&1)
+EXIT_CODE=$?
+echo "${OUTPUT}"
+[ "${EXIT_CODE}" -eq 0 ] && echo "${OUTPUT}" | grep -Eqi "Camel|Qdrant|Wanaku" \
+  && echo "PASS: search returned seeded payloads" \
+  || echo "FAIL: search did not return seeded payloads (known gap: the route has no embedding step)"
+```
+
+**Expected result:**
+
+- The output includes `PASS: search returned seeded payloads`.
+- The output contains no line starting with `FAIL:`.
+
+### Test 12.12: The tool is not served in another namespace (negative)
+
+Wanaku Server serves a tool only in the namespace of its forward.
+
+```bash run
+OUTPUT=$(java -jar "${CLI_JAR}" mcp tool list --uri "${WANAKU_MCP_BASE_URL}/qdrant-other-ns/mcp" \
+  --no-auth --plain 2>&1)
+echo "${OUTPUT}" | grep -q "${TEMPLATE_TOOL}" \
+  && echo "FAIL: tool is visible in another namespace" || echo "PASS: tool is not visible in another namespace"
+```
+
+**Expected result:**
+
+- The output includes `PASS: tool is not visible in another namespace`.
+- The output contains no line starting with `FAIL:`.
+
+### Step 12.13: Stop the CIC runtime
+
+Run the Shutdown section of [common/start-cic.md](common/start-cic.md):
+
+```bash run
+java -jar "${CLI_JAR}" forwards remove --host "${WANAKU_SERVER_URL}" --no-auth \
+  --name "${CIC_NAME:-cic-test}" 2>/dev/null || true
+${CONTAINER_RUNTIME} stop "${CIC_NAME:-cic-test}" > /dev/null 2>&1 || true
+${CONTAINER_RUNTIME} rm "${CIC_NAME:-cic-test}" > /dev/null 2>&1 || true
+echo "PASS: CIC runtime stopped and its forward removed"
+```
+
+**Expected result:**
+
+- The output includes `PASS: CIC runtime stopped and its forward removed`.
 
 ## Phase 13: Negative Tests
 
@@ -966,44 +1154,49 @@ java -jar "${CLI_JAR}" service restore --plain --host "${WANAKU_BARN_URL}" --no-
 - The output includes `PASS: restore of an unknown catalog rejected`.
 - The output contains no line starting with `FAIL:`.
 
-### Test 13.9: The service catalog API is not on Wanaku Server (optional)
+### Test 13.9: The service catalog API is not on Wanaku Server
 
-Run this test only when Wanaku Server runs (Step 1.2). It confirms that the `service` commands need
-`--host "${WANAKU_BARN_URL}"`.
+This test confirms that the `service` commands need `--host "${WANAKU_BARN_URL}"`.
 
-```bash
-if [ -n "${WANAKU_SERVER_URL}" ]; then
-  java -jar "${CLI_JAR}" service catalog list --plain --host "${WANAKU_SERVER_URL}" --no-auth > /dev/null 2>&1
-  [ $? -ne 0 ] && echo "PASS: Wanaku Server does not serve the service catalog API" \
-    || echo "FAIL: service catalog list succeeded against Wanaku Server"
-else
-  echo "SKIP: Wanaku Server is not running"
-fi
+```bash run
+java -jar "${CLI_JAR}" service catalog list --plain --host "${WANAKU_SERVER_URL}" --no-auth > /dev/null 2>&1
+[ $? -ne 0 ] && echo "PASS: Wanaku Server does not serve the service catalog API" \
+  || echo "FAIL: service catalog list succeeded against Wanaku Server"
 ```
 
 **Expected result:**
 
-- The output includes `PASS: Wanaku Server does not serve the service catalog API` or `SKIP: Wanaku Server is not running`.
+- The output includes `PASS: Wanaku Server does not serve the service catalog API`.
+- The output contains no line starting with `FAIL:`.
 
 ## Phase 14: Cleanup
 
-### Step 14.1: Stop the CIC runtime
+### Step 14.1: Stop the CIC runtimes
 
-If Phase 12 ran, repeat the CIC shutdown commands from Step 12.4. The commands are idempotent.
+The commands repeat the CIC shutdown of Steps 11.5 and 12.13 for both runtimes. They are idempotent.
+
+```bash run
+for NAME in "${CATALOG_CIC_NAME:-${CIC_NAME}}" "${QDRANT_CIC_NAME}"; do
+  java -jar "${CLI_JAR}" forwards remove --host "${WANAKU_SERVER_URL}" --no-auth --name "${NAME}" 2>/dev/null || true
+  ${CONTAINER_RUNTIME} stop "${NAME}" > /dev/null 2>&1 || true
+  ${CONTAINER_RUNTIME} rm "${NAME}" > /dev/null 2>&1 || true
+done
+echo "PASS: CIC runtimes stopped and their forwards removed"
+```
 
 **Expected result:**
 
-- The stated setup or shutdown instructions complete successfully (inferred).
+- The output includes `PASS: CIC runtimes stopped and their forwards removed`.
 
 ### Step 14.2: Remove the catalogs
 
 ```bash run
-for NAME in "${TEST_CATALOG_NAME}" "${TEST_ECHO_CATALOG}"; do
+for NAME in "${TEST_CATALOG_NAME}" "${TEST_ECHO_CATALOG}" "${TEMPLATE_CATALOG}"; do
   java -jar "${CLI_JAR}" service catalog remove --plain --host "${WANAKU_BARN_URL}" --no-auth \
     --name="${NAME}" > /dev/null 2>&1 || true
 done
 OUTPUT=$(java -jar "${CLI_JAR}" service catalog list --plain --host "${WANAKU_BARN_URL}" --no-auth 2>&1)
-echo "${OUTPUT}" | grep -Eq "^(${TEST_CATALOG_NAME}|${TEST_ECHO_CATALOG})[[:space:]]" \
+echo "${OUTPUT}" | grep -Eq "^(${TEST_CATALOG_NAME}|${TEST_ECHO_CATALOG}|${TEMPLATE_CATALOG})[[:space:]]" \
   && echo "FAIL: test catalogs still listed" || echo "PASS: test catalogs removed"
 ```
 
@@ -1012,7 +1205,24 @@ echo "${OUTPUT}" | grep -Eq "^(${TEST_CATALOG_NAME}|${TEST_ECHO_CATALOG})[[:spac
 - The output includes `PASS: test catalogs removed`.
 - The output contains no line starting with `FAIL:`.
 
-### Step 14.3: Remove the temporary files
+### Step 14.3: Remove the Qdrant data
+
+The commands are idempotent. They also run when Phase 12 was skipped.
+
+```bash run
+curl -s -X DELETE "http://${QDRANT_HOST}:${QDRANT_REST_PORT}/collections/${QDRANT_COLLECTION}" \
+  ${QDRANT_API_KEY:+-H "api-key: ${QDRANT_API_KEY}"} > /dev/null 2>&1 || true
+${CONTAINER_RUNTIME} rm -f "${QDRANT_CONTAINER}" > /dev/null 2>&1 || true
+echo "PASS: Qdrant test data removed"
+```
+
+**Expected result:**
+
+- The output includes `PASS: Qdrant test data removed`.
+
+### Step 14.4: Remove the temporary files
+
+`TEST_WORK_DIR` also holds `TEMPLATE_WORK_DIR` and the default `TEMPLATE_PROPS_FILE`.
 
 ```bash run
 cd "${WANAKU_REPO_ROOT}"
@@ -1024,10 +1234,10 @@ echo "PASS: temporary files removed"
 
 - The output includes `PASS: temporary files removed`.
 
-### Step 14.4: Stop the processes
+### Step 14.5: Stop the processes
 
-Run the Shutdown section of [common/start-barn.md](common/start-barn.md). If Step 1.2 ran, also run the Shutdown
-section of [common/start-server.md](common/start-server.md).
+Run the Shutdown sections of [common/start-barn.md](common/start-barn.md) and
+[common/start-server.md](common/start-server.md).
 
 ```bash run
 if [ -n "${WANAKU_BARN_PID}" ]; then
@@ -1046,21 +1256,25 @@ rm -rf "${WANAKU_BARN_HOME}"
 
 | Phase | Test ID | Test Name | Priority |
 |-------|---------|-----------|----------|
-| 1 | 1.1-1.2 | Start Barn (and Wanaku Server for Phase 12) | Critical |
+| S | S.1 | Check prerequisites | Setup |
+| S | S.2 | Set environment variables | Setup |
+| 1 | 1.1-1.3 | Start Barn and Wanaku Server (test governance), detect container runtime | Critical |
 | 2 | 2.1-2.4 | Catalog init and structure | Critical |
 | 3 | 3.1-3.2 | Write `ai-tool:` routes | Critical |
 | 4 | 4.1-4.2 | Generate rules with expose | Medium |
 | 5 | 5.1-5.2 | Barn validation (valid and invalid catalog) | High |
 | 6 | 6.1-6.2 | Package into a Base64-encoded ZIP | High |
 | 7 | 7.1-7.2 | Deploy to Barn and list | Critical |
-| 8 | 8.1-8.5 | Remove, reserved name (409), second removal, restore | Critical |
-| 9 | 9.1-9.4 | Version history (new version, restore, stale expected version, unknown version) | High |
-| 10 | 10.1-10.4 | Template list, search, instantiate, substituted value | High |
-| 11 | 11.1-11.3 | Deployment instructions (local, docker, unsupported model) | Medium |
-| 12 | 12.0-12.4 | Serve through the CIC, tool in Wanaku Server, MCP call, forward removal | High |
+| 8 | 8.1-8.3 | Remove, listed as removed, restore | High |
+| 9 | 9.1-9.3 | Template list, echo-tool instantiation, substituted value | High |
+| 10 | 10.1 | Local deployment instructions | Medium |
+| 11 | 11.0-11.5 | Serve through the CIC, tool in Wanaku Server, MCP call, forward removal | Critical |
+| 12 | 12.0-12.4 | Qdrant pre-flight, template variables, Qdrant start and seed, instantiation properties | Setup |
+| 12 | 12.5 | Instantiate `camel-qdrant-search-tool` and verify the substituted values | High |
+| 12 | 12.6-12.8 | Serve the Qdrant catalog through the CIC and verify the tool in Wanaku Server | High |
+| 12 | 12.9-12.10 | MCP call reaches the CIC route and Qdrant | High |
+| 12 | 12.11 | Search returns seeded payloads (known gap) | Medium |
+| 12 | 12.12 | Tool not served in another namespace (negative) | High |
+| 12 | 12.13 | Stop the Qdrant CIC runtime | Setup |
 | 13 | 13.1-13.9 | Negative tests (missing arguments, bad paths, unreachable host, unknown names, wrong host) | High |
-| 14 | 14.1-14.4 | Cleanup (CIC, catalogs, files, processes) | Critical |
-| S | S.1 | Check prerequisites | Setup |
-| S | S.2 | Set environment variables | Setup |
-
-| 12 | 12.1a | Set the CIC runtime inputs | Setup |
+| 14 | 14.1-14.5 | Cleanup (CIC runtimes, catalogs, Qdrant, files, processes) | Critical |

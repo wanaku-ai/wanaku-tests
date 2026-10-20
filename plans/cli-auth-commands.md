@@ -4,8 +4,10 @@
 
 This test plan verifies the authentication commands of the two CLIs from this repository:
 
-- `wanaku-keycloak-admin users` and `wanaku-keycloak-admin credentials`: full CRUD for Keycloak users (list, add,
-  set-password, remove) and service clients (list, add, show, regenerate, remove).
+- `wanaku-keycloak-admin users` and `wanaku-keycloak-admin credentials`: one round trip for a Keycloak user (add, list,
+  set-password, remove) and one for a service client (add, show, regenerate, remove). The unit tests in `wanaku-barn`
+  (`UsersCommandsTest`, `CredentialsCommandsTest` and `RealmCommandsTest`) cover the CRUD logic and the error cases.
+  This plan keeps only the end-to-end smoke tests against a real Keycloak.
 - `wanaku auth login`, `auth status`, `auth token` and the `--token` / `--no-auth` options: the login modes that the
   CLI supports now, and the use of the resulting token against **Wanaku Server behind oauth2-proxy**.
 
@@ -29,10 +31,10 @@ The plan also verifies the RFC 9728 protected-resource metadata
 | Component | Needed | Role in this plan |
 |-----------|--------|-------------------|
 | Keycloak (realm `wanaku`) | Yes | Users, clients, tokens |
-| Wanaku Server behind oauth2-proxy | Yes (Phases 13 onwards) | Accepts or rejects the tokens |
+| Wanaku Server behind oauth2-proxy | Yes (Phase 1, and Phases 6 onwards) | Accepts or rejects the tokens |
 | Wanaku Barn | No | Barn has no authentication |
 
-Phases 2 to 12 need Keycloak only. Every step is fully automatable.
+Phases 2 to 5 need Keycloak only. Every step is fully automatable.
 
 ## Prerequisites
 
@@ -310,45 +312,12 @@ still passes.
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
-## Phase 2: User Management — List (Initial State)
+## Phase 2: Users Round Trip
 
-### Test 2.1: List users returns successfully
+The unit tests in `wanaku-barn` (`UsersCommandsTest`) cover the error cases of the `users` commands. This phase is a
+smoke test against a real Keycloak.
 
-Run this block as a separate `bash` script, not in the shared session.
-
-```bash
-OUTPUT=$(kc users list --plain 2>&1)
-EXIT_CODE=$?
-[ "${EXIT_CODE}" -eq 0 ] && echo "PASS: users list succeeded" \
-  || { echo "FAIL: users list failed (exit code ${EXIT_CODE})"; echo "${OUTPUT}"; exit 1; }
-echo "${OUTPUT}" | head -1 | grep -q "^username" && echo "PASS: header row present" || echo "FAIL: header row missing"
-```
-
-**Expected output (plain):** a tab-separated table with the header `username	email	enabled`.
-
-**Expected result:**
-
-- The output includes `PASS: users list succeeded`.
-- The output includes `PASS: header row present`.
-- The output contains no line starting with `FAIL:`.
-- The commands exit with code 0.
-
-### Test 2.2: The test user does not exist yet
-
-```bash run
-kc users list --plain 2>&1 | grep -q "^${TEST_USERNAME}[[:space:]]" \
-  && echo "FAIL: test user '${TEST_USERNAME}' already exists before creation" \
-  || echo "PASS: test user '${TEST_USERNAME}' not present (expected)"
-```
-
-**Expected result:**
-
-- The output includes `PASS: test user '<TEST_USERNAME>' not present (expected)`. Replace each `<VARIABLE>` placeholder with that variable’s run-time value.
-- The output contains no line starting with `FAIL:`.
-
-## Phase 3: User Management — Add
-
-### Test 3.1: Create a new user
+### Test 2.1: Add a user and find it in the list
 
 Run this block as a separate `bash` script, not in the shared session.
 
@@ -360,72 +329,22 @@ if [ "${EXIT_CODE}" -eq 0 ] && echo "${OUTPUT}" | grep -q "User '${TEST_USERNAME
 else
   echo "FAIL: users add failed (exit code ${EXIT_CODE})"; echo "${OUTPUT}"; exit 1
 fi
+
+kc users list --plain 2>&1 | grep -q "^${TEST_USERNAME}[[:space:]]${TEST_EMAIL}" \
+  && echo "PASS: user '${TEST_USERNAME}' found with its email" \
+  || { echo "FAIL: user '${TEST_USERNAME}' not found after creation"; exit 1; }
 ```
+
+**Expected output (plain list):** a tab-separated table with the header `username	email	enabled`.
 
 **Expected result:**
 
 - The output includes `PASS: user '<TEST_USERNAME>' created`. Replace each `<VARIABLE>` placeholder with that variable’s run-time value.
-- The output contains no line starting with `FAIL:`.
-- The commands exit with code 0.
-
-### Test 3.2: List users shows the new user
-
-```bash run
-kc users list --plain 2>&1 | grep -q "^${TEST_USERNAME}[[:space:]]${TEST_EMAIL}" \
-  && echo "PASS: user '${TEST_USERNAME}' found with its email" \
-  || echo "FAIL: user '${TEST_USERNAME}' not found after creation"
-```
-
-**Expected result:**
-
 - The output includes `PASS: user '<TEST_USERNAME>' found with its email`. Replace each `<VARIABLE>` placeholder with that variable’s run-time value.
 - The output contains no line starting with `FAIL:`.
-
-### Test 3.3: A duplicate user is rejected
-
-```bash run
-OUTPUT=$(kc users add --username "${TEST_USERNAME}" --password "${TEST_PASSWORD}" --email "${TEST_EMAIL}" 2>&1)
-EXIT_CODE=$?
-if [ "${EXIT_CODE}" -ne 0 ] && echo "${OUTPUT}" | grep -q "Failed to create user"; then
-  echo "PASS: duplicate user rejected (exit code ${EXIT_CODE})"
-else
-  echo "FAIL: duplicate user should have been rejected"; echo "${OUTPUT}"
-fi
-```
-
-**Expected output:** `Failed to create user 'testuser-811': {"errorMessage":"User exists with same email"}`, exit code `1`.
-
-**Expected result:**
-
-- The output includes `PASS: duplicate user rejected`.
-- The output contains no line starting with `FAIL:`.
-
-### Test 3.4: Create a user with only the required fields
-
-Without `--email`, the command generates the address `<username>@wanaku.local`.
-
-Run this block as a separate `bash` script, not in the shared session.
-
-```bash
-OUTPUT=$(kc users add --username "${TEST_USERNAME}-minimal" --password "${TEST_PASSWORD}" 2>&1)
-EXIT_CODE=$?
-[ "${EXIT_CODE}" -eq 0 ] && echo "PASS: user '${TEST_USERNAME}-minimal' created" \
-  || { echo "FAIL: minimal user creation failed (exit code ${EXIT_CODE})"; echo "${OUTPUT}"; exit 1; }
-
-kc users list --plain 2>&1 | grep -q "^${TEST_USERNAME}-minimal[[:space:]]${TEST_USERNAME}-minimal@wanaku.local" \
-  && echo "PASS: generated email address present" || echo "FAIL: generated email address not found"
-```
-
-**Expected result:**
-
-- The output includes `PASS: user '<TEST_USERNAME>-minimal' created`. Replace each `<VARIABLE>` placeholder with that variable’s run-time value.
-- The output includes `PASS: generated email address present`.
-- The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
-## Phase 4: User Management — Set Password
-
-### Test 4.1: Set the password of an existing user
+### Test 2.2: Set the password of the user
 
 Run this block as a separate `bash` script, not in the shared session.
 
@@ -445,133 +364,37 @@ fi
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
-### Test 4.2: Set the password of a non-existent user fails
-
-```bash run
-OUTPUT=$(kc users set-password --username "non-existent-user-99999" --password "anypass" 2>&1)
-EXIT_CODE=$?
-if [ "${EXIT_CODE}" -ne 0 ] && echo "${OUTPUT}" | grep -q "not found"; then
-  echo "PASS: set-password for non-existent user failed (exit code ${EXIT_CODE})"
-else
-  echo "FAIL: set-password for non-existent user should have failed"; echo "${OUTPUT}"
-fi
-```
-
-**Expected result:**
-
-- The output includes `PASS: set-password for non-existent user failed`.
-- The output contains no line starting with `FAIL:`.
-
-## Phase 5: User Management — Remove
-
-### Test 5.1: Remove the minimal test user
+### Test 2.3: Remove the user and check that it is not in the list
 
 Run this block as a separate `bash` script, not in the shared session.
 
 ```bash
-OUTPUT=$(kc users remove --username "${TEST_USERNAME}-minimal" 2>&1)
+OUTPUT=$(kc users remove --username "${TEST_USERNAME}" 2>&1)
 EXIT_CODE=$?
 if [ "${EXIT_CODE}" -eq 0 ] && echo "${OUTPUT}" | grep -q "deleted successfully"; then
-  echo "PASS: user '${TEST_USERNAME}-minimal' removed"
+  echo "PASS: user '${TEST_USERNAME}' removed"
 else
   echo "FAIL: users remove failed (exit code ${EXIT_CODE})"; echo "${OUTPUT}"; exit 1
 fi
-```
 
-**Expected result:**
-
-- The output includes `PASS: user '<TEST_USERNAME>-minimal' removed`. Replace each `<VARIABLE>` placeholder with that variable’s run-time value.
-- The output contains no line starting with `FAIL:`.
-- The commands exit with code 0.
-
-### Test 5.2: The removed user is not in the list
-
-```bash run
-kc users list --plain 2>&1 | grep -q "^${TEST_USERNAME}-minimal[[:space:]]" \
-  && echo "FAIL: removed user still present" \
+kc users list --plain 2>&1 | grep -q "^${TEST_USERNAME}[[:space:]]" \
+  && { echo "FAIL: removed user still present"; exit 1; } \
   || echo "PASS: removed user no longer in list"
 ```
 
 **Expected result:**
 
+- The output includes `PASS: user '<TEST_USERNAME>' removed`. Replace each `<VARIABLE>` placeholder with that variable’s run-time value.
 - The output includes `PASS: removed user no longer in list`.
-- The output contains no line starting with `FAIL:`.
-
-### Test 5.3: Remove a non-existent user fails
-
-```bash run
-OUTPUT=$(kc users remove --username "non-existent-user-99999" 2>&1)
-EXIT_CODE=$?
-[ "${EXIT_CODE}" -ne 0 ] && echo "PASS: removing non-existent user failed (exit code ${EXIT_CODE})" \
-  || echo "FAIL: removing non-existent user should have failed"
-```
-
-**Expected result:**
-
-- The output includes `PASS: removing non-existent user failed`.
-- The output contains no line starting with `FAIL:`.
-
-## Phase 6: Service Client Credentials — List (Initial State)
-
-### Test 6.1: List credentials returns successfully
-
-Run this block as a separate `bash` script, not in the shared session.
-
-```bash
-OUTPUT=$(kc credentials list --plain 2>&1)
-EXIT_CODE=$?
-[ "${EXIT_CODE}" -eq 0 ] && echo "PASS: credentials list succeeded" \
-  || { echo "FAIL: credentials list failed (exit code ${EXIT_CODE})"; echo "${OUTPUT}"; exit 1; }
-echo "${OUTPUT}"
-```
-
-**Expected output (plain):** header `clientId	description	enabled`, then one row for each service client.
-
-**Expected result:**
-
-- The output includes `PASS: credentials list succeeded`.
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
-### Test 6.2: The list does not show internal Keycloak clients
+## Phase 3: Service Client Round Trip
 
-```bash run
-OUTPUT=$(kc credentials list --plain 2>&1)
-FAIL=0
-for INTERNAL in account account-console admin-cli broker realm-management security-admin-console; do
-  if echo "${OUTPUT}" | grep -q "^${INTERNAL}[[:space:]]"; then
-    echo "FAIL: internal client '${INTERNAL}' shown in list"
-    FAIL=1
-  fi
-done
-[ "${FAIL}" -eq 0 ] && echo "PASS: internal Keycloak clients filtered from list"
-```
+The unit tests in `wanaku-barn` (`CredentialsCommandsTest`) cover the error cases and the filter for internal Keycloak
+clients. This phase is a smoke test against a real Keycloak.
 
-**Expected result:**
-
-- The output includes `PASS: internal Keycloak clients filtered from list`.
-- The output contains no line starting with `FAIL:`.
-
-### Test 6.3: The list shows the clients from the realm import
-
-```bash run
-OUTPUT=$(kc credentials list --plain 2>&1)
-for CLIENT in wanaku-service wanaku-mcp-router mcp-client; do
-  echo "${OUTPUT}" | grep -q "^${CLIENT}[[:space:]]" \
-    && echo "PASS: '${CLIENT}' present" || echo "FAIL: '${CLIENT}' not found"
-done
-```
-
-**Expected result:**
-
-- The output includes `PASS: 'wanaku-service' present`.
-- The output includes `PASS: 'wanaku-mcp-router' present`.
-- The output includes `PASS: 'mcp-client' present`.
-- The output contains no line starting with `FAIL:`.
-
-## Phase 7: Service Client Credentials — Add
-
-### Test 7.1: Create a new service client
+### Test 3.1: Add a service client
 
 Run this block as a separate `bash` script, not in the shared session.
 
@@ -591,124 +414,23 @@ fi
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
-### Test 7.2: The new client is in the list with its description
+### Test 3.2: With --show-secret --plain, stdout contains only the secret
 
 ```bash run
-kc credentials list --plain 2>&1 | grep -q "^${TEST_CLIENT_ID}[[:space:]]Test service client for issue 811" \
-  && echo "PASS: '${TEST_CLIENT_ID}' listed with its description" \
-  || echo "FAIL: '${TEST_CLIENT_ID}' not found after creation"
-```
-
-**Expected result:**
-
-- The output includes `PASS: '<TEST_CLIENT_ID>' listed with its description`. Replace each `<VARIABLE>` placeholder with that variable’s run-time value.
-- The output contains no line starting with `FAIL:`.
-
-### Test 7.3: Create a service client with --show-secret
-
-```bash run
-OUTPUT=$(kc credentials add --client-id "${TEST_CLIENT_ID}-with-secret" --show-secret 2>&1)
-EXIT_CODE=$?
-if [ "${EXIT_CODE}" -eq 0 ] && echo "${OUTPUT}" | grep -q "^Client Secret: ."; then
-  echo "PASS: secret displayed with --show-secret"
+SECRET=$(kc credentials show --client-id "${TEST_CLIENT_ID}" --show-secret --plain 2>/dev/null)
+if [ -n "${SECRET}" ] && ! echo "${SECRET}" | grep -q "[[:space:]]"; then
+  echo "PASS: secret retrieved (length: ${#SECRET})"
 else
-  echo "FAIL: secret not displayed (exit code ${EXIT_CODE})"; echo "${OUTPUT}"
+  echo "FAIL: stdout is empty or contains more than the secret: '${SECRET}'"
 fi
 ```
 
 **Expected result:**
 
-- The output includes `PASS: secret displayed with --show-secret`.
+- The output includes `PASS: secret retrieved (length: ${#SECRET})`.
 - The output contains no line starting with `FAIL:`.
 
-### Test 7.4: A duplicate client is rejected
-
-```bash run
-OUTPUT=$(kc credentials add --client-id "${TEST_CLIENT_ID}" --description "Duplicate" 2>&1)
-EXIT_CODE=$?
-if [ "${EXIT_CODE}" -ne 0 ] && echo "${OUTPUT}" | grep -q "already exists"; then
-  echo "PASS: duplicate client rejected (exit code ${EXIT_CODE})"
-else
-  echo "FAIL: duplicate client should have been rejected"; echo "${OUTPUT}"
-fi
-```
-
-**Expected result:**
-
-- The output includes `PASS: duplicate client rejected`.
-- The output contains no line starting with `FAIL:`.
-
-## Phase 8: Service Client Credentials — Show
-
-### Test 8.1: Show the test client
-
-Run this block as a separate `bash` script, not in the shared session.
-
-```bash
-OUTPUT=$(kc credentials show --client-id "${TEST_CLIENT_ID}" --plain 2>&1)
-EXIT_CODE=$?
-if [ "${EXIT_CODE}" -eq 0 ] && echo "${OUTPUT}" | grep -q "^${TEST_CLIENT_ID}[[:space:]]"; then
-  echo "PASS: show output contains '${TEST_CLIENT_ID}'"
-else
-  echo "FAIL: credentials show failed (exit code ${EXIT_CODE})"; echo "${OUTPUT}"; exit 1
-fi
-```
-
-**Expected result:**
-
-- The output includes `PASS: show output contains '<TEST_CLIENT_ID>'`. Replace each `<VARIABLE>` placeholder with that variable’s run-time value.
-- The output contains no line starting with `FAIL:`.
-- The commands exit with code 0.
-
-### Test 8.2: Without --show-secret, the secret is not displayed
-
-```bash run
-OUTPUT=$(kc credentials show --client-id "${TEST_CLIENT_ID}" --plain 2>&1)
-echo "${OUTPUT}" | grep -q "Use --show-secret to display the client secret" \
-  && echo "PASS: secret hidden; hint displayed" || echo "FAIL: hint not displayed"
-```
-
-**Expected result:**
-
-- The output includes `PASS: secret hidden; hint displayed`.
-- The output contains no line starting with `FAIL:`.
-
-### Test 8.3: With --show-secret --plain, stdout contains only the secret
-
-```bash run
-ORIGINAL_SECRET=$(kc credentials show --client-id "${TEST_CLIENT_ID}" --show-secret --plain 2>/dev/null)
-if [ -n "${ORIGINAL_SECRET}" ] && ! echo "${ORIGINAL_SECRET}" | grep -q "[[:space:]]"; then
-  echo "PASS: secret retrieved (length: ${#ORIGINAL_SECRET})"
-else
-  echo "FAIL: stdout is empty or contains more than the secret: '${ORIGINAL_SECRET}'"
-fi
-```
-
-**Expected result:**
-
-- The output includes `PASS: secret retrieved (length: ${#ORIGINAL_SECRET})`.
-- The output contains no line starting with `FAIL:`.
-
-### Test 8.4: Show a non-existent client fails
-
-```bash run
-OUTPUT=$(kc credentials show --client-id "non-existent-client-99999" --plain 2>&1)
-EXIT_CODE=$?
-if [ "${EXIT_CODE}" -ne 0 ] && echo "${OUTPUT}" | grep -q "not found"; then
-  echo "PASS: show non-existent client failed (exit code ${EXIT_CODE})"
-else
-  echo "FAIL: show non-existent client should have failed"
-fi
-```
-
-**Expected result:**
-
-- The output includes `PASS: show non-existent client failed`.
-- The output contains no line starting with `FAIL:`.
-
-## Phase 9: Service Client Credentials — Regenerate
-
-### Test 9.1: Regenerate the secret
+### Test 3.3: Regenerate gives a different secret
 
 Run this block as a separate `bash` script, not in the shared session.
 
@@ -721,39 +443,15 @@ if [ "${EXIT_CODE}" -eq 0 ] && echo "${OUTPUT}" | grep -q "^New Secret: ."; then
 else
   echo "FAIL: credentials regenerate failed (exit code ${EXIT_CODE})"; echo "${OUTPUT}"; exit 1
 fi
-```
 
-**Expected result:**
-
-- The output includes `PASS: secret regenerated`.
-- The output contains no line starting with `FAIL:`.
-- The commands exit with code 0.
-
-### Test 9.2: The new secret differs from the original
-
-```bash run
 NEW_SECRET=$(kc credentials show --client-id "${TEST_CLIENT_ID}" --show-secret --plain 2>/dev/null)
 if [ -z "${ORIGINAL_SECRET}" ] || [ -z "${NEW_SECRET}" ]; then
-  echo "FAIL: could not compare secrets"
+  echo "FAIL: could not compare secrets"; exit 1
 elif [ "${ORIGINAL_SECRET}" != "${NEW_SECRET}" ]; then
   echo "PASS: regenerated secret differs from original"
 else
-  echo "FAIL: regenerated secret is the same as the original"
+  echo "FAIL: regenerated secret is the same as the original"; exit 1
 fi
-```
-
-**Expected result:**
-
-- The output includes `PASS: regenerated secret differs from original`.
-- The output contains no line starting with `FAIL:`.
-
-### Test 9.3: Regenerate for a non-existent client fails
-
-```bash run
-OUTPUT=$(kc credentials regenerate --client-id "non-existent-client-99999" --show-secret 2>&1)
-EXIT_CODE=$?
-[ "${EXIT_CODE}" -ne 0 ] && echo "PASS: regenerate for non-existent client failed (exit code ${EXIT_CODE})" \
-  || echo "FAIL: regenerate for non-existent client should have failed"
 ```
 
 Do not regenerate the `wanaku-mcp-router` secret in this plan. The oauth2-proxy instances use it. A new value breaks
@@ -761,60 +459,35 @@ the browser login of the proxies until they get the new secret.
 
 **Expected result:**
 
-- The output includes `PASS: regenerate for non-existent client failed`.
+- The output includes `PASS: secret regenerated`.
+- The output includes `PASS: regenerated secret differs from original`.
 - The output contains no line starting with `FAIL:`.
+- The commands exit with code 0.
 
-## Phase 10: Service Client Credentials — Remove
-
-### Test 10.1: Remove both test clients
+### Test 3.4: Remove the service client and check that it is not in the list
 
 ```bash run
-for CLIENT in "${TEST_CLIENT_ID}-with-secret" "${TEST_CLIENT_ID}"; do
-  OUTPUT=$(kc credentials remove --client-id "${CLIENT}" 2>&1)
-  EXIT_CODE=$?
-  if [ "${EXIT_CODE}" -eq 0 ] && echo "${OUTPUT}" | grep -q "Client '${CLIENT}' deleted successfully"; then
-    echo "PASS: client '${CLIENT}' removed"
-  else
-    echo "FAIL: credentials remove '${CLIENT}' failed (exit code ${EXIT_CODE})"; echo "${OUTPUT}"
-  fi
-done
-```
-
-**Expected result:**
-
-- The output includes `PASS: client '<TEST_CLIENT_ID>-with-secret' removed`. Replace each `<VARIABLE>` placeholder with that variable’s run-time value.
-- The output includes `PASS: client '<TEST_CLIENT_ID>' removed`. Replace each `<VARIABLE>` placeholder with that variable’s run-time value.
-- The output contains no line starting with `FAIL:`.
-
-### Test 10.2: The removed clients are not in the list
-
-```bash run
-kc credentials list --plain 2>&1 | grep -q "^${TEST_CLIENT_ID}" \
-  && echo "FAIL: removed client still present" || echo "PASS: removed clients no longer in list"
-```
-
-**Expected result:**
-
-- The output includes `PASS: removed clients no longer in list`.
-- The output contains no line starting with `FAIL:`.
-
-### Test 10.3: Remove a non-existent client fails
-
-```bash run
-OUTPUT=$(kc credentials remove --client-id "non-existent-client-99999" 2>&1)
+OUTPUT=$(kc credentials remove --client-id "${TEST_CLIENT_ID}" 2>&1)
 EXIT_CODE=$?
-[ "${EXIT_CODE}" -ne 0 ] && echo "PASS: removing non-existent client failed (exit code ${EXIT_CODE})" \
-  || echo "FAIL: removing non-existent client should have failed"
+if [ "${EXIT_CODE}" -eq 0 ] && echo "${OUTPUT}" | grep -q "Client '${TEST_CLIENT_ID}' deleted successfully"; then
+  echo "PASS: client '${TEST_CLIENT_ID}' removed"
+else
+  echo "FAIL: credentials remove failed (exit code ${EXIT_CODE})"; echo "${OUTPUT}"
+fi
+
+kc credentials list --plain 2>&1 | grep -q "^${TEST_CLIENT_ID}[[:space:]]" \
+  && echo "FAIL: removed client still present" || echo "PASS: removed client no longer in list"
 ```
 
 **Expected result:**
 
-- The output includes `PASS: removing non-existent client failed`.
+- The output includes `PASS: client '<TEST_CLIENT_ID>' removed`. Replace each `<VARIABLE>` placeholder with that variable’s run-time value.
+- The output includes `PASS: removed client no longer in list`.
 - The output contains no line starting with `FAIL:`.
 
-## Phase 11: Negative Tests — Admin Commands
+## Phase 4: Negative Test — Admin Commands
 
-### Test 11.1: Wrong admin credentials
+### Test 4.1: Wrong admin credentials
 
 ```bash run
 OUTPUT=$(wanaku-keycloak-admin users list --keycloak-url "${KEYCLOAK_URL}" \
@@ -832,53 +505,12 @@ fi
 - The output includes `PASS: wrong admin credentials rejected`.
 - The output contains no line starting with `FAIL:`.
 
-### Test 11.2: Unreachable Keycloak (users and credentials)
-
-```bash run
-for GROUP in users credentials; do
-  OUTPUT=$(wanaku-keycloak-admin "${GROUP}" list --keycloak-url "http://localhost:59999" \
-    --admin-username "${KEYCLOAK_ADMIN_USER}" --admin-password "${KEYCLOAK_ADMIN_PASS}" --plain 2>&1)
-  EXIT_CODE=$?
-  if [ "${EXIT_CODE}" -ne 0 ] && echo "${OUTPUT}" | grep -q "Failed to communicate with Keycloak"; then
-    echo "PASS: ${GROUP} list against unreachable Keycloak failed gracefully"
-  else
-    echo "FAIL: ${GROUP} list against unreachable Keycloak (exit code ${EXIT_CODE})"; echo "${OUTPUT}"
-  fi
-done
-```
-
-**Expected result:**
-
-- The output includes `PASS: users list against unreachable Keycloak failed gracefully`.
-- The output includes `PASS: credentials list against unreachable Keycloak failed gracefully`.
-- The output contains no line starting with `FAIL:`.
-
-### Test 11.3: Missing required options
-
-```bash run
-kc users add --password "${TEST_PASSWORD}" > /dev/null 2>&1
-EXIT_CODE=$?
-[ "${EXIT_CODE}" -eq 2 ] && echo "PASS: users add without --username is a usage error (exit code 2)" \
-  || echo "FAIL: users add without --username returned exit code ${EXIT_CODE}"
-
-kc credentials add --description "Missing client-id" > /dev/null 2>&1
-EXIT_CODE=$?
-[ "${EXIT_CODE}" -eq 2 ] && echo "PASS: credentials add without --client-id is a usage error (exit code 2)" \
-  || echo "FAIL: credentials add without --client-id returned exit code ${EXIT_CODE}"
-```
-
-**Expected result:**
-
-- The output includes `PASS: users add without --username is a usage error (exit code 2)`.
-- The output includes `PASS: credentials add without --client-id is a usage error (exit code 2)`.
-- The output contains no line starting with `FAIL:`.
-
-## Phase 12: Auth Login — Keycloak Base URL and Realm
+## Phase 5: Auth Login — Keycloak Base URL and Realm
 
 These tests authenticate directly against Keycloak. Wanaku Server is not used. The CLI uses the confidential
 `wanaku-mcp-router` client by default and reads its secret from `WANAKU_CLIENT_SECRET`.
 
-### Test 12.1: Back up and clear the credentials file
+### Test 5.1: Back up and clear the credentials file
 
 ```bash run
 [ -f "${CREDENTIALS_FILE}" ] && cp "${CREDENTIALS_FILE}" "${CREDENTIALS_FILE}.bak-auth-test"
@@ -890,7 +522,7 @@ echo "PASS: credentials file cleared"
 
 - The output includes `PASS: credentials file cleared`.
 
-### Test 12.2: Login with --realm succeeds
+### Test 5.2: Login with --realm succeeds
 
 Run this block as a separate `bash` script, not in the shared session.
 
@@ -915,7 +547,7 @@ fi
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
-### Test 12.3: The credentials file has the expected entries
+### Test 5.3: The credentials file has the expected entries
 
 ```bash run
 for ENTRY in "auth.realm=${WANAKU_REALM}" "client.id=wanaku-mcp-router" "auth.mode=token"; do
@@ -938,7 +570,7 @@ done
 - The output includes `PASS: auth.server.url stored`.
 - The output contains no line starting with `FAIL:`.
 
-### Test 12.4: auth status reports the session
+### Test 5.4: auth status reports the session
 
 ```bash run
 OUTPUT=$(wanaku auth status --plain 2>&1)
@@ -958,7 +590,7 @@ fi
 - The output includes `PASS: auth status reports the stored session`.
 - The output contains no line starting with `FAIL:`.
 
-### Test 12.5: auth token --get --unmask --plain writes only the token
+### Test 5.5: auth token --get --unmask --plain writes only the token
 
 Run this block as a separate `bash` script, not in the shared session.
 
@@ -978,13 +610,13 @@ fi
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
-## Phase 13: Token Accepted by the Proxies
+## Phase 6: Token Accepted by the Proxies
 
 oauth2-proxy accepts tokens whose audience contains `wanaku-mcp-router` (the proxy client ID) or one of the extra
 audiences `mcp-client` and `wanaku-mcp-client`. The `wanaku-mcp-router` client has an audience mapper, so the token
-from Phase 12 is accepted.
+from Phase 5 is accepted.
 
-### Test 13.1: The stored token works with the management API
+### Test 6.1: The stored token works with the management API
 
 Run this block as a separate `bash` script, not in the shared session.
 
@@ -1004,7 +636,7 @@ fi
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
-### Test 13.2: The token works with the MCP endpoint
+### Test 6.2: The token works with the MCP endpoint
 
 The `wanaku mcp` commands do not read the stored credentials. Pass the token with `--token`.
 
@@ -1028,7 +660,7 @@ A new registry has no tools, so an empty list is a valid result.
 - The output includes `PASS: MCP call without --token is rejected (401)`.
 - The output contains no line starting with `FAIL:`.
 
-### Test 13.3: The raw token works with curl
+### Test 6.3: The raw token works with curl
 
 This test checks the HTTP status code that the proxy returns for a bearer token.
 
@@ -1042,7 +674,7 @@ CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer ${TOKEN}
 - The output includes `PASS: raw token accepted (HTTP 200)`.
 - The output contains no line starting with `FAIL:`.
 
-### Test 13.4: A token of a client that the proxy does not trust is rejected with guidance
+### Test 6.4: A token of a client that the proxy does not trust is rejected with guidance
 
 `admin-cli` tokens do not carry an accepted audience.
 
@@ -1072,7 +704,7 @@ fi
 - The output includes `PASS: admin-cli token rejected; the CLI names the correct client`.
 - The output contains no line starting with `FAIL:`.
 
-### Test 13.5: Login with the public mcp-client client
+### Test 6.5: Login with the public mcp-client client
 
 `--client-secret ""` overrides `WANAKU_CLIENT_SECRET`, so the CLI sends only the client ID. The realm of
 option A enables direct access grants for `mcp-client`. The realm of option B (`deploy/auth/wanaku-config.json`)
@@ -1108,9 +740,9 @@ export WANAKU_CREDENTIALS="${ORIGINAL_CREDENTIALS}"
 - The output includes `PASS: mcp-client login rejected by the realm (expected for this realm)`.
 - The output contains no line starting with `FAIL:`.
 
-## Phase 14: Auth Login — Full Issuer URL and Realm Persistence
+## Phase 7: Auth Login — Full Issuer URL and Realm Persistence
 
-### Test 14.1: Login with a full issuer URL does not store a realm
+### Test 7.1: Login with a full issuer URL does not store a realm
 
 ```bash run
 rm -f "${CREDENTIALS_FILE}"
@@ -1132,7 +764,7 @@ fi
 - The output includes `PASS: token stored and no realm entry`.
 - The output contains no line starting with `FAIL:`.
 
-### Test 14.2: Login with --realm stores the realm again
+### Test 7.2: Login with --realm stores the realm again
 
 ```bash run
 echo "${WANAKU_TEST_PASS}" | wanaku auth login --auth-server "${KEYCLOAK_URL}" --realm "${WANAKU_REALM}" \
@@ -1146,7 +778,7 @@ grep -q "^auth.realm=${WANAKU_REALM}$" "${CREDENTIALS_FILE}" \
 - The output includes `PASS: realm stored after login with --realm`.
 - The output contains no line starting with `FAIL:`.
 
-### Test 14.3: A new login with an issuer URL clears the stored realm
+### Test 7.3: A new login with an issuer URL clears the stored realm
 
 ```bash run
 echo "${WANAKU_TEST_PASS}" | wanaku auth login --auth-server "${KEYCLOAK_URL}/realms/${WANAKU_REALM}" \
@@ -1161,13 +793,13 @@ grep -q "^auth.realm=" "${CREDENTIALS_FILE}" \
 - The output includes `PASS: stored realm cleared`.
 - The output contains no line starting with `FAIL:`.
 
-## Phase 15: Issuer Discovery Through Wanaku Server
+## Phase 8: Issuer Discovery Through Wanaku Server
 
 When `WANAKU_AUTH_ISSUER` is set, Wanaku Server serves OAuth metadata on the MCP listener. The MCP proxy lets
 `/.well-known/*`, `/authorize`, `/token` and `/register` through without a token. These tests use `curl` because they
 check the HTTP metadata documents.
 
-### Test 15.1: Protected-resource metadata (RFC 9728)
+### Test 8.1: Protected-resource metadata (RFC 9728)
 
 ```bash run
 META=$(curl -s "${WANAKU_MCP_BASE_URL}/.well-known/oauth-protected-resource/${WANAKU_MCP_NAMESPACE}/mcp")
@@ -1194,7 +826,7 @@ document can differ from the public scheme.
 - The output includes `PASS: resource is the namespace endpoint`.
 - The output contains no line starting with `FAIL:`.
 
-### Test 15.2: OpenID configuration points to the Keycloak issuer
+### Test 8.2: OpenID configuration points to the Keycloak issuer
 
 ```bash run
 DISCOVERY=$(curl -s "${WANAKU_MCP_BASE_URL}/.well-known/openid-configuration")
@@ -1212,7 +844,7 @@ In option B, the issuer is `WANAKU_AUTH_ISSUER_URL`. Replace the `--arg iss` val
 - The output includes `PASS: discovery document names the Keycloak issuer`.
 - The output contains no line starting with `FAIL:`.
 
-### Test 15.3: Login through the MCP origin with a blank realm
+### Test 8.3: Login through the MCP origin with a blank realm
 
 A blank `--realm` makes the CLI use `--auth-server` as the issuer. The CLI reads the issuer from the Wanaku Server
 document and then requests the token from Keycloak.
@@ -1237,7 +869,7 @@ fi
 - The output includes `PASS: login through the MCP origin works; no realm stored; token accepted`.
 - The output contains no line starting with `FAIL:`.
 
-### Test 15.4: The management origin is not an issuer
+### Test 8.4: The management origin is not an issuer
 
 The management proxy does not let `/.well-known/*` through, so discovery fails. The CLI prints a hint.
 
@@ -1258,7 +890,7 @@ fi
 - The output includes `PASS: login against the management origin fails with a hint`.
 - The output contains no line starting with `FAIL:`.
 
-### Test 15.5: Metadata without an issuer (optional)
+### Test 8.5: Metadata without an issuer (optional)
 
 Run this test only when a local Wanaku Server without `WANAKU_AUTH_ISSUER` is available (see
 [common/start-server.md](common/start-server.md)). Set `WANAKU_UNPROTECTED_MCP_BASE_URL` to its MCP base URL.
@@ -1279,9 +911,9 @@ The server returns HTTP `200` with an empty `authorization_servers` list. It doe
 
 - The output includes `PASS: no authorization server without WANAKU_AUTH_ISSUER` or `SKIP: WANAKU_UNPROTECTED_MCP_BASE_URL not set`.
 
-## Phase 16: Token Refresh
+## Phase 9: Token Refresh
 
-### Test 16.1: An expired token is refreshed automatically
+### Test 9.1: An expired token is refreshed automatically
 
 Run this block as a separate `bash` script, not in the shared session.
 
@@ -1310,7 +942,7 @@ fi
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
-### Test 16.2: The realm is preserved after the refresh
+### Test 9.2: The realm is preserved after the refresh
 
 ```bash run
 grep -q "^auth.realm=${WANAKU_REALM}$" "${CREDENTIALS_FILE}" \
@@ -1322,24 +954,9 @@ grep -q "^auth.realm=${WANAKU_REALM}$" "${CREDENTIALS_FILE}" \
 - The output includes `PASS: realm preserved after token refresh`.
 - The output contains no line starting with `FAIL:`.
 
-## Phase 17: Auth Login — Negative Tests
+## Phase 10: Auth Login — Negative Tests
 
-### Test 17.1: Invalid realm
-
-```bash run
-OUTPUT=$(echo "${WANAKU_TEST_PASS}" | wanaku auth login --auth-server "${KEYCLOAK_URL}" \
-  --realm "nonexistent-realm-99999" --username "${WANAKU_TEST_USER}" --password --plain 2>&1)
-EXIT_CODE=$?
-[ "${EXIT_CODE}" -ne 0 ] && echo "${OUTPUT}" | grep -q "Status code 404" \
-  && echo "PASS: invalid realm rejected" || echo "FAIL: invalid realm not rejected (exit code ${EXIT_CODE})"
-```
-
-**Expected result:**
-
-- The output includes `PASS: invalid realm rejected`.
-- The output contains no line starting with `FAIL:`.
-
-### Test 17.2: Wrong password and unknown user
+### Test 10.1: Wrong password
 
 ```bash run
 OUTPUT=$(echo "wrong-password-99999" | wanaku auth login --auth-server "${KEYCLOAK_URL}" --realm "${WANAKU_REALM}" \
@@ -1347,21 +964,14 @@ OUTPUT=$(echo "wrong-password-99999" | wanaku auth login --auth-server "${KEYCLO
 EXIT_CODE=$?
 [ "${EXIT_CODE}" -ne 0 ] && echo "${OUTPUT}" | grep -q "Invalid user credentials" \
   && echo "PASS: wrong password rejected" || echo "FAIL: wrong password not rejected (exit code ${EXIT_CODE})"
-
-OUTPUT=$(echo "${WANAKU_TEST_PASS}" | wanaku auth login --auth-server "${KEYCLOAK_URL}" --realm "${WANAKU_REALM}" \
-  --username "nonexistent-user-99999" --password --plain 2>&1)
-EXIT_CODE=$?
-[ "${EXIT_CODE}" -ne 0 ] && echo "${OUTPUT}" | grep -q "Invalid user credentials" \
-  && echo "PASS: unknown user rejected" || echo "FAIL: unknown user not rejected (exit code ${EXIT_CODE})"
 ```
 
 **Expected result:**
 
 - The output includes `PASS: wrong password rejected`.
-- The output includes `PASS: unknown user rejected`.
 - The output contains no line starting with `FAIL:`.
 
-### Test 17.3: Unreachable auth server
+### Test 10.2: Unreachable auth server
 
 ```bash run
 OUTPUT=$(echo "${WANAKU_TEST_PASS}" | wanaku auth login --auth-server "http://localhost:59999" \
@@ -1376,40 +986,7 @@ EXIT_CODE=$?
 - The output includes `PASS: unreachable auth server reported`.
 - The output contains no line starting with `FAIL:`.
 
-### Test 17.4: Missing --username
-
-```bash run
-OUTPUT=$(echo "${WANAKU_TEST_PASS}" | wanaku auth login --auth-server "${KEYCLOAK_URL}" --realm "${WANAKU_REALM}" \
-  --password --plain 2>&1)
-EXIT_CODE=$?
-[ "${EXIT_CODE}" -ne 0 ] && echo "${OUTPUT}" | grep -q "Missing required argument(s): --username" \
-  && echo "PASS: missing --username rejected" || echo "FAIL: missing --username not rejected (exit code ${EXIT_CODE})"
-```
-
-**Expected result:**
-
-- The output includes `PASS: missing --username rejected`.
-- The output contains no line starting with `FAIL:`.
-
-### Test 17.5: A blank realm with a Keycloak base URL fails
-
-A blank realm makes the base URL the issuer. Keycloak has no discovery document at its root.
-
-```bash run
-OUTPUT=$(echo "${WANAKU_TEST_PASS}" | wanaku auth login --auth-server "${KEYCLOAK_URL}" --realm "   " \
-  --username "${WANAKU_TEST_USER}" --password --plain 2>&1)
-EXIT_CODE=$?
-[ "${EXIT_CODE}" -ne 0 ] && echo "${OUTPUT}" | grep -q "${KEYCLOAK_URL}/.well-known/openid-configuration" \
-  && echo "PASS: blank realm uses the base URL as issuer and fails" \
-  || echo "FAIL: unexpected result (exit code ${EXIT_CODE})"
-```
-
-**Expected result:**
-
-- The output includes `PASS: blank realm uses the base URL as issuer and fails`.
-- The output contains no line starting with `FAIL:`.
-
-### Test 17.6: --api-token stores a token; an invalid token is rejected by the proxy
+### Test 10.3: --api-token stores a token; an invalid token is rejected by the proxy
 
 ```bash run
 GOOD_TOKEN=$(wanaku auth token --get --unmask --plain 2>/dev/null)
@@ -1430,29 +1007,28 @@ echo "${OUTPUT}" | grep -q "Authentication rejected by the server (status: 401" 
 - The output includes `PASS: invalid stored token rejected by the proxy`.
 - The output contains no line starting with `FAIL:`.
 
-## Phase 18: CLI --token and --no-auth Options
+## Phase 11: CLI --token and --no-auth Options
 
-### Test 18.1: Obtain a token
+### Test 11.1: Obtain a token
 
-Run this block as a separate `bash` script, not in the shared session.
+This block runs in the shared session, so Test 11.2 can use `TOKEN`.
 
-```bash
+```bash run
 rm -f "${CREDENTIALS_FILE}"
 echo "${WANAKU_TEST_PASS}" | wanaku auth login --auth-server "${KEYCLOAK_URL}" --realm "${WANAKU_REALM}" \
   --username "${WANAKU_TEST_USER}" --password --plain > /dev/null 2>&1
 TOKEN=$(wanaku auth token --get --unmask --plain 2>/dev/null)
 rm -f "${CREDENTIALS_FILE}"
 [ -n "${TOKEN}" ] && echo "PASS: token obtained (length: ${#TOKEN}); stored credentials removed" \
-  || { echo "FAIL: could not obtain a token"; exit 1; }
+  || echo "FAIL: could not obtain a token"
 ```
 
 **Expected result:**
 
 - The output includes `PASS: token obtained (length: ${#TOKEN}); stored credentials removed`.
 - The output contains no line starting with `FAIL:`.
-- The commands exit with code 0.
 
-### Test 18.2: Management commands accept --token without stored credentials
+### Test 11.2: Management commands accept --token without stored credentials
 
 ```bash run
 for GROUP in tools resources prompts namespaces forwards; do
@@ -1472,7 +1048,7 @@ done
 - The output includes `PASS: forwards list with --token`.
 - The output contains no line starting with `FAIL:`.
 
-### Test 18.3: --no-auth fails against the protected server
+### Test 11.3: --no-auth fails against the protected server
 
 ```bash run
 OUTPUT=$(wanaku tools list --host "${WANAKU_SERVER_URL}" --no-auth --plain 2>&1)
@@ -1487,7 +1063,7 @@ EXIT_CODE=$?
 - The output includes `PASS: --no-auth rejected by the management proxy (401)`.
 - The output contains no line starting with `FAIL:`.
 
-### Test 18.4: An unreachable host reports a connection error, not an auth warning
+### Test 11.4: An unreachable host reports a connection error, not an auth warning
 
 The CLI always sends a stored or given token. It does not probe an OIDC endpoint first.
 
@@ -1507,13 +1083,13 @@ fi
 - The output includes `PASS: unreachable host reported as a connection error`.
 - The output contains no line starting with `FAIL:`.
 
-## Phase 19: Admin UI Login Through the Management Proxy (PKCE)
+## Phase 12: Admin UI Login Through the Management Proxy (PKCE)
 
 The management proxy protects the admin UI with a browser session. It uses the authorization code flow with PKCE
 (`OAUTH2_PROXY_CODE_CHALLENGE_METHOD=S256`). These tests use `curl` because they check redirects. In option B with
 `spec.server.variant: headless`, there is no admin UI. Skip this phase then.
 
-### Test 19.1: Without a session, /admin/ shows the proxy sign-in page
+### Test 12.1: Without a session, /admin/ shows the proxy sign-in page
 
 ```bash run
 CODE=$(curl -s -o /dev/null -w "%{http_code}" "${WANAKU_SERVER_URL}/admin/")
@@ -1530,7 +1106,7 @@ fi
 - The output includes `PASS: /admin/ without a session shows the oauth2-proxy sign-in page (403)`.
 - The output contains no line starting with `FAIL:`.
 
-### Test 19.2: The login redirect contains a PKCE challenge
+### Test 12.2: The login redirect contains a PKCE challenge
 
 ```bash run
 LOCATION=$(curl -sI "${WANAKU_SERVER_URL}/oauth2/start?rd=%2Fadmin%2F" | grep -i "^location:" | tr -d '\r' | sed 's/^[Ll]ocation: //')
@@ -1552,31 +1128,29 @@ In option B, the redirect uses `WANAKU_AUTH_ISSUER_URL`. Replace the first check
 - The output includes `PASS: redirect uses the wanaku-mcp-router client`.
 - The output contains no line starting with `FAIL:`.
 
-## Phase 20: Cleanup
+## Phase 13: Cleanup
 
-### Step 20.1: Remove the test users and clients (idempotent)
+### Step 13.1: Remove the test users and the test client (idempotent)
 
 ```bash run
-for USER_NAME in "${TEST_USERNAME}" "${TEST_USERNAME}-minimal" "${WANAKU_TEST_USER}"; do
+for USER_NAME in "${TEST_USERNAME}" "${WANAKU_TEST_USER}"; do
   kc users remove --username "${USER_NAME}" > /dev/null 2>&1 || true
 done
-for CLIENT in "${TEST_CLIENT_ID}" "${TEST_CLIENT_ID}-with-secret"; do
-  kc credentials remove --client-id "${CLIENT}" > /dev/null 2>&1 || true
-done
+kc credentials remove --client-id "${TEST_CLIENT_ID}" > /dev/null 2>&1 || true
 
-kc users list --plain 2>&1 | grep -q "^${TEST_USERNAME}" && echo "FAIL: test user still present" \
+kc users list --plain 2>&1 | grep -qE "^(${TEST_USERNAME}|${WANAKU_TEST_USER})[[:space:]]" && echo "FAIL: test user still present" \
   || echo "PASS: test users removed"
-kc credentials list --plain 2>&1 | grep -q "^${TEST_CLIENT_ID}" && echo "FAIL: test client still present" \
-  || echo "PASS: test clients removed"
+kc credentials list --plain 2>&1 | grep -q "^${TEST_CLIENT_ID}[[:space:]]" && echo "FAIL: test client still present" \
+  || echo "PASS: test client removed"
 ```
 
 **Expected result:**
 
 - The output includes `PASS: test users removed`.
-- The output includes `PASS: test clients removed`.
+- The output includes `PASS: test client removed`.
 - The output contains no line starting with `FAIL:`.
 
-### Step 20.2: Restore the credentials file
+### Step 13.2: Restore the credentials file
 
 ```bash run
 rm -f "${CREDENTIALS_FILE}" "${CREDENTIALS_FILE}-admin-cli" "${CREDENTIALS_FILE}-mcp-client"
@@ -1593,7 +1167,7 @@ fi
 - The output includes `PASS: original credentials restored`.
 - The output includes `PASS: no backup to restore`.
 
-### Step 20.3: Remove the environment
+### Step 13.3: Remove the environment
 
 - Option A: `docker compose -p wanaku-auth -f deploy/auth/docker-compose-auth.yml down -v` from the
   `wanaku-ai/wanaku` checkout. The `-v` option also removes the Keycloak and registry volumes.
@@ -1610,25 +1184,18 @@ fi
 |-------|---------|-----------|----------|
 | 0 | 0.1 | Tools and jars | High |
 | 1 | 1.1–1.3 | Environment variables, proxies return 401 without token, auth test user | Critical |
-| 2 | 2.1–2.2 | User list (initial state) | High |
-| 3 | 3.1–3.4 | User add (create, verify, duplicate, minimal fields) | Critical |
-| 4 | 4.1–4.2 | User set-password (existing, non-existent) | Critical |
-| 5 | 5.1–5.3 | User remove (delete, verify, non-existent) | Critical |
-| 6 | 6.1–6.3 | Credentials list (initial state, internal clients filtered, imported clients) | High |
-| 7 | 7.1–7.4 | Credentials add (create, verify, show-secret, duplicate) | Critical |
-| 8 | 8.1–8.4 | Credentials show (details, hidden secret, plain secret, non-existent) | Critical |
-| 9 | 9.1–9.3 | Credentials regenerate (regenerate, differs, non-existent) | Critical |
-| 10 | 10.1–10.3 | Credentials remove (delete, verify, non-existent) | Critical |
-| 11 | 11.1–11.3 | Admin negative tests (wrong admin, unreachable Keycloak, missing options) | High |
-| 12 | 12.1–12.5 | Auth login with Keycloak base URL and realm, stored entries, auth status, token output | Critical |
-| 13 | 13.1–13.5 | Token accepted by management and MCP proxies, admin-cli rejected with guidance, public mcp-client | Critical |
-| 14 | 14.1–14.3 | Full issuer URL login and realm persistence | High |
-| 15 | 15.1–15.5 | RFC 9728 metadata, discovery document, login through the MCP origin, management origin rejected | Critical |
-| 16 | 16.1–16.2 | Automatic token refresh, realm preserved | Critical |
-| 17 | 17.1–17.6 | Auth login negative tests, --api-token | High |
-| 18 | 18.1–18.4 | --token on management commands, --no-auth rejected, unreachable host | Critical |
-| 19 | 19.1–19.2 | Admin UI sign-in page and PKCE redirect | High |
-| 20 | 20.1–20.3 | Cleanup | Critical |
+| 2 | 2.1–2.3 | Users round trip (add and list, set-password, remove and list) | Critical |
+| 3 | 3.1–3.4 | Service client round trip (add, plain secret, regenerate, remove) | Critical |
+| 4 | 4.1 | Admin negative test (wrong admin credentials) | High |
+| 5 | 5.1–5.5 | Auth login with Keycloak base URL and realm, stored entries, auth status, token output | Critical |
+| 6 | 6.1–6.5 | Token accepted by management and MCP proxies, admin-cli rejected with guidance, public mcp-client | Critical |
+| 7 | 7.1–7.3 | Full issuer URL login and realm persistence | High |
+| 8 | 8.1–8.5 | RFC 9728 metadata, discovery document, login through the MCP origin, management origin rejected | Critical |
+| 9 | 9.1–9.2 | Automatic token refresh, realm preserved | Critical |
+| 10 | 10.1–10.3 | Auth login negative tests (wrong password, unreachable auth server), --api-token | High |
+| 11 | 11.1–11.4 | --token on management commands, --no-auth rejected, unreachable host | Critical |
+| 12 | 12.1–12.2 | Admin UI sign-in page and PKCE redirect | High |
+| 13 | 13.1–13.3 | Cleanup | Critical |
 | S | S.1 | Check prerequisites | Setup |
 | S | S.2 | Check prerequisites | Setup |
 | 1 | 1.0 | Select and prepare one environment | Setup |

@@ -7,8 +7,12 @@ them at the MCP endpoint of **Wanaku Server** (`${WANAKU_MCP_BASE_URL}/<namespac
 prompts come from the supplied infra-remediation MCP test fixture, which is registered with Wanaku Server as a forward. Thus the
 `list`, `call`, `read` and `get` operations return real data.
 
-This plan covers help output, option validation, tool/resource/prompt operations, namespace isolation,
-governance, enable/disable and error handling against a builtin or existing Wanaku Server. All steps are automatable.
+This plan covers tool/resource/prompt operations, namespace isolation, governance, enable/disable, the forward
+lifecycle across a server restart and error handling against a builtin or existing Wanaku Server. All steps are
+automatable.
+
+The plan does not test help output, option validation or argument conversion. The CLI unit tests in
+`wanaku-ai/wanaku-barn` (`apps/wanaku-cli`) cover them.
 The server needs a reachable infra-remediation MCP test fixture; it does not use Wanaku Barn, Keycloak or oauth2-proxy.
 
 For operator deployment and authenticated MCP operations on OpenShift, use
@@ -259,7 +263,7 @@ esac
 The background process uses `/dev/null` for stdin and a file for stdout/stderr, so it does not retain the worker's
 captured input/output streams. Readiness below is bounded to about 30 seconds; each registry query has a 10-second
 limit plus a 2-second termination grace period. Step 1.1 should complete within about 85 seconds, including port
-checks. Run Phase 9 cleanup after any failure.
+checks. Run Phase 8 cleanup after any failure.
 
 **Existing mode (`WANAKU_SERVER_MODE=existing`):** Set both `WANAKU_SERVER_URL` (management API base URL)
 and `WANAKU_MCP_BASE_URL` (MCP listener base URL, without a namespace or `/mcp`). These may have different hosts,
@@ -449,115 +453,28 @@ done
 
 ---
 
-## Phase 2: Help and Usage
+## Phase 2: Tool Operations
 
-### Test 2.1: `wanaku mcp` shows the subcommands
-
-```bash run
-OUTPUT=$(wanaku mcp 2>&1)
-for SUB in tool resource prompt; do
-  echo "${OUTPUT}" | grep -q "^  ${SUB} " && echo "PASS [2.1]: '${SUB}' listed" || echo "FAIL [2.1]: '${SUB}' not listed"
-done
-```
-
-**Expected result:**
-
-- The output includes `PASS [2.1]: 'tool' listed`.
-- The output includes `PASS [2.1]: 'resource' listed`.
-- The output includes `PASS [2.1]: 'prompt' listed`.
-- The output contains no line starting with `FAIL`.
-
-### Test 2.2: Subcommand help shows the options
-
-```bash run
-check_help() {
-  HELP=$(wanaku mcp "$1" --help 2>&1)
-  shift
-  for OPT in "$@"; do
-    echo "${HELP}" | grep -q -- "${OPT}" && echo "PASS [2.2]: ${OPT} listed" || echo "FAIL [2.2]: ${OPT} missing"
-  done
-  echo "${HELP}" | grep -q "^  list " && echo "PASS [2.2]: 'list' listed" || echo "FAIL [2.2]: 'list' missing"
-}
-check_help tool --uri --name --param
-check_help resource --uri --resource-uri
-check_help prompt --uri --name --arg
-```
-
-**Expected result:**
-
-- The output includes `PASS [2.2]: --uri listed`.
-- The output includes `PASS [2.2]: --name listed`.
-- The output includes `PASS [2.2]: --param listed`.
-- The output includes `PASS [2.2]: --resource-uri listed`.
-- The output includes `PASS [2.2]: --arg listed`.
-- The output includes `PASS [2.2]: 'list' listed`.
-- The output contains no line starting with `FAIL`.
-
----
-
-## Phase 3: Required Option Validation
-
-The call commands check `--uri`, `--name` and `--resource-uri` themselves and exit with `1`. The `list` subcommands
-declare `--uri` as a required picocli option and exit with `2`.
-
-### Test 3.1: Missing options are rejected
-
-```bash run
-expect_exit() {
-  EXPECTED="$1"; MESSAGE="$2"; shift 2
-  OUTPUT=$("$@" 2>&1)
-  EXIT_CODE=$?
-  if [ "${EXIT_CODE}" -eq "${EXPECTED}" ] && echo "${OUTPUT}" | grep -q -- "${MESSAGE}"; then
-    echo "PASS [3.1]: '$*' exits ${EXIT_CODE} with '${MESSAGE}'"
-  else
-    echo "FAIL [3.1]: '$*' exit ${EXIT_CODE}, expected ${EXPECTED} with '${MESSAGE}'"
-    echo "${OUTPUT}"
-  fi
-}
-expect_exit 1 "Missing required option: --uri"          wanaku mcp tool --no-auth --name restartService
-expect_exit 1 "Missing required option: --name"         wanaku mcp tool --no-auth --uri "${MCP_URI}"
-expect_exit 1 "Missing required option: --resource-uri" wanaku mcp resource --no-auth --uri "${MCP_URI}"
-expect_exit 1 "Missing required option: --name"         wanaku mcp prompt --no-auth --uri "${MCP_URI}"
-expect_exit 2 "Missing required option"                 wanaku mcp tool list --no-auth
-expect_exit 2 "Missing required option"                 wanaku mcp resource list --no-auth
-expect_exit 2 "Missing required option"                 wanaku mcp prompt list --no-auth
-```
-
-**Expected result:**
-
-- The output includes `PASS [3.1]: 'wanaku mcp tool --no-auth --name restartService' exits 1 with 'Missing required option: --uri'`.
-- The output includes `PASS [3.1]: 'wanaku mcp tool --no-auth --uri <MCP_URI>' exits 1 with 'Missing required option: --name'`.
-- The output includes `PASS [3.1]: 'wanaku mcp resource --no-auth --uri <MCP_URI>' exits 1 with 'Missing required option: --resource-uri'`.
-- The output includes `PASS [3.1]: 'wanaku mcp prompt --no-auth --uri <MCP_URI>' exits 1 with 'Missing required option: --name'`.
-- The output includes `PASS [3.1]: 'wanaku mcp tool list --no-auth' exits 2 with 'Missing required option'`.
-- The output includes `PASS [3.1]: 'wanaku mcp resource list --no-auth' exits 2 with 'Missing required option'`.
-- The output includes `PASS [3.1]: 'wanaku mcp prompt list --no-auth' exits 2 with 'Missing required option'`.
-- The output contains no line starting with `FAIL`.
-
----
-
-## Phase 4: Tool Operations
-
-### Test 4.1: List the tools of the namespace
+### Test 2.1: List the tools of the namespace
 
 ```bash run
 OUTPUT=$(wanaku mcp tool list --uri "${MCP_URI}" --no-auth --plain 2>/dev/null)
 EXIT_CODE=$?
-[ "${EXIT_CODE}" -eq 0 ] && echo "PASS [4.1]: tool list exit 0" || echo "FAIL [4.1]: tool list exit ${EXIT_CODE}"
+[ "${EXIT_CODE}" -eq 0 ] && echo "PASS [2.1]: tool list exit 0" || echo "FAIL [2.1]: tool list exit ${EXIT_CODE}"
 for TOOL in restartService scaleDeployment escalateTicket; do
-  echo "${OUTPUT}" | grep -q "^${TOOL} " && echo "PASS [4.1]: '${TOOL}' listed" || echo "FAIL [4.1]: '${TOOL}' not listed"
+  echo "${OUTPUT}" | grep -q "^${TOOL} " && echo "PASS [2.1]: '${TOOL}' listed" || echo "FAIL [2.1]: '${TOOL}' not listed"
 done
 ```
 
 **Expected result:**
 
-- The output includes `PASS [4.1]: tool list exit 0`.
-- The output includes `PASS [4.1]: 'restartService' listed`.
-- The output includes `PASS [4.1]: 'scaleDeployment' listed`.
-- The output includes `PASS [4.1]: 'escalateTicket' listed`.
+- The output includes `PASS [2.1]: tool list exit 0`.
+- The output includes `PASS [2.1]: 'restartService' listed`.
+- The output includes `PASS [2.1]: 'scaleDeployment' listed`.
+- The output includes `PASS [2.1]: 'escalateTicket' listed`.
 - The output contains no line starting with `FAIL`.
 
-### Test 4.2: Call a tool with its required string parameters
+### Test 2.2: Call a tool with its required string parameters
 
 The fixture has no tool with a successful one-parameter call independent of forwarded headers. Use both
 required parameters of `restartService` to verify successful invocation.
@@ -566,133 +483,73 @@ required parameters of `restartService` to verify successful invocation.
 OUTPUT=$(wanaku mcp tool --uri "${MCP_URI}" --no-auth --name restartService --param serverId=test-server --param service=nginx --plain 2>/dev/null)
 EXIT_CODE=$?
 if [ "${EXIT_CODE}" -eq 0 ] && [ "${OUTPUT}" = "SUCCESS: Service 'nginx' restarted on server 'test-server'." ]; then
-  echo "PASS [4.2]: restartService returned the restart confirmation"
+  echo "PASS [2.2]: restartService returned the restart confirmation"
 else
-  echo "FAIL [4.2]: exit ${EXIT_CODE}, output '${OUTPUT}'"
+  echo "FAIL [2.2]: exit ${EXIT_CODE}, output '${OUTPUT}'"
 fi
 ```
 
 **Expected result:**
 
-- The output includes `PASS [4.2]: restartService returned the restart confirmation`.
+- The output includes `PASS [2.2]: restartService returned the restart confirmation`.
 - The output contains no line starting with `FAIL`.
 
-### Test 4.3: Call a tool with repeated and comma-separated parameters
-
-The CLI accepts `--param` more than once, and it splits one value at commas. Both forms must supply
-the two required fixture parameters and produce the same restart confirmation. Also verify the fixture
-accepts its string-valued urgency enum; the ticket number increments, so assert its format rather than a fixed ID.
-
-```bash run
-OUTPUT=$(wanaku mcp tool --uri "${MCP_URI}" --no-auth --name restartService --param serverId=test-server --param service=nginx --plain 2>/dev/null)
-[ "${OUTPUT}" = "SUCCESS: Service 'nginx' restarted on server 'test-server'." ] && echo "PASS [4.3]: --param serverId=test-server --param service=nginx" \
-  || echo "FAIL [4.3]: --param serverId=test-server --param service=nginx returned '${OUTPUT}'"
-OUTPUT=$(wanaku mcp tool --uri "${MCP_URI}" --no-auth --name restartService --param serverId=test-server,service=nginx --plain 2>/dev/null)
-[ "${OUTPUT}" = "SUCCESS: Service 'nginx' restarted on server 'test-server'." ] && echo "PASS [4.3]: --param serverId=test-server,service=nginx" \
-  || echo "FAIL [4.3]: --param serverId=test-server,service=nginx returned '${OUTPUT}'"
-OUTPUT=$(wanaku mcp tool --uri "${MCP_URI}" --no-auth --name escalateTicket \
-  --param reason=memory-pressure --param urgency=high --plain 2>/dev/null)
-EXIT_CODE=$?
-if [ "${EXIT_CODE}" -eq 0 ] && echo "${OUTPUT}" | grep -Eq '^Ticket INC-[0-9]+ created with urgency=high: memory-pressure$'; then
-  echo "PASS [4.3]: escalateTicket accepts urgency=high"
-else
-  echo "FAIL [4.3]: exit ${EXIT_CODE}, output '${OUTPUT}'"
-fi
-```
-
-**Expected result:**
-
-- The output includes `PASS [4.3]: --param serverId=test-server --param service=nginx`.
-- The output includes `PASS [4.3]: --param serverId=test-server,service=nginx`.
-- The output includes `PASS [4.3]: escalateTicket accepts urgency=high`.
-- The output contains no line starting with `FAIL`.
-
-### Test 4.4: Numeric tool arguments are converted or rejected appropriately
-
-The CLI sends `replicas=2` as a string; the supplied Quarkus fixture converts it to an integer. Verify that
-valid numeric input succeeds and non-numeric input fails, without depending on validation-library wording.
-
-```bash run
-OUTPUT=$(wanaku mcp tool --uri "${MCP_URI}" --no-auth --name scaleDeployment \
-  --param target=test-deployment --param replicas=2 --plain 2>/dev/null)
-EXIT_CODE=$?
-if [ "${EXIT_CODE}" -eq 0 ] && [ "${OUTPUT}" = "SUCCESS: Deployment 'test-deployment' scaled to 2 replica(s)." ]; then
-  echo "PASS [4.4]: numeric string converted to integer"
-else
-  echo "FAIL [4.4]: exit ${EXIT_CODE}, output: ${OUTPUT}"
-fi
-OUTPUT=$(wanaku mcp tool --uri "${MCP_URI}" --no-auth --name scaleDeployment \
-  --param target=test-deployment --param replicas=not-a-number --plain 2>&1)
-EXIT_CODE=$?
-if [ "${EXIT_CODE}" -eq 1 ] && echo "${OUTPUT}" | grep -qiE 'replicas|not-a-number|integer|number'; then
-  echo "PASS [4.4]: non-numeric replicas rejected"
-else
-  echo "FAIL [4.4]: exit ${EXIT_CODE}, output: ${OUTPUT}"
-fi
-```
-
-**Expected result:**
-
-- The output includes `PASS [4.4]: numeric string converted to integer`.
-- The output includes `PASS [4.4]: non-numeric replicas rejected`.
-- The output contains no line starting with `FAIL`.
-
-### Test 4.5: Call a tool without its required argument
+### Test 2.3: Call a tool without its required argument
 
 ```bash run
 OUTPUT=$(wanaku mcp tool --uri "${MCP_URI}" --no-auth --name restartService --plain 2>&1)
 EXIT_CODE=$?
 if [ "${EXIT_CODE}" -eq 1 ] && echo "${OUTPUT}" | grep -q "Missing required argument: serverId"; then
-  echo "PASS [4.5]: missing 'serverId' rejected"
+  echo "PASS [2.3]: missing 'serverId' rejected"
 else
-  echo "FAIL [4.5]: exit ${EXIT_CODE}, output: ${OUTPUT}"
+  echo "FAIL [2.3]: exit ${EXIT_CODE}, output: ${OUTPUT}"
 fi
 ```
 
 **Expected result:**
 
-- The output includes `PASS [4.5]: missing 'serverId' rejected`.
+- The output includes `PASS [2.3]: missing 'serverId' rejected`.
 - The output contains no line starting with `FAIL`.
 
-### Test 4.6: Call an unknown tool
+### Test 2.4: Call an unknown tool
 
 ```bash run
 OUTPUT=$(wanaku mcp tool --uri "${MCP_URI}" --no-auth --name non-existent-tool-12345 --plain 2>&1)
 EXIT_CODE=$?
 if [ "${EXIT_CODE}" -eq 1 ] && echo "${OUTPUT}" | grep -q "tool not found: non-existent-tool-12345"; then
-  echo "PASS [4.6]: unknown tool rejected"
+  echo "PASS [2.4]: unknown tool rejected"
 else
-  echo "FAIL [4.6]: exit ${EXIT_CODE}, output: ${OUTPUT}"
+  echo "FAIL [2.4]: exit ${EXIT_CODE}, output: ${OUTPUT}"
 fi
 ```
 
 **Expected result:**
 
-- The output includes `PASS [4.6]: unknown tool rejected`.
+- The output includes `PASS [2.4]: unknown tool rejected`.
 - The output contains no line starting with `FAIL`.
 
 ---
 
-## Phase 5: Resource Operations
+## Phase 3: Resource Operations
 
-### Test 5.1: List the resources of the namespace
+### Test 3.1: List the resources of the namespace
 
 ```bash run
 OUTPUT=$(wanaku mcp resource list --uri "${MCP_URI}" --no-auth --plain 2>/dev/null)
 EXIT_CODE=$?
 if [ "${EXIT_CODE}" -eq 0 ] && echo "${OUTPUT}" | grep -q "^safetyLimits .*config://policies/safety-limits"; then
-  echo "PASS [5.1]: safetyLimits listed with its URI"
+  echo "PASS [3.1]: safetyLimits listed with its URI"
 else
-  echo "FAIL [5.1]: exit ${EXIT_CODE}, output: ${OUTPUT}"
+  echo "FAIL [3.1]: exit ${EXIT_CODE}, output: ${OUTPUT}"
 fi
 ```
 
 **Expected result:**
 
-- The output includes `PASS [5.1]: safetyLimits listed with its URI`.
+- The output includes `PASS [3.1]: safetyLimits listed with its URI`.
 - The output contains no line starting with `FAIL`.
 
-### Test 5.2: Read a resource
+### Test 3.2: Read a resource
 
 ```bash run
 RESOURCE_URI="${TEST_RESOURCE_URI:-config://policies/safety-limits}"
@@ -700,18 +557,18 @@ OUTPUT=$(wanaku mcp resource --uri "${MCP_URI}" --no-auth --resource-uri "${RESO
 EXIT_CODE=$?
 if [ "${EXIT_CODE}" -eq 0 ] && echo "${OUTPUT}" | grep -q "max_db_replicas" \
   && echo "${OUTPUT}" | grep -q "blocked_services" && echo "${OUTPUT}" | grep -q "payment-gateway"; then
-  echo "PASS [5.2]: resource content returned"
+  echo "PASS [3.2]: resource content returned"
 else
-  echo "FAIL [5.2]: exit ${EXIT_CODE}, output: ${OUTPUT}"
+  echo "FAIL [3.2]: exit ${EXIT_CODE}, output: ${OUTPUT}"
 fi
 ```
 
 **Expected result:**
 
-- The output includes `PASS [5.2]: resource content returned`.
+- The output includes `PASS [3.2]: resource content returned`.
 - The output contains no line starting with `FAIL`.
 
-### Test 5.3: Read an unknown resource
+### Test 3.3: Read an unknown resource
 
 Wanaku Server looks up the URI in its registry before it forwards the request.
 
@@ -719,57 +576,57 @@ Wanaku Server looks up the URI in its registry before it forwards the request.
 OUTPUT=$(wanaku mcp resource --uri "${MCP_URI}" --no-auth --resource-uri "demo://non-existent-12345" --plain 2>&1)
 EXIT_CODE=$?
 if [ "${EXIT_CODE}" -eq 1 ] && echo "${OUTPUT}" | grep -q "resource not found: demo://non-existent-12345"; then
-  echo "PASS [5.3]: unknown resource rejected"
+  echo "PASS [3.3]: unknown resource rejected"
 else
-  echo "FAIL [5.3]: exit ${EXIT_CODE}, output: ${OUTPUT}"
+  echo "FAIL [3.3]: exit ${EXIT_CODE}, output: ${OUTPUT}"
 fi
 ```
 
 **Expected result:**
 
-- The output includes `PASS [5.3]: unknown resource rejected`.
+- The output includes `PASS [3.3]: unknown resource rejected`.
 - The output contains no line starting with `FAIL`.
 
 ---
 
-## Phase 6: Prompt Operations
+## Phase 4: Prompt Operations
 
-### Test 6.1: List the prompts of the namespace
+### Test 4.1: List the prompts of the namespace
 
 ```bash run
 OUTPUT=$(wanaku mcp prompt list --uri "${MCP_URI}" --no-auth --plain 2>/dev/null)
 for PROMPT in summarizeIncident draftEscalation; do
-  echo "${OUTPUT}" | grep -q "^${PROMPT} " && echo "PASS [6.1]: '${PROMPT}' listed" || echo "FAIL [6.1]: '${PROMPT}' not listed"
+  echo "${OUTPUT}" | grep -q "^${PROMPT} " && echo "PASS [4.1]: '${PROMPT}' listed" || echo "FAIL [4.1]: '${PROMPT}' not listed"
 done
 ```
 
 **Expected result:**
 
-- The output includes `PASS [6.1]: 'summarizeIncident' listed`.
-- The output includes `PASS [6.1]: 'draftEscalation' listed`.
+- The output includes `PASS [4.1]: 'summarizeIncident' listed`.
+- The output includes `PASS [4.1]: 'draftEscalation' listed`.
 - The output contains no line starting with `FAIL`.
 
-### Test 6.2: Get a prompt without arguments
+### Test 4.2: Get a prompt without arguments
 
 Both fixture prompts require arguments; neither is a zero-argument prompt. Verify that an argument-free
-request is rejected, then verify successful rendering in Test 6.3.
+request is rejected, then verify successful rendering in Test 4.3.
 
 ```bash run
 OUTPUT=$(wanaku mcp prompt --uri "${MCP_URI}" --no-auth --name summarizeIncident --plain 2>&1)
 EXIT_CODE=$?
 if [ "${EXIT_CODE}" -eq 1 ] && echo "${OUTPUT}" | grep -q -- "-32602"; then
-  echo "PASS [6.2]: required prompt arguments rejected when absent"
+  echo "PASS [4.2]: required prompt arguments rejected when absent"
 else
-  echo "FAIL [6.2]: exit ${EXIT_CODE}, output: ${OUTPUT}"
+  echo "FAIL [4.2]: exit ${EXIT_CODE}, output: ${OUTPUT}"
 fi
 ```
 
 **Expected result:**
 
-- The output includes `PASS [6.2]: required prompt arguments rejected when absent`.
+- The output includes `PASS [4.2]: required prompt arguments rejected when absent`.
 - The output contains no line starting with `FAIL`.
 
-### Test 6.3: Get prompts with arguments
+### Test 4.3: Get prompts with arguments
 
 ```bash run
 OUTPUT=$(wanaku mcp prompt --uri "${MCP_URI}" --no-auth --name summarizeIncident \
@@ -777,67 +634,67 @@ OUTPUT=$(wanaku mcp prompt --uri "${MCP_URI}" --no-auth --name summarizeIncident
 EXIT_CODE=$?
 if [ "${EXIT_CODE}" -eq 0 ] && echo "${OUTPUT}" | grep -q "server test-server" \
   && echo "${OUTPUT}" | grep -q "memory-pressure"; then
-  echo "PASS [6.3]: summarizeIncident rendered with both arguments"
+  echo "PASS [4.3]: summarizeIncident rendered with both arguments"
 else
-  echo "FAIL [6.3]: exit ${EXIT_CODE}, output: ${OUTPUT}"
+  echo "FAIL [4.3]: exit ${EXIT_CODE}, output: ${OUTPUT}"
 fi
 OUTPUT=$(wanaku mcp prompt --uri "${MCP_URI}" --no-auth --name draftEscalation \
   --arg urgency=high --arg reason=memory-pressure --plain 2>/dev/null)
 EXIT_CODE=$?
 if [ "${EXIT_CODE}" -eq 0 ] && echo "${OUTPUT}" | grep -q "urgency=high" \
   && echo "${OUTPUT}" | grep -q "memory-pressure"; then
-  echo "PASS [6.3]: draftEscalation rendered with both arguments"
+  echo "PASS [4.3]: draftEscalation rendered with both arguments"
 else
-  echo "FAIL [6.3]: exit ${EXIT_CODE}, output: ${OUTPUT}"
+  echo "FAIL [4.3]: exit ${EXIT_CODE}, output: ${OUTPUT}"
 fi
 ```
 
 **Expected result:**
 
-- The output includes `PASS [6.3]: summarizeIncident rendered with both arguments`.
-- The output includes `PASS [6.3]: draftEscalation rendered with both arguments`.
+- The output includes `PASS [4.3]: summarizeIncident rendered with both arguments`.
+- The output includes `PASS [4.3]: draftEscalation rendered with both arguments`.
 - The output contains no line starting with `FAIL`.
 
-### Test 6.4: Get a prompt without one required argument
+### Test 4.4: Get a prompt without one required argument
 
 ```bash run
 OUTPUT=$(wanaku mcp prompt --uri "${MCP_URI}" --no-auth --name summarizeIncident \
   --arg serverId=test-server --plain 2>&1)
 EXIT_CODE=$?
 if [ "${EXIT_CODE}" -eq 1 ] && echo "${OUTPUT}" | grep -q -- "-32602"; then
-  echo "PASS [6.4]: missing 'incident' rejected"
+  echo "PASS [4.4]: missing 'incident' rejected"
 else
-  echo "FAIL [6.4]: exit ${EXIT_CODE}, output: ${OUTPUT}"
+  echo "FAIL [4.4]: exit ${EXIT_CODE}, output: ${OUTPUT}"
 fi
 ```
 
 **Expected result:**
 
-- The output includes `PASS [6.4]: missing 'incident' rejected`.
+- The output includes `PASS [4.4]: missing 'incident' rejected`.
 - The output contains no line starting with `FAIL`.
 
-### Test 6.5: Get an unknown prompt
+### Test 4.5: Get an unknown prompt
 
 ```bash run
 OUTPUT=$(wanaku mcp prompt --uri "${MCP_URI}" --no-auth --name non-existent-prompt-12345 --plain 2>&1)
 EXIT_CODE=$?
 if [ "${EXIT_CODE}" -eq 1 ] && echo "${OUTPUT}" | grep -q "prompt not found: non-existent-prompt-12345"; then
-  echo "PASS [6.5]: unknown prompt rejected"
+  echo "PASS [4.5]: unknown prompt rejected"
 else
-  echo "FAIL [6.5]: exit ${EXIT_CODE}, output: ${OUTPUT}"
+  echo "FAIL [4.5]: exit ${EXIT_CODE}, output: ${OUTPUT}"
 fi
 ```
 
 **Expected result:**
 
-- The output includes `PASS [6.5]: unknown prompt rejected`.
+- The output includes `PASS [4.5]: unknown prompt rejected`.
 - The output contains no line starting with `FAIL`.
 
 ---
 
-## Phase 7: Namespaces and Governance
+## Phase 5: Namespaces and Governance
 
-### Test 7.1: A namespace shows only its own entries
+### Test 5.1: A namespace shows only its own entries
 
 `MCP_ISOLATED_NAMESPACE` is governed, but it has no forward.
 
@@ -846,107 +703,183 @@ ISO_URI="${WANAKU_MCP_BASE_URL}/${MCP_ISOLATED_NAMESPACE}/mcp"
 for KIND in tool resource prompt; do
   OUTPUT=$(wanaku mcp "${KIND}" list --uri "${ISO_URI}" --no-auth --plain 2>/dev/null)
   echo "${OUTPUT}" | grep -q "^No ${KIND}s found" \
-    && echo "PASS [7.1]: no ${KIND}s in ${MCP_ISOLATED_NAMESPACE}" || echo "FAIL [7.1]: ${KIND}s leaked: ${OUTPUT}"
+    && echo "PASS [5.1]: no ${KIND}s in ${MCP_ISOLATED_NAMESPACE}" || echo "FAIL [5.1]: ${KIND}s leaked: ${OUTPUT}"
 done
 ```
 
 **Expected result:**
 
-- The output includes `PASS [7.1]: no tools in <MCP_ISOLATED_NAMESPACE>`.
-- The output includes `PASS [7.1]: no resources in <MCP_ISOLATED_NAMESPACE>`.
-- The output includes `PASS [7.1]: no prompts in <MCP_ISOLATED_NAMESPACE>`.
+- The output includes `PASS [5.1]: no tools in <MCP_ISOLATED_NAMESPACE>`.
+- The output includes `PASS [5.1]: no resources in <MCP_ISOLATED_NAMESPACE>`.
+- The output includes `PASS [5.1]: no prompts in <MCP_ISOLATED_NAMESPACE>`.
 - The output contains no line starting with `FAIL`.
 
-### Test 7.2: A tool of another namespace cannot be called
+### Test 5.2: A tool of another namespace cannot be called
 
 ```bash run
 OUTPUT=$(wanaku mcp tool --uri "${ISO_URI}" --no-auth --name restartService --param serverId=test-server --param service=nginx --plain 2>&1)
 EXIT_CODE=$?
 if [ "${EXIT_CODE}" -eq 1 ] && echo "${OUTPUT}" | grep -q "tool not found: restartService"; then
-  echo "PASS [7.2]: 'restartService' is not callable from ${MCP_ISOLATED_NAMESPACE}"
+  echo "PASS [5.2]: 'restartService' is not callable from ${MCP_ISOLATED_NAMESPACE}"
 else
-  echo "FAIL [7.2]: exit ${EXIT_CODE}, output: ${OUTPUT}"
+  echo "FAIL [5.2]: exit ${EXIT_CODE}, output: ${OUTPUT}"
 fi
 ```
 
 **Expected result:**
 
-- The output includes `PASS [7.2]: 'restartService' is not callable from <MCP_ISOLATED_NAMESPACE>`.
+- The output includes `PASS [5.2]: 'restartService' is not callable from <MCP_ISOLATED_NAMESPACE>`.
 - The output contains no line starting with `FAIL`.
 
-### Test 7.3: The fail-safe default denies calls in a namespace that is not governed
+### Test 5.3: The fail-safe default denies calls in a namespace that is not governed
 
 The governance check runs before the tool lookup. Listing is not governed.
 
 ```bash run
 UNGOV_URI="${WANAKU_MCP_BASE_URL}/${MCP_UNGOVERNED_NAMESPACE}/mcp"
 wanaku mcp tool list --uri "${UNGOV_URI}" --no-auth --plain > /dev/null 2>&1 \
-  && echo "PASS [7.3]: listing is allowed in ${MCP_UNGOVERNED_NAMESPACE}" || echo "FAIL [7.3]: listing failed"
+  && echo "PASS [5.3]: listing is allowed in ${MCP_UNGOVERNED_NAMESPACE}" || echo "FAIL [5.3]: listing failed"
 
 OUTPUT=$(wanaku mcp tool --uri "${UNGOV_URI}" --no-auth --name restartService --param serverId=test-server --param service=nginx --plain 2>&1)
 EXIT_CODE=$?
 if [ "${EXIT_CODE}" -eq 1 ] && echo "${OUTPUT}" | grep -q "No governance policy permits this action."; then
-  echo "PASS [7.3]: tools/call denied by the fail-safe default"
+  echo "PASS [5.3]: tools/call denied by the fail-safe default"
 else
-  echo "FAIL [7.3]: exit ${EXIT_CODE}, output: ${OUTPUT}"
+  echo "FAIL [5.3]: exit ${EXIT_CODE}, output: ${OUTPUT}"
 fi
 ```
 
 **Expected result:**
 
-- The output includes `PASS [7.3]: listing is allowed in <MCP_UNGOVERNED_NAMESPACE>`.
-- The output includes `PASS [7.3]: tools/call denied by the fail-safe default`.
+- The output includes `PASS [5.3]: listing is allowed in <MCP_UNGOVERNED_NAMESPACE>`.
+- The output includes `PASS [5.3]: tools/call denied by the fail-safe default`.
 - The output contains no line starting with `FAIL`.
 
-### Test 7.4: A disabled tool is hidden from MCP clients
+### Test 5.4: A disabled tool is hidden from MCP clients
 
 The enable and disable routes have no CLI command, so this test uses `curl`.
 
 ```bash run
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT "${WANAKU_SERVER_URL}/api/v1/tools/restartService/disable")
-[ "${HTTP_CODE}" = "200" ] && echo "PASS [7.4]: restartService disabled" || echo "FAIL [7.4]: disable returned HTTP ${HTTP_CODE}"
+[ "${HTTP_CODE}" = "200" ] && echo "PASS [5.4]: restartService disabled" || echo "FAIL [5.4]: disable returned HTTP ${HTTP_CODE}"
 
 wanaku mcp tool list --uri "${MCP_URI}" --no-auth --plain 2>/dev/null | grep -q "^restartService " \
-  && echo "FAIL [7.4]: disabled tool still listed" || echo "PASS [7.4]: disabled tool not listed"
+  && echo "FAIL [5.4]: disabled tool still listed" || echo "PASS [5.4]: disabled tool not listed"
 
 OUTPUT=$(wanaku mcp tool --uri "${MCP_URI}" --no-auth --name restartService --param serverId=test-server --param service=nginx --plain 2>&1)
 echo "${OUTPUT}" | grep -q "tool not found: restartService" \
-  && echo "PASS [7.4]: disabled tool cannot be called" || echo "FAIL [7.4]: output: ${OUTPUT}"
+  && echo "PASS [5.4]: disabled tool cannot be called" || echo "FAIL [5.4]: output: ${OUTPUT}"
 
 # The management API still lists the entry
 wanaku tools list --host "${WANAKU_SERVER_URL}" --no-auth --plain | grep -q "^restartService" \
-  && echo "PASS [7.4]: management API still lists restartService" || echo "FAIL [7.4]: restartService missing from management API"
+  && echo "PASS [5.4]: management API still lists restartService" || echo "FAIL [5.4]: restartService missing from management API"
 ```
 
 **Expected result:**
 
-- The output includes `PASS [7.4]: restartService disabled`.
-- The output includes `PASS [7.4]: disabled tool not listed`.
-- The output includes `PASS [7.4]: disabled tool cannot be called`.
-- The output includes `PASS [7.4]: management API still lists restartService`.
+- The output includes `PASS [5.4]: restartService disabled`.
+- The output includes `PASS [5.4]: disabled tool not listed`.
+- The output includes `PASS [5.4]: disabled tool cannot be called`.
+- The output includes `PASS [5.4]: management API still lists restartService`.
 - The output contains no line starting with `FAIL`.
 
-### Test 7.5: An enabled tool is visible again
+### Test 5.5: An enabled tool is visible again
 
 ```bash run
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT "${WANAKU_SERVER_URL}/api/v1/tools/restartService/enable")
-[ "${HTTP_CODE}" = "200" ] && echo "PASS [7.5]: restartService enabled" || echo "FAIL [7.5]: enable returned HTTP ${HTTP_CODE}"
+[ "${HTTP_CODE}" = "200" ] && echo "PASS [5.5]: restartService enabled" || echo "FAIL [5.5]: enable returned HTTP ${HTTP_CODE}"
 
 OUTPUT=$(wanaku mcp tool --uri "${MCP_URI}" --no-auth --name restartService --param serverId=test-server --param service=nginx --plain 2>/dev/null)
-[ "${OUTPUT}" = "SUCCESS: Service 'nginx' restarted on server 'test-server'." ] && echo "PASS [7.5]: restartService callable again" || echo "FAIL [7.5]: output '${OUTPUT}'"
+[ "${OUTPUT}" = "SUCCESS: Service 'nginx' restarted on server 'test-server'." ] && echo "PASS [5.5]: restartService callable again" || echo "FAIL [5.5]: output '${OUTPUT}'"
 ```
 
 **Expected result:**
 
-- The output includes `PASS [7.5]: restartService enabled`.
-- The output includes `PASS [7.5]: restartService callable again`.
+- The output includes `PASS [5.5]: restartService enabled`.
+- The output includes `PASS [5.5]: restartService callable again`.
 - The output contains no line starting with `FAIL`.
 
 ---
 
-## Phase 8: Endpoint and Connection Errors
+## Phase 6: Forwards and Restart
 
-### Test 8.1: The bare `/mcp` path is rejected
+### Test 6.1: The forward is listed with its address
+
+```bash run
+TAB=$(printf '\t')
+wanaku forwards list --host "${WANAKU_SERVER_URL}" --no-auth --plain \
+  | grep -q "^${TEST_MCP_FORWARD}${TAB}${TEST_MCP_URL}" \
+  && echo "PASS [6.1]: forward listed with its address" \
+  || echo "FAIL [6.1]: forward ${TEST_MCP_FORWARD} not listed with ${TEST_MCP_URL}"
+```
+
+**Expected result:**
+
+- The output includes `PASS [6.1]: forward listed with its address`.
+- The output contains no line starting with `FAIL`.
+
+### Test 6.2: Forwards survive a restart
+
+No automated test restarts Wanaku Server and checks that the registry is restored. This test does that in builtin
+mode. In existing mode, the plan must not restart the server, so the test prints `SKIP`.
+
+The test stops the server with `SIGTERM`, starts it again with the same `WANAKU_PERSIST_PATH`, and checks that the
+forward and its tools are restored from `registry.json`.
+
+```bash run
+if [ "${MCP_CREATED_SERVER:-false}" != true ]; then
+  echo "SKIP [6.2]: the server is not owned by this run (existing mode)"
+else
+  [ -f "${WANAKU_SERVER_DATA_DIR}/registry.json" ] && echo "PASS [6.2]: registry.json written" \
+    || echo "FAIL [6.2]: registry.json missing in ${WANAKU_SERVER_DATA_DIR}"
+  kill -TERM "${WANAKU_SERVER_PID}" 2>/dev/null || true
+  wait "${WANAKU_SERVER_PID}" 2>/dev/null || true
+  WANAKU_MGMT_LISTEN="0.0.0.0:${WANAKU_SERVER_MGMT_PORT}" \
+  WANAKU_PERSIST_BACKEND=file WANAKU_PERSIST_PATH="${WANAKU_SERVER_DATA_DIR}" \
+    "${WANAKU_SERVER_BIN}" --wanaku-config "${WANAKU_SERVER_CONFIG}" \
+    < /dev/null >> "${WANAKU_SERVER_LOG}" 2>&1 &
+  WANAKU_SERVER_PID=$!
+  F2_READY=false
+  for ATTEMPT in $(seq 1 30); do
+    if curl --connect-timeout 1 --max-time 1 -fsS "${WANAKU_SERVER_URL}/healthz" > /dev/null 2>&1; then
+      F2_READY=true
+      break
+    fi
+    sleep 1
+  done
+  [ "${F2_READY}" = true ] && echo "PASS [6.2]: server ready after restart" \
+    || { echo "FAIL [6.2]: server not ready after restart"; tail -n 20 "${WANAKU_SERVER_LOG}"; }
+  TAB=$(printf '\t')
+  wanaku forwards list --host "${WANAKU_SERVER_URL}" --no-auth --plain \
+    | grep -q "^${TEST_MCP_FORWARD}${TAB}${TEST_MCP_URL}" \
+    && echo "PASS [6.2]: forward restored after restart" || echo "FAIL [6.2]: forward lost after restart"
+  F2_TOOLS=false
+  for ATTEMPT in $(seq 1 30); do
+    if wanaku mcp tool list --uri "${MCP_URI}" --no-auth --plain 2>/dev/null | grep -Eq '^restartService([[:space:]]|$)'; then
+      F2_TOOLS=true
+      break
+    fi
+    sleep 1
+  done
+  [ "${F2_TOOLS}" = true ] && echo "PASS [6.2]: tools served again after restart" \
+    || echo "FAIL [6.2]: restartService not served after restart"
+fi
+```
+
+**Expected result:**
+
+- In builtin mode, the output includes `PASS [6.2]: registry.json written`.
+- In builtin mode, the output includes `PASS [6.2]: server ready after restart`.
+- In builtin mode, the output includes `PASS [6.2]: forward restored after restart`.
+- In builtin mode, the output includes `PASS [6.2]: tools served again after restart`.
+- In existing mode, the output includes `SKIP [6.2]: the server is not owned by this run (existing mode)`.
+- The output contains no line starting with `FAIL`.
+
+---
+
+## Phase 7: Endpoint and Connection Errors
+
+### Test 7.1: The bare `/mcp` path is rejected
 
 Wanaku Server returns the JSON-RPC error `-32600` for an MCP request without a namespace.
 
@@ -954,76 +887,42 @@ Wanaku Server returns the JSON-RPC error `-32600` for an MCP request without a n
 OUTPUT=$(wanaku mcp tool list --uri "${WANAKU_MCP_BASE_URL}/mcp" --no-auth --plain 2>&1)
 EXIT_CODE=$?
 if [ "${EXIT_CODE}" -eq 1 ] && echo "${OUTPUT}" | grep -q "invalid MCP endpoint path: use /{namespace}/mcp"; then
-  echo "PASS [8.1]: bare /mcp rejected"
+  echo "PASS [7.1]: bare /mcp rejected"
 else
-  echo "FAIL [8.1]: exit ${EXIT_CODE}, output: ${OUTPUT}"
+  echo "FAIL [7.1]: exit ${EXIT_CODE}, output: ${OUTPUT}"
 fi
 ```
 
 **Expected result:**
 
-- The output includes `PASS [8.1]: bare /mcp rejected`.
+- The output includes `PASS [7.1]: bare /mcp rejected`.
 - The output contains no line starting with `FAIL`.
 
-### Test 8.2: A legacy SSE endpoint is rejected by the CLI
-
-```bash run
-OUTPUT=$(wanaku mcp tool list --uri "${MCP_URI}/sse" --no-auth --plain 2>&1)
-EXIT_CODE=$?
-if [ "${EXIT_CODE}" -eq 1 ] && echo "${OUTPUT}" | grep -q "Legacy SSE MCP endpoints are no longer supported"; then
-  echo "PASS [8.2]: SSE endpoint rejected with a migration hint"
-else
-  echo "FAIL [8.2]: exit ${EXIT_CODE}, output: ${OUTPUT}"
-fi
-```
-
-**Expected result:**
-
-- The output includes `PASS [8.2]: SSE endpoint rejected with a migration hint`.
-- The output contains no line starting with `FAIL`.
-
-### Test 8.3: An unreachable server fails without a stack trace
+### Test 7.2: An unreachable server fails without a stack trace
 
 ```bash run
 OUTPUT=$(wanaku mcp tool list --uri "${MCP_UNREACHABLE_URI}" --no-auth --plain 2>&1)
 EXIT_CODE=$?
 if [ "${EXIT_CODE}" -eq 1 ] && ! echo "${OUTPUT}" | grep -q "at .*(.*\.java:"; then
-  echo "PASS [8.3]: unreachable server fails gracefully"
+  echo "PASS [7.2]: unreachable server fails gracefully"
 else
-  echo "FAIL [8.3]: exit ${EXIT_CODE}, output: ${OUTPUT}"
+  echo "FAIL [7.2]: exit ${EXIT_CODE}, output: ${OUTPUT}"
 fi
 echo "${OUTPUT}" | grep -q "Connection refused" \
-  || echo "WARN [8.3]: message is not the friendly 'Connection refused' text: ${OUTPUT}"
+  || echo "WARN [7.2]: message is not the friendly 'Connection refused' text: ${OUTPUT}"
 ```
 
 **Expected result:**
 
-- The output includes `PASS [8.3]: unreachable server fails gracefully`.
+- The output includes `PASS [7.2]: unreachable server fails gracefully`.
 - The output contains no line starting with `FAIL`.
-- The output contains `Connection refused`, or includes `WARN [8.3]: message is not the friendly`.
-
-### Test 8.4: An invalid URI fails gracefully
-
-```bash run
-OUTPUT=$(wanaku mcp tool list --uri "not-a-valid-uri" --no-auth --plain 2>&1)
-EXIT_CODE=$?
-if [ "${EXIT_CODE}" -eq 1 ] && echo "${OUTPUT}" | grep -q "Invalid URI: 'not-a-valid-uri'"; then
-  echo "PASS [8.4]: invalid URI rejected"
-else
-  echo "FAIL [8.4]: exit ${EXIT_CODE}, output: ${OUTPUT}"
-fi
-```
-
-**Expected result:**
-
-- The output includes `PASS [8.4]: invalid URI rejected`.
-- The output contains no line starting with `FAIL`.
+- The output contains `Connection refused`, or includes `WARN [7.2]: message is not the friendly`.
 
 ---
 
-## Phase 9: Cleanup
+## Phase 8: Cleanup
 
-### Step 9.1: Cleanup
+### Step 8.1: Cleanup
 
 Remove only resources recorded as created by this run, including after partial setup. Never stop an existing
 Wanaku Server or delete its persistence/configuration. Do not use port-wide process killing on a shared machine.
@@ -1067,11 +966,10 @@ Cleanup failures must be investigated; ignored missing-resource errors alone do 
 | S     | S.1-S.2 | CLI invocation and server mode                                                        | High     |
 | 0     | 0.1     | Prerequisites                                                                         | High     |
 | 1     | 1.1-1.4 | Server with test governance, fixture forward, namespaces                              | Critical |
-| 2     | 2.1-2.2 | Help and usage output                                                                 | Medium   |
-| 3     | 3.1     | Required option validation (exit codes 1 and 2)                                       | High     |
-| 4     | 4.1-4.6 | Tool list, call, multi-param, numeric conversion/rejection, missing arg, unknown tool | Critical |
-| 5     | 5.1-5.3 | Resource list, read, unknown resource                                                 | Critical |
-| 6     | 6.1-6.5 | Prompt list, get, get with args, missing arg, unknown prompt                          | Critical |
-| 7     | 7.1-7.5 | Namespace isolation, fail-safe governance, disable/enable                             | Critical |
-| 8     | 8.1-8.4 | Bare `/mcp`, legacy SSE, unreachable server, invalid URI                              | High     |
-| 9     | 9.1     | Cleanup                                                                               | Critical |
+| 2     | 2.1-2.4 | Tool list, call, missing arg, unknown tool                                            | Critical |
+| 3     | 3.1-3.3 | Resource list, read, unknown resource                                                 | Critical |
+| 4     | 4.1-4.5 | Prompt list, get, get with args, missing arg, unknown prompt                          | Critical |
+| 5     | 5.1-5.5 | Namespace isolation, fail-safe governance, disable/enable                             | Critical |
+| 6     | 6.1-6.2 | Forward listing, forwards survive a restart (builtin mode)                            | Critical |
+| 7     | 7.1-7.2 | Bare `/mcp`, unreachable server                                                       | High     |
+| 8     | 8.1     | Cleanup                                                                               | Critical |
