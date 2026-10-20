@@ -36,33 +36,40 @@ COPY --from=fixture --chown=0:0 /deployments/ /opt/test-mcp-server/
 RUN printf '#!/bin/sh\nexec java -jar /opt/test-mcp-server/quarkus-run.jar "$@"\n' >/usr/local/bin/test-mcp-server \
     && chmod 0755 /usr/local/bin/test-mcp-server
 
-# The CLI has a native build for Linux x86_64 only. Other architectures use
-# the JVM build. The JVM CLI and the test MCP server need Java 21 or later.
-# The launcher finds its files relative to its own path, so
-# /usr/local/bin/wanaku is a wrapper, not a link.
+# The wanaku CLI and wanaku-keycloak-admin come from the same wanaku-barn
+# release. Both have native builds for Linux x86_64 only. Other
+# architectures use the JVM builds. The JVM builds and the test MCP server
+# need Java 21 or later. The launchers find their files relative to their own
+# path, so the commands in /usr/local/bin are wrappers, not links.
 RUN --mount=type=bind,from=busybox,source=/bin/busybox,target=/tmp/busybox \
     set -eu; \
     programs_to_install="nodejs npm java-headless openssl"; \
-    base="https://github.com/wanaku-ai/wanaku-barn/releases/download/${WANAKU_CLI_RELEASE}"; \
-    case "${TARGETARCH:-$(uname -m)}" in \
-        amd64|x86_64) archive="wanaku-cli-${WANAKU_CLI_VERSION}-linux-x86_64.zip"; launcher=bin/wanaku; programs="bin/wanaku bin/wanaku-cli" ;; \
-        *) archive="wanaku-cli-${WANAKU_CLI_VERSION}.zip"; launcher=wanaku; programs=wanaku ;; \
-    esac; \
     dnf install --assumeyes --setopt=install_weak_deps=False $programs_to_install; \
     dnf clean all; \
     node --version; \
     npx --version; \
     java -version; \
+    base="https://github.com/wanaku-ai/wanaku-barn/releases/download/${WANAKU_CLI_RELEASE}"; \
     tmp=$(mktemp -d); \
-    curl -fsSL -o "$tmp/$archive" "$base/$archive"; \
     curl -fsSL -o "$tmp/checksums_sha256.txt" "$base/checksums_sha256.txt"; \
-    (cd "$tmp" && grep -F "  $archive" checksums_sha256.txt | sha256sum -c -); \
-    /tmp/busybox unzip -q "$tmp/$archive" -d "$tmp/out"; \
-    mv "$tmp"/out/* /opt/wanaku-cli; \
-    chmod -R a+rX,go-w /opt/wanaku-cli; \
-    (cd /opt/wanaku-cli && chmod 0755 $programs); \
-    printf '#!/bin/sh\nexec /opt/wanaku-cli/%s "$@"\n' "$launcher" >/usr/local/bin/wanaku; \
-    chmod 0755 /usr/local/bin/wanaku; \
+    install_barn_tool() { \
+        dist="$1"; command="$2"; \
+        case "${TARGETARCH:-$(uname -m)}" in \
+            amd64|x86_64) archive="$dist-${WANAKU_CLI_VERSION}-linux-x86_64.zip"; launcher="bin/$command" ;; \
+            *) archive="$dist-${WANAKU_CLI_VERSION}.zip"; launcher="$command" ;; \
+        esac; \
+        curl -fsSL -o "$tmp/$archive" "$base/$archive"; \
+        (cd "$tmp" && grep -F "  $archive" checksums_sha256.txt | sha256sum -c -); \
+        /tmp/busybox unzip -q "$tmp/$archive" -d "$tmp/$dist"; \
+        mv "$tmp/$dist"/* "/opt/$dist"; \
+        chmod -R a+rX,go-w "/opt/$dist"; \
+        if [ -d "/opt/$dist/bin" ]; then chmod 0755 "/opt/$dist"/bin/*; fi; \
+        chmod 0755 "/opt/$dist/$launcher"; \
+        printf '#!/bin/sh\nexec /opt/%s/%s "$@"\n' "$dist" "$launcher" >"/usr/local/bin/$command"; \
+        chmod 0755 "/usr/local/bin/$command"; \
+    }; \
+    install_barn_tool wanaku-cli wanaku; \
+    install_barn_tool wanaku-keycloak-admin wanaku-keycloak-admin; \
     rm -rf "$tmp"
 
 # The OpenShift and Helm clients, for plans that deploy to a cluster. The
@@ -94,6 +101,6 @@ RUN set -eu; \
 USER 10001:0
 
 LABEL org.opencontainers.image.title="wanaku-saci-worker" \
-      org.opencontainers.image.description="Saci worker with wanaku-server, the wanaku CLI, the test MCP server, oc and helm" \
+      org.opencontainers.image.description="Saci worker with wanaku-server, the wanaku CLI, wanaku-keycloak-admin, the test MCP server, oc and helm" \
       org.opencontainers.image.source="https://github.com/wanaku-ai/wanaku" \
       org.opencontainers.image.licenses="Apache-2.0"

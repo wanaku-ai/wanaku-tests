@@ -48,6 +48,7 @@ jobs:
           docker run --rm --user 123456:0 --entrypoint bash "$IMAGE_REF" -c '
             set -eu
             wanaku --version
+            wanaku-keycloak-admin --version
             oc version --client
             kubectl version --client
             helm version --short
