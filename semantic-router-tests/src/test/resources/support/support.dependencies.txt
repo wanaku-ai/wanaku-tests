@@ -5,4 +5,4 @@ org.apache.camel:camel-kamelet
 org.apache.camel:camel-ai-tool
 org.apache.camel:camel-mcp-server
 org.apache.camel:camel-platform-http-main
-mvn:org.apache.camel:camel-typesafe-ai:4.23.0-SNAPSHOT
+mvn:org.apache.camel:camel-typesafe-ai:4.23.0

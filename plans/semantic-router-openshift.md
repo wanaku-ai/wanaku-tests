@@ -72,7 +72,7 @@ Step S.2 sets the other variables. All image tags default to `latest` and can be
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `WSR_IMAGE` | `quay.io/wanaku/wanaku-semantic-router:latest` | WSR runtime image (the operator default) |
-| `WSR_CAMEL_VERSION` | `4.23.0-SNAPSHOT` | The Camel version of the WSR image. The route manifest (`camel.version`) must match it. |
+| `WSR_CAMEL_VERSION` | `4.23.0` | The Camel version of the WSR image. The route manifest (`camel.version`) must match it. |
 | `TYPESAFE_API_KEY` | not set | Credential of the expert provider. When it is not set, the plan stores a placeholder value in the Secret and skips the routing and semantic audit tests. |
 | `TYPESAFE_BASE_URL` | not set | Optional base URL of a TypeSafe AI compatible provider (`camel.component.typesafe-ai.base-url`). The local `SemanticRouterITCase` uses a deterministic fixture provider through this property. |
 | `TYPESAFE_MODEL` | not set | Optional model (`camel.component.typesafe-ai.model`). Without it, the Camel TypeSafe AI component uses its default model. |
@@ -133,7 +133,7 @@ export WANAKU_REPO_ROOT="${WANAKU_REPO_ROOT:-.}"
 export WANAKU_SERVER_IMAGE="${WANAKU_SERVER_IMAGE:-quay.io/wanaku/wanaku-server:latest}"
 export WANAKU_BARN_IMAGE="${WANAKU_BARN_IMAGE:-quay.io/wanaku/wanaku-barn-backend:latest}"
 export WSR_IMAGE="${WSR_IMAGE:-quay.io/wanaku/wanaku-semantic-router:latest}"
-export WSR_CAMEL_VERSION="${WSR_CAMEL_VERSION:-4.23.0-SNAPSHOT}"
+export WSR_CAMEL_VERSION="${WSR_CAMEL_VERSION:-4.23.0}"
 export WANAKU_ROUTER_NAME="${WANAKU_ROUTER_NAME:-wanaku-test-router}"
 # The WanakuSemanticRouter name. It is also the forward name (spec.forward.name is not set).
 export WSR_NAME="${WSR_NAME:-support-semantic}"
