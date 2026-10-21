@@ -85,13 +85,15 @@ export WANAKU_REPO_ROOT="${WANAKU_REPO_ROOT:-.}"
 # Checkout of wanaku-ai/wanaku (environment option A only)
 export WANAKU_SERVER_REPO_ROOT="${WANAKU_SERVER_REPO_ROOT:-../wanaku}"
 export KEYCLOAK_ADMIN_USER="${KEYCLOAK_ADMIN_USER:-admin}"
-export KEYCLOAK_ADMIN_PASS="${KEYCLOAK_ADMIN_PASS:-admin}"
+# KEYCLOAK_ADMIN_PASS has no default. Option A reads it from the environment.
+# Option B generates it in common/keycloak-setup.md when it is not set.
 export WANAKU_REALM="${WANAKU_REALM:-wanaku}"
 export WANAKU_TEST_USER="${WANAKU_TEST_USER:-alice}"
-export WANAKU_TEST_PASS="${WANAKU_TEST_PASS:-secretpass}"
+export WANAKU_TEST_PASS="${WANAKU_TEST_PASS:-$(openssl rand -hex 16)}"
 export WANAKU_TEST_EMAIL="${WANAKU_TEST_EMAIL:-alice@example.com}"
 export TEST_USERNAME="${TEST_USERNAME:-testuser-811}"
-export TEST_PASSWORD="${TEST_PASSWORD:-TestPass123}"
+export TEST_PASSWORD="${TEST_PASSWORD:-$(openssl rand -hex 16)}"
+export TEST_NEW_PASSWORD="${TEST_NEW_PASSWORD:-$(openssl rand -hex 16)}"
 export TEST_EMAIL="${TEST_EMAIL:-testuser811@example.com}"
 export TEST_CLIENT_ID="${TEST_CLIENT_ID:-test-service-811}"
 export WANAKU_MCP_NAMESPACE="${WANAKU_MCP_NAMESPACE:-default}"
@@ -177,11 +179,20 @@ instances expose.
 Use steps 1 to 4 of the
 [authenticated local deployment guide](https://github.com/wanaku-ai/wanaku/blob/main/deploy/auth/README.md)
 (`deploy/auth/README.md` in the `wanaku-ai/wanaku` repository). Do not do its step 3 (create a user). Step 1.3 of this
-plan creates the test user. Then set the variables:
+plan creates the test user.
+
+Export the Keycloak admin credentials and the `wanaku-mcp-router` client secret of your Compose deployment before
+you run the plan. The plan does not contain default values for them. Use the values that the Compose project uses
+(`KC_BOOTSTRAP_ADMIN_USERNAME`, `KC_BOOTSTRAP_ADMIN_PASSWORD` and `WANAKU_MCPROUTER_SECRET`). Do not commit them.
+Then set the variables:
 
 ```bash
+for VAR_NAME in KEYCLOAK_ADMIN_USER KEYCLOAK_ADMIN_PASS WANAKU_MCPROUTER_SECRET; do
+  eval "VAL=\${${VAR_NAME}}"
+  [ -n "${VAL}" ] && echo "PASS: ${VAR_NAME} is set" || { echo "FAIL: ${VAR_NAME} is not set"; exit 1; }
+done
 export KEYCLOAK_URL="http://localhost:8543"
-export WANAKU_CLIENT_SECRET="${WANAKU_MCPROUTER_SECRET:-changeme}"
+export WANAKU_CLIENT_SECRET="${WANAKU_MCPROUTER_SECRET}"
 export WANAKU_SERVER_URL="http://localhost:4180"   # management proxy
 export WANAKU_MCP_BASE_URL="http://localhost:4181" # MCP proxy
 # The bundled wanaku-realm.json enables direct access grants for mcp-client
@@ -247,7 +258,7 @@ Compose setup uses the opposite assignment. The plan uses only the URLs, so this
 Run this block as a separate `bash` script, not in the shared session.
 
 ```bash
-for VAR_NAME in KEYCLOAK_URL WANAKU_CLIENT_SECRET WANAKU_SERVER_URL WANAKU_MCP_BASE_URL EXPECT_PUBLIC_CLIENT_LOGIN; do
+for VAR_NAME in KEYCLOAK_URL KEYCLOAK_ADMIN_USER KEYCLOAK_ADMIN_PASS WANAKU_CLIENT_SECRET WANAKU_SERVER_URL WANAKU_MCP_BASE_URL EXPECT_PUBLIC_CLIENT_LOGIN; do
   eval "VAL=\${${VAR_NAME}}"
   [ -n "${VAL}" ] && echo "PASS: ${VAR_NAME} is set" || { echo "FAIL: ${VAR_NAME} is not set"; exit 1; }
 done
@@ -260,6 +271,8 @@ HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${KEYCLOAK_URL}/realms/${WAN
 **Expected result:**
 
 - The output includes `PASS: KEYCLOAK_URL is set`.
+- The output includes `PASS: KEYCLOAK_ADMIN_USER is set`.
+- The output includes `PASS: KEYCLOAK_ADMIN_PASS is set`.
 - The output includes `PASS: WANAKU_CLIENT_SECRET is set`.
 - The output includes `PASS: WANAKU_SERVER_URL is set`.
 - The output includes `PASS: WANAKU_MCP_BASE_URL is set`.
@@ -298,13 +311,15 @@ Run this block as a separate `bash` script, not in the shared session.
 
 ```bash
 kc users add --username "${WANAKU_TEST_USER}" --password "${WANAKU_TEST_PASS}" --email "${WANAKU_TEST_EMAIL}" 2>&1
+# The password is generated per run. Set it again in case the user exists from an earlier run.
+kc users set-password --username "${WANAKU_TEST_USER}" --password "${WANAKU_TEST_PASS}" 2>&1
 kc users list --plain 2>&1 | grep -q "^${WANAKU_TEST_USER}[[:space:]]" \
   && echo "PASS: user '${WANAKU_TEST_USER}' exists" \
   || { echo "FAIL: user '${WANAKU_TEST_USER}' not found"; exit 1; }
 ```
 
-If the user exists from an earlier run, the `add` command fails with `User exists with same email`. The `list` check
-still passes.
+If the user exists from an earlier run, the `add` command fails with `User exists with same email`. The `set-password`
+command then sets the password of this run, and the `list` check still passes.
 
 **Expected result:**
 
@@ -349,7 +364,7 @@ kc users list --plain 2>&1 | grep -q "^${TEST_USERNAME}[[:space:]]${TEST_EMAIL}"
 Run this block as a separate `bash` script, not in the shared session.
 
 ```bash
-OUTPUT=$(kc users set-password --username "${TEST_USERNAME}" --password "NewPass456" 2>&1)
+OUTPUT=$(kc users set-password --username "${TEST_USERNAME}" --password "${TEST_NEW_PASSWORD}" 2>&1)
 EXIT_CODE=$?
 if [ "${EXIT_CODE}" -eq 0 ] && echo "${OUTPUT}" | grep -q "Password updated for user '${TEST_USERNAME}'"; then
   echo "PASS: password updated"
@@ -491,7 +506,7 @@ kc credentials list --plain 2>&1 | grep -q "^${TEST_CLIENT_ID}[[:space:]]" \
 
 ```bash run
 OUTPUT=$(wanaku-keycloak-admin users list --keycloak-url "${KEYCLOAK_URL}" \
-  --admin-username "wrong-admin" --admin-password "wrong-pass" --plain 2>&1)
+  --admin-username "wrong-admin" --admin-password "wrong-$(openssl rand -hex 8)" --plain 2>&1)
 EXIT_CODE=$?
 if [ "${EXIT_CODE}" -ne 0 ] && echo "${OUTPUT}" | grep -q "Failed to obtain admin token"; then
   echo "PASS: wrong admin credentials rejected (exit code ${EXIT_CODE})"
@@ -959,7 +974,7 @@ grep -q "^auth.realm=${WANAKU_REALM}$" "${CREDENTIALS_FILE}" \
 ### Test 10.1: Wrong password
 
 ```bash run
-OUTPUT=$(echo "wrong-password-99999" | wanaku auth login --auth-server "${KEYCLOAK_URL}" --realm "${WANAKU_REALM}" \
+OUTPUT=$(echo "wrong-$(openssl rand -hex 8)" | wanaku auth login --auth-server "${KEYCLOAK_URL}" --realm "${WANAKU_REALM}" \
   --username "${WANAKU_TEST_USER}" --password --plain 2>&1)
 EXIT_CODE=$?
 [ "${EXIT_CODE}" -ne 0 ] && echo "${OUTPUT}" | grep -q "Invalid user credentials" \

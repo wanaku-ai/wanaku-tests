@@ -8,6 +8,7 @@ Reusable steps for deploying and configuring Keycloak as the OIDC provider for W
 - `WANAKU_NAMESPACE` environment variable set
 - `WANAKU_REPO_ROOT` environment variable set (path to the wanaku repository root)
 - `jq` available
+- `openssl` available (generates passwords that are not set)
 - `curl` available (only for Keycloak readiness polling — all Wanaku/Keycloak API calls use the CLI)
 - `wanaku` CLI available on `PATH`, **or** the project built with `mvn verify` (to use the jar directly)
 
@@ -20,7 +21,7 @@ Reusable steps for deploying and configuring Keycloak as the OIDC provider for W
 | `WANAKU_CLI` | Command to invoke the Wanaku CLI (see step 1) | `wanaku` |
 | `WANAKU_KEYCLOAK_ADMIN_CLI` | Command to invoke the Keycloak admin CLI, which provides the `realm`, `credentials` and `users` commands (see step 1) | `wanaku-keycloak-admin` |
 | `KEYCLOAK_ADMIN_USER` | Keycloak admin username | `admin` |
-| `KEYCLOAK_ADMIN_PASS` | Keycloak admin password | `admin` |
+| `KEYCLOAK_ADMIN_PASS` | Keycloak admin password. Do not commit it. | Generated at run time |
 | `KEYCLOAK_IMAGE` | Keycloak container image | `quay.io/keycloak/keycloak:26.7` |
 | `WANAKU_AUTH_SECRET_NAME` | Name of the Secret that `WanakuRouter.spec.auth.secretName` references (see step 8) | `wanaku-oidc` |
 
@@ -30,7 +31,8 @@ Reusable steps for deploying and configuring Keycloak as the OIDC provider for W
 
 ```bash
 export KEYCLOAK_ADMIN_USER="${KEYCLOAK_ADMIN_USER:-admin}"
-export KEYCLOAK_ADMIN_PASS="${KEYCLOAK_ADMIN_PASS:-admin}"
+# The procedure deploys this Keycloak, so a random password is generated when none is set
+export KEYCLOAK_ADMIN_PASS="${KEYCLOAK_ADMIN_PASS:-$(openssl rand -hex 16)}"
 export KEYCLOAK_IMAGE="${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.7}"
 export WANAKU_REPO_ROOT="${WANAKU_REPO_ROOT:-.}"
 
@@ -382,7 +384,7 @@ subsequent steps use to call Wanaku Server through the oauth2-proxy.
 
 ```bash
 export WANAKU_TEST_USER="${WANAKU_TEST_USER:-alice}"
-export WANAKU_TEST_PASS="${WANAKU_TEST_PASS:-secretpass}"
+export WANAKU_TEST_PASS="${WANAKU_TEST_PASS:-$(openssl rand -hex 16)}"
 export WANAKU_TEST_EMAIL="${WANAKU_TEST_EMAIL:-alice@example.com}"
 
 ${WANAKU_KEYCLOAK_ADMIN_CLI} users add \
@@ -460,8 +462,10 @@ After completing this procedure, the following variables are set and available f
 | `WANAKU_OIDC_SECRET` | Client secret for the `wanaku-service` client |
 | `WANAKU_CLIENT_SECRET` | Client secret for the `wanaku-mcp-router` client, read by `wanaku auth login` |
 | `WANAKU_TEST_USER` | Username for authenticated CLI operations (default: `alice`) |
-| `WANAKU_TEST_PASS` | Password for the test user (default: `secretpass`) |
+| `WANAKU_TEST_PASS` | Password for the test user (default: generated at run time) |
 | `WANAKU_TEST_EMAIL` | Email for the test user (default: `alice@example.com`) |
+| `KEYCLOAK_ADMIN_USER` | Keycloak admin username (default: `admin`) |
+| `KEYCLOAK_ADMIN_PASS` | Keycloak admin password (default: generated at run time) |
 | `WANAKU_AUTH_SECRET_NAME` | Secret with the `client-secret` and `cookie-secret` keys for `spec.auth.secretName` (default: `wanaku-oidc`) |
 | `WANAKU_AUTH_ISSUER_URL` | Public issuer URL for `spec.auth.issuerUrl` (`${KEYCLOAK_URL}/realms/wanaku`) |
 | `WANAKU_AUTH_INTERNAL_ISSUER_URL` | In-cluster issuer URL for `spec.auth.internalIssuerUrl` (`http://keycloak:8080/realms/wanaku`) |
