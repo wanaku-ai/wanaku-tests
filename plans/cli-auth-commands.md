@@ -84,11 +84,12 @@ commands are in the `wanaku` CLI. The Keycloak realm defaults to `wanaku` for bo
 export WANAKU_REPO_ROOT="${WANAKU_REPO_ROOT:-.}"
 # Checkout of wanaku-ai/wanaku (environment option A only)
 export WANAKU_SERVER_REPO_ROOT="${WANAKU_SERVER_REPO_ROOT:-../wanaku}"
-export KEYCLOAK_ADMIN_USER="${KEYCLOAK_ADMIN_USER:-admin}"
-# KEYCLOAK_ADMIN_PASS has no default. Option A reads it from the environment.
-# Option B generates it in common/keycloak-setup.md when it is not set.
+# KEYCLOAK_ADMIN_USER and KEYCLOAK_ADMIN_PASS have no default here. Option A reads them from the environment.
+# Option B sets them in common/keycloak-setup.md when they are not set.
 export WANAKU_REALM="${WANAKU_REALM:-wanaku}"
 export WANAKU_TEST_USER="${WANAKU_TEST_USER:-alice}"
+# Step 1.3 does not change the password of a user that exists, so it must know if the value is generated
+if [ -z "${WANAKU_TEST_PASS}" ]; then export WANAKU_TEST_PASS_GENERATED=true; else export WANAKU_TEST_PASS_GENERATED=false; fi
 export WANAKU_TEST_PASS="${WANAKU_TEST_PASS:-$(openssl rand -hex 16)}"
 export WANAKU_TEST_EMAIL="${WANAKU_TEST_EMAIL:-alice@example.com}"
 export TEST_USERNAME="${TEST_USERNAME:-testuser-811}"
@@ -310,16 +311,21 @@ CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${WANAKU_MCP_BASE_URL}/${
 Run this block as a separate `bash` script, not in the shared session.
 
 ```bash
-kc users add --username "${WANAKU_TEST_USER}" --password "${WANAKU_TEST_PASS}" --email "${WANAKU_TEST_EMAIL}" 2>&1
-# The password is generated per run. Set it again in case the user exists from an earlier run.
-kc users set-password --username "${WANAKU_TEST_USER}" --password "${WANAKU_TEST_PASS}" 2>&1
+if ! OUTPUT=$(kc users add --username "${WANAKU_TEST_USER}" --password "${WANAKU_TEST_PASS}" --email "${WANAKU_TEST_EMAIL}" 2>&1); then
+  echo "${OUTPUT}"
+  if [ "${WANAKU_TEST_PASS_GENERATED}" = "true" ]; then
+    echo "FAIL: could not create user '${WANAKU_TEST_USER}' with the generated password. If the user exists, export WANAKU_TEST_PASS with its password, or remove the user."
+    exit 1
+  fi
+fi
 kc users list --plain 2>&1 | grep -q "^${WANAKU_TEST_USER}[[:space:]]" \
   && echo "PASS: user '${WANAKU_TEST_USER}' exists" \
   || { echo "FAIL: user '${WANAKU_TEST_USER}' not found"; exit 1; }
 ```
 
-If the user exists from an earlier run, the `add` command fails with `User exists with same email`. The `set-password`
-command then sets the password of this run, and the `list` check still passes.
+If the user exists from an earlier run, the `add` command fails with `User exists with same email`. The plan does not
+change the password of a user that exists. The block continues only when you exported `WANAKU_TEST_PASS` with the
+password of that user. Otherwise, it fails. Phase 13 removes the user at the end of a run.
 
 **Expected result:**
 

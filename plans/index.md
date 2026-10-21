@@ -24,7 +24,8 @@ The plans do not contain passwords, tokens or client secrets. They get each cred
 - **Generated at run time.** When a plan creates the account itself, it generates a random value with
   `openssl rand -hex 16` if the variable is not set. This applies to `KEYCLOAK_ADMIN_PASS` when
   [common/keycloak-setup.md](common/keycloak-setup.md) deploys Keycloak, and to the passwords of the test users
-  (`WANAKU_TEST_PASS`, `TEST_PASSWORD`, `TEST_NEW_PASSWORD`).
+  (`WANAKU_TEST_PASS`, `TEST_PASSWORD`, `TEST_NEW_PASSWORD`). It also applies to the client secrets that the realm
+  import sets (`WANAKU_SERVICE_SECRET`, `WANAKU_MCP_ROUTER_SECRET`).
 - **Supplied from the environment.** When a plan uses a system that already exists, export the credential before the
   run. The plan fails when the variable is not set.
 

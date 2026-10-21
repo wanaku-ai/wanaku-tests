@@ -25,6 +25,11 @@ Reusable steps for deploying and configuring Keycloak as the OIDC provider for W
 | `KEYCLOAK_IMAGE` | Keycloak container image | `quay.io/keycloak/keycloak:26.7` |
 | `WANAKU_AUTH_SECRET_NAME` | Name of the Secret that `WanakuRouter.spec.auth.secretName` references (see step 8) | `wanaku-oidc` |
 
+The procedure generates the passwords and client secrets that are not set. The values exist only in the shell that runs
+the procedure. Keycloak keeps its data on a PersistentVolumeClaim in `WANAKU_NAMESPACE`. If you run the procedure again
+in a namespace from an earlier run, export the values of that run first (`KEYCLOAK_ADMIN_PASS`, `WANAKU_TEST_PASS`).
+New random values do not change the accounts that exist. Alternatively, delete the namespace and use a new one.
+
 ## Phase 1: Keycloak Setup on OpenShift
 
 ### Step 1: Set variables
@@ -229,7 +234,13 @@ The Keycloak admin CLI (`wanaku-keycloak-admin`) imports a full realm configurat
 - The `mcp-client` client (public, for MCP clients)
 - All required roles, scopes, and service accounts
 
+The realm configuration sets the client secrets with `${VAR:default}` placeholders. The CLI replaces each placeholder
+with the value of the environment variable, so export random values before the import. Do not use the defaults in the
+realm file.
+
 ```bash
+export WANAKU_SERVICE_SECRET="${WANAKU_SERVICE_SECRET:-$(openssl rand -hex 16)}"
+export WANAKU_MCP_ROUTER_SECRET="${WANAKU_MCP_ROUTER_SECRET:-$(openssl rand -hex 16)}"
 ${WANAKU_KEYCLOAK_ADMIN_CLI} realm create \
   --keycloak-url "${KEYCLOAK_URL}" \
   --admin-username "${KEYCLOAK_ADMIN_USER}" \
@@ -262,7 +273,7 @@ echo "PASS: wanaku realm is accessible"
 
 ### Step 7: Retrieve the OIDC client secret for wanaku-service
 
-The realm configuration sets the `wanaku-service` client secret via the Keycloak variable `${WANAKU_SERVICE_SECRET:mypasswd}`. By default this resolves to `mypasswd` unless the `WANAKU_SERVICE_SECRET` environment variable was set on the Keycloak container.
+Step 6 sets the `wanaku-service` client secret from `WANAKU_SERVICE_SECRET`.
 
 Retrieve the actual secret using the CLI:
 
@@ -460,6 +471,8 @@ After completing this procedure, the following variables are set and available f
 | `KEYCLOAK_HOST` | External hostname of Keycloak (from OpenShift Ingress) |
 | `KEYCLOAK_URL` | Full URL (`https://<host>`) |
 | `WANAKU_OIDC_SECRET` | Client secret for the `wanaku-service` client |
+| `WANAKU_SERVICE_SECRET` | Generated client secret for the `wanaku-service` client, used for the realm import |
+| `WANAKU_MCP_ROUTER_SECRET` | Generated client secret for the `wanaku-mcp-router` client, used for the realm import |
 | `WANAKU_CLIENT_SECRET` | Client secret for the `wanaku-mcp-router` client, read by `wanaku auth login` |
 | `WANAKU_TEST_USER` | Username for authenticated CLI operations (default: `alice`) |
 | `WANAKU_TEST_PASS` | Password for the test user (default: generated at run time) |
