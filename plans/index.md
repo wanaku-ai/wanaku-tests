@@ -38,6 +38,6 @@ The plans do not contain passwords, tokens or client secrets. They get each cred
 | `TYPESAFE_API_KEY` | [semantic-router-openshift.md](semantic-router-openshift.md), [cloud-run-semantic.md](cloud-run-semantic.md) | Environment (optional). |
 
 To set the values, export them in the shell that runs Saci, or pass them as `env:` parameters of an environment in
-[saci.yaml](saci.yaml), as the `openshift` environment does for `OPENSHIFT_SA_TOKEN`. To keep them in a file, put
+[saci.example.yaml](saci.example.yaml), as the `openshift` environment does for `OPENSHIFT_SA_TOKEN`. To keep them in a file, put
 the `export` lines in a file that ends in `.env` (for example `plans/secrets.env`) and run `source plans/secrets.env`
 before the run. Git ignores files that end in `.env`. Do not commit credentials.

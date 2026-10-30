@@ -1,11 +1,7 @@
-# Configuration for the Saci that runs the self-test plans in test/plans/
-# against a second Saci, the one test/start-under-test.sh starts on
-# 127.0.0.1:18080. This one listens on 127.0.0.1:8080 and needs a real,
-# tool-capable model. Reference: docs/configuration.md, test/README.md.
-
+# Sample saci configuration file for creating a test environment
 backend:
   listen: 0.0.0.0:18080
-  data_dir: ./saci-self-test-data
+  data_dir: ./saci-test-data
   # Workers share the host's network, so loopback reaches this backend and
   # the backend under test.
   worker_url: http://host.docker.internal:18080
