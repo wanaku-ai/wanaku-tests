@@ -87,7 +87,7 @@ else
   echo "PASS: operator-managed deployments cleaned up"
 fi
 
-# The Server PVC (server-volume-claim) and the Barn PVC (<router>-barn-data) are owned by the router
+# The Server PVC (<router>-server-data) and the Barn PVC (<router>-barn-data) are owned by the router
 oc get pvc -n "${WANAKU_NAMESPACE}" -o name 2>/dev/null | grep -v "keycloak-data-pvc" || echo "PASS: no Wanaku PVCs remain"
 ```
 
