@@ -160,6 +160,7 @@ mvn clean install -Dwanaku.test.cli.path=../artifacts/wanaku-cli-0.1.0/quarkus-r
 ```
 wanaku-tests/
 ├── artifacts/             # Wanaku JARs (not in git)
+├── load/                  # k6 load tests for the MCP request path (see load/README.md)
 ├── http-capability-tests/ # HTTP capability tests (18 tests)
 │   └── src/test/java/ai/wanaku/test/http/
 │       ├── HttpToolCliITCase.java          # CLI tool management (3)
