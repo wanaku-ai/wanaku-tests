@@ -36,7 +36,15 @@ public class ForwardsClient {
     }
 
     public void add(String name, String address, String namespace) {
-        LOG.debug("Adding forward: {} -> {} (namespace: {})", name, address, namespace);
+        add(name, address, namespace, false);
+    }
+
+    /**
+     * Adds a forward. With {@code replace}, an existing forward with the same name is replaced
+     * ({@code POST /api/v1/forwards?replace=true}) instead of returning 409.
+     */
+    public void add(String name, String address, String namespace, boolean replace) {
+        LOG.debug("Adding forward: {} -> {} (namespace: {}, replace: {})", name, address, namespace, replace);
 
         Map<String, Object> body = new HashMap<>();
         body.put("name", name);
@@ -46,7 +54,9 @@ public class ForwardsClient {
         try {
             String json = objectMapper.writeValueAsString(body);
 
-            HttpRequest request = buildRequest(WanakuTestConstants.FORWARDS_PATH)
+            String path =
+                    replace ? WanakuTestConstants.FORWARDS_PATH + "?replace=true" : WanakuTestConstants.FORWARDS_PATH;
+            HttpRequest request = buildRequest(path)
                     .POST(HttpRequest.BodyPublishers.ofString(json))
                     .header("Content-Type", "application/json")
                     .build();

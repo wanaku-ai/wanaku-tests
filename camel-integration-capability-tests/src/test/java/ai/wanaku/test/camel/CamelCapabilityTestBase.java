@@ -102,7 +102,8 @@ public abstract class CamelCapabilityTestBase extends BaseIntegrationTest {
     private void registerForwardWithRetry(String name, String address, String namespace) {
         ForwardsClient forwardsClient = new ForwardsClient(getServerBaseUrl(), null);
         for (int attempt = 1; attempt <= MAX_REGISTER_RETRIES; attempt++) {
-            forwardsClient.add(name, address, namespace);
+            // Each test method starts a new CIC under the same service name, so replace the earlier forward.
+            forwardsClient.add(name, address, namespace, true);
             if (!routerClient.listTools().isEmpty()) {
                 LOG.info("Forward '{}' registered, tools discovered (attempt {})", name, attempt);
                 return;
