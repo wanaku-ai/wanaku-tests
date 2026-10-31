@@ -338,8 +338,8 @@ AUTH_COND=$(oc get "wanakurouter/${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}"
 # edge-terminated and redirect HTTP to HTTPS.
 export WANAKU_SERVER_URL="https://$(oc get route "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.host}')"
 export WANAKU_MCP_BASE_URL="https://$(oc get route "${WANAKU_ROUTER_NAME}-mcp" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.host}')"
-# deploy/auth/wanaku-config.json of this repository disables direct access grants for mcp-client
-export EXPECT_PUBLIC_CLIENT_LOGIN="fail"
+# deploy/auth/wanaku-config.json enables direct access grants for mcp-client
+export EXPECT_PUBLIC_CLIENT_LOGIN="pass"
 ```
 
 In the operator deployment, the MCP proxy listens on port `4180` and the management proxy on port `4181`. The Docker
@@ -827,9 +827,8 @@ fi
 
 ### Test 6.5: Login with the public mcp-client client
 
-`--client-secret ""` overrides `WANAKU_CLIENT_SECRET`, so the CLI sends only the client ID. The realm of
-option A enables direct access grants for `mcp-client`. The realm of option B (`deploy/auth/wanaku-config.json`)
-does not.
+`--client-secret ""` overrides `WANAKU_CLIENT_SECRET`, so the CLI sends only the client ID. The realms of option A
+and option B (`deploy/auth/wanaku-config.json`) enable direct access grants for `mcp-client`.
 
 ```bash run
 ORIGINAL_CREDENTIALS="${WANAKU_CREDENTIALS}"
