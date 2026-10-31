@@ -477,7 +477,7 @@ for PROBE in livenessProbe readinessProbe startupProbe; do
   check "${PROBE} path" "$(dep_jsonpath "{.spec.template.spec.containers[0].${PROBE}.httpGet.path}")" "/healthz"
   check "${PROBE} port" "$(dep_jsonpath "{.spec.template.spec.containers[0].${PROBE}.httpGet.port}")" "management"
 done
-check "registry volume claim" "$(dep_jsonpath '{.spec.template.spec.volumes[?(@.name=="server-volume")].persistentVolumeClaim.claimName}')" "server-volume-claim"
+check "registry volume claim" "$(dep_jsonpath '{.spec.template.spec.volumes[?(@.name=="server-volume")].persistentVolumeClaim.claimName}')" "${WANAKU_ROUTER_NAME}-server-data"
 
 [ "${FAIL}" -eq 0 ] || return 1
 ```
@@ -531,13 +531,13 @@ done
 
 ### Test 3.6: Verify the PVCs
 
-**Description:** The Server stores `registry.json` on the `server-volume-claim` PVC.
+**Description:** The Server stores `registry.json` on the `<WANAKU_ROUTER_NAME>-server-data` PVC.
 
 Run this block in the shared Bash session.
 
 ```bash run
 FAIL=0
-for PVC in server-volume-claim; do
+for PVC in "${WANAKU_ROUTER_NAME}-server-data"; do
   PHASE=$(oc get pvc "${PVC}" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.status.phase}' 2>/dev/null)
   check "PVC ${PVC} phase" "${PHASE}" "Bound"
 done
@@ -546,7 +546,7 @@ done
 
 **Expected result:**
 
-- The output includes `PASS: PVC server-volume-claim phase =`.
+- The output includes `PASS: PVC <WANAKU_ROUTER_NAME>-server-data phase =`.
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
@@ -646,7 +646,7 @@ Run this block in the shared Bash session.
 ROUTER_UID=$(router_jsonpath '{.metadata.uid}')
 FAIL=0
 for RESOURCE in "deployment/${WANAKU_ROUTER_NAME}-server" "service/server-${WANAKU_ROUTER_NAME}" \
-    "pvc/server-volume-claim" \
+    "pvc/${WANAKU_ROUTER_NAME}-server-data" \
     "route.route.openshift.io/${WANAKU_ROUTER_NAME}" "route.route.openshift.io/${WANAKU_ROUTER_NAME}-mcp"; do
   OWNER_UID=$(oc get "${RESOURCE}" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.metadata.ownerReferences[0].uid}' 2>/dev/null)
   check "${RESOURCE} owner" "${OWNER_UID}" "${ROUTER_UID}"
@@ -665,7 +665,7 @@ done
 
 - The output includes `PASS: deployment/<WANAKU_ROUTER_NAME>-server owner =`.
 - The output includes `PASS: service/server-<WANAKU_ROUTER_NAME> owner =`.
-- The output includes `PASS: pvc/server-volume-claim owner =`.
+- The output includes `PASS: pvc/<WANAKU_ROUTER_NAME>-server-data owner =`.
 - The output includes `PASS: route.route.openshift.io/<WANAKU_ROUTER_NAME> owner =`.
 - The output includes `PASS: route.route.openshift.io/<WANAKU_ROUTER_NAME>-mcp owner =`.
 - The output includes `PASS: <WANAKU_ROUTER_NAME>-server managed-by label = wanaku-operator`.
@@ -822,8 +822,8 @@ CODE=$(curl --connect-timeout 5 --max-time 15 -s ${CURL_TLS_OPTS} -o /dev/null -
 
 ### Test 4.7: Verify the Server registry survives a pod restart
 
-**Description:** The Server writes `registry.json` to `/data/registry` on the `server-volume-claim` PVC. A namespace
-created in Test 4.3 must still exist after the pod is replaced.
+**Description:** The Server writes `registry.json` to `/data/registry` on the `<WANAKU_ROUTER_NAME>-server-data` PVC. A
+namespace created in Test 4.3 must still exist after the pod is replaced.
 
 Run these blocks in the shared Bash session. The first block deletes the pod. The second waits for the replacement
 pod and checks the namespace.
@@ -1231,7 +1231,7 @@ wait_for_deletion route "${WANAKU_ROUTER_NAME}-mcp" "${WANAKU_NAMESPACE}" 60 || 
 
 ```bash run
 FAIL=0
-wait_for_deletion pvc server-volume-claim "${WANAKU_NAMESPACE}" 50 || FAIL=1
+wait_for_deletion pvc "${WANAKU_ROUTER_NAME}-server-data" "${WANAKU_NAMESPACE}" 50 || FAIL=1
 [ "${FAIL}" -eq 0 ] || return 1
 ```
 
@@ -1243,7 +1243,7 @@ wait_for_deletion pvc server-volume-claim "${WANAKU_NAMESPACE}" 50 || FAIL=1
 - The output includes `PASS: service/oauth2-proxy-<WANAKU_ROUTER_NAME> deleted`.
 - The output includes `PASS: route/<WANAKU_ROUTER_NAME> deleted`.
 - The output includes `PASS: route/<WANAKU_ROUTER_NAME>-mcp deleted`.
-- The output includes `PASS: pvc/server-volume-claim deleted`.
+- The output includes `PASS: pvc/<WANAKU_ROUTER_NAME>-server-data deleted`.
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
