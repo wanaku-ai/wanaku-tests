@@ -45,10 +45,12 @@ public class WanakuServerManager extends ProcessManager {
     }
 
     public void prepare() {
-        this.mgmtPort = PortUtils.findAvailablePort();
-        this.mcpPort = PortUtils.findAvailablePort();
+        // The server refuses to start when two listeners share a port, so allocate them together.
+        int[] ports = PortUtils.findAvailablePorts(3);
+        this.mgmtPort = ports[0];
+        this.mcpPort = ports[1];
         if (config.isA2aEnabled()) {
-            this.a2aPort = PortUtils.findAvailablePort();
+            this.a2aPort = ports[2];
             addEnvironmentVariable("WANAKU_A2A_PUBLIC_URL", getA2aBaseUrl() + "/");
         }
 
