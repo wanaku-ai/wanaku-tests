@@ -94,8 +94,9 @@ Saci limit.
 ### Known limitations
 
 - Wanaku Server denies `tools/call`, `resources/read` and `prompts/get` unless governance permits them. Listing
-  requests are not governed. The operator has no field to supply governance configuration, so Test 14.1 checks
-  fail-safe denial and Test 14.2 remains blocked unless the deployment allows calls in the `default` namespace.
+  requests are not governed. Test 14.1 checks the fail-safe denial of the default deployment. Step 14.2 then gives
+  the Server a custom `wanaku.yaml` through `spec.server.configMapRef`, and Test 14.3 checks that the calls succeed.
+  `spec.server.configMapRef` requires a Wanaku operator that includes wanaku-ai/wanaku-barn#370.
 - Tool, resource and prompt names are unique across the server registry. Use this plan's fresh deployment rather
   than registering the same fixture twice in an existing server.
 
@@ -660,28 +661,89 @@ echo "${OUTPUT}" | grep -Eq "No governance policy permits this action.|evaluator
 - The output includes `PASS [14.1]: resources/read denied`.
 - The output contains no line starting with `FAIL`.
 
-### Test 14.2: Calls succeed when governance allows them (BLOCKED)
+### Step 14.2: Allow calls with a custom wanaku.yaml
 
-This test is blocked. The `WanakuRouter` resource has no field for the Wanaku Server governance configuration, and
-the operator owns the generated `wanaku.yaml`. Run the test only when the deployment allows calls in the `default`
-namespace. Set `WANAKU_E2E_GOVERNANCE_ALLOWS_DEFAULT=true` in that case.
+The operator reads a custom `wanaku.yaml` from the ConfigMap that `spec.server.configMapRef` names. This step
+creates a ConfigMap with the posture `no_match: allow` and references it from the router. The operator copies the
+file into the `<router>-server-config` ConfigMap and restarts the Server. The forward from Phase 12 stays registered,
+because the Server keeps its registry on its PVC.
+
+Run this block in the shared Bash session.
 
 ```bash run
-if [ "${WANAKU_E2E_GOVERNANCE_ALLOWS_DEFAULT:-false}" = "true" ]; then
-  OUTPUT=$(wanaku mcp tool --uri "${MCP_URI}" --token "${MCP_TOKEN}" ${WANAKU_TLS_FLAG} \
-    --name restartService --param serverId=test-server --param service=nginx --plain 2>/dev/null)
-  [ "${OUTPUT}" = "SUCCESS: Service 'nginx' restarted on server 'test-server'." ] && echo "PASS [14.2]: restartService called through the Route" || echo "FAIL [14.2]: '${OUTPUT}'"
-  OUTPUT=$(wanaku mcp prompt --uri "${MCP_URI}" --token "${MCP_TOKEN}" ${WANAKU_TLS_FLAG} \
-    --name draftEscalation --arg urgency=high --arg reason=memory-pressure --plain 2>/dev/null)
-  echo "${OUTPUT}" | grep -q "urgency=high" && echo "PASS [14.2]: draftEscalation rendered" || echo "FAIL [14.2]: '${OUTPUT}'"
+GOVERNANCE_CM="${WANAKU_ROUTER_NAME}-governance"
+GOVERNANCE_YAML='governance:
+  default:
+    mode: enforce
+    no_match: allow
+    on_failure: deny
+'
+oc create configmap "${GOVERNANCE_CM}" -n "${WANAKU_NAMESPACE}" --from-literal=wanaku.yaml="${GOVERNANCE_YAML}" \
+  --dry-run=client -o yaml | oc apply -n "${WANAKU_NAMESPACE}" -f - > /dev/null \
+  || { echo "FAIL [14.2]: cannot create ConfigMap ${GOVERNANCE_CM}"; return 1; }
+oc patch wanakurouter "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" --type=merge \
+  -p "{\"spec\":{\"server\":{\"configMapRef\":{\"name\":\"${GOVERNANCE_CM}\"}}}}" > /dev/null \
+  || { echo "FAIL [14.2]: cannot set spec.server.configMapRef"; return 1; }
+
+# Wait until the operator mounts the file in the Server pod template
+for i in $(seq 1 20); do
+  MOUNTED=$(oc get deployment "${WANAKU_ROUTER_NAME}-server" -n "${WANAKU_NAMESPACE}" \
+    -o jsonpath='{.spec.template.spec.volumes[?(@.name=="server-config")].configMap.name}')
+  [ "${MOUNTED}" = "${WANAKU_ROUTER_NAME}-server-config" ] && break
+  sleep 3
+done
+[ "${MOUNTED}" = "${WANAKU_ROUTER_NAME}-server-config" ] && echo "PASS [14.2]: the Server mounts ${MOUNTED}" \
+  || { echo "FAIL [14.2]: the Server does not mount the configuration (volume '${MOUNTED}')"; return 1; }
+oc get configmap "${WANAKU_ROUTER_NAME}-server-config" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.data.wanaku\.yaml}' \
+  | grep -q "no_match: allow" && echo "PASS [14.2]: the managed ConfigMap holds the custom posture" \
+  || echo "FAIL [14.2]: the managed ConfigMap does not hold the custom posture"
+oc rollout status "deployment/${WANAKU_ROUTER_NAME}-server" --timeout=90s -n "${WANAKU_NAMESPACE}" > /dev/null \
+  && echo "PASS [14.2]: the Server restarted with the custom configuration" \
+  || { echo "FAIL [14.2]: the Server rollout did not finish"; return 1; }
+```
+
+**Expected result:**
+
+- The output includes `PASS [14.2]: the Server mounts <WANAKU_ROUTER_NAME>-server-config`.
+- The output includes `PASS [14.2]: the managed ConfigMap holds the custom posture`.
+- The output includes `PASS [14.2]: the Server restarted with the custom configuration`.
+- The output contains no line starting with `FAIL`.
+- The commands exit with code 0.
+
+### Test 14.3: Calls succeed when governance allows them
+
+Run this block in the shared Bash session.
+
+```bash run
+for i in $(seq 1 10); do
+  HTTP_CODE=$(curl -s --connect-timeout 3 --max-time 5 -o /dev/null -w "%{http_code}" "${WANAKU_SERVER_URL}/health" 2>/dev/null || echo "000")
+  [ "${HTTP_CODE}" = "200" ] && break
+  [ "${i}" -eq 10 ] && { echo "FAIL [14.3]: health returned HTTP ${HTTP_CODE}"; return 1; }
+  sleep 5
+done
+
+OUTPUT=$(wanaku mcp tool --uri "${MCP_URI}" --token "${MCP_TOKEN}" ${WANAKU_TLS_FLAG} \
+  --name restartService --param serverId=test-server --param service=nginx --plain 2>&1)
+[ "${OUTPUT}" = "SUCCESS: Service 'nginx' restarted on server 'test-server'." ] \
+  && echo "PASS [14.3]: restartService called through the Route" || echo "FAIL [14.3]: '${OUTPUT}'"
+OUTPUT=$(wanaku mcp prompt --uri "${MCP_URI}" --token "${MCP_TOKEN}" ${WANAKU_TLS_FLAG} \
+  --name draftEscalation --arg urgency=high --arg reason=memory-pressure --plain 2>&1)
+echo "${OUTPUT}" | grep -q "urgency=high" && echo "PASS [14.3]: draftEscalation rendered" || echo "FAIL [14.3]: '${OUTPUT}'"
+OUTPUT=$(wanaku mcp resource --uri "${MCP_URI}" --token "${MCP_TOKEN}" ${WANAKU_TLS_FLAG} \
+  --resource-uri config://policies/safety-limits --plain 2>&1)
+EXIT_CODE=$?
+if [ "${EXIT_CODE}" -eq 0 ] && ! echo "${OUTPUT}" | grep -Eq "No governance policy permits this action.|evaluator: no_match"; then
+  echo "PASS [14.3]: resources/read allowed"
 else
-  echo "SKIP [14.2]: governance configuration is not available through the operator"
+  echo "FAIL [14.3]: resources/read exit ${EXIT_CODE}, output: ${OUTPUT}"
 fi
 ```
 
 **Expected result:**
 
-- Either `PASS [14.2]: restartService called through the Route` and `PASS [14.2]: draftEscalation rendered` appear, or `SKIP [14.2]: governance configuration is not available through the operator` appears.
+- The output includes `PASS [14.3]: restartService called through the Route`.
+- The output includes `PASS [14.3]: draftEscalation rendered`.
+- The output includes `PASS [14.3]: resources/read allowed`.
 - The output contains no line starting with `FAIL`.
 
 ---
@@ -696,6 +758,7 @@ wanaku namespaces delete "${MCP_E2E_NAMESPACE}" --host "${WANAKU_SERVER_URL}" ${
 oc delete deployment test-mcp -n "${WANAKU_NAMESPACE}" --ignore-not-found=true
 oc delete service test-mcp -n "${WANAKU_NAMESPACE}" --ignore-not-found=true
 oc delete wanakurouter "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" --ignore-not-found=true
+oc delete configmap "${WANAKU_ROUTER_NAME}-governance" -n "${WANAKU_NAMESPACE}" --ignore-not-found=true
 wait_for_deletion deployment "${WANAKU_ROUTER_NAME}-server" "${WANAKU_NAMESPACE}" 45 || true
 wait_for_deletion deployment "${WANAKU_ROUTER_NAME}-oauth2-proxy" "${WANAKU_NAMESPACE}" 45 || true
 oc delete secret "${WANAKU_ROUTER_NAME}-oidc" -n "${WANAKU_NAMESPACE}" --ignore-not-found=true
@@ -734,5 +797,5 @@ Follow [common/cleanup.md](common/cleanup.md).
 | 11b | 11.2-11.10 | Keycloak, operator, authenticated WanakuRouter, Routes and login | Critical |
 | 12 | 12.1-12.4 | In-cluster MCP fixture registered as a forward | Critical |
 | 13 | 13.1-13.4 | MCP discovery, token requirement, isolation and bare `/mcp` rejection | Critical |
-| 14 | 14.1-14.2 | Fail-safe denial; governed success path (BLOCKED) | High |
+| 14 | 14.1-14.3 | Fail-safe denial; custom wanaku.yaml through `spec.server.configMapRef`; governed success path | High |
 | 15 | 15.1-15.2 | Cleanup | Critical |

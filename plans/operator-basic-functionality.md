@@ -1188,6 +1188,197 @@ wait_cr_condition wanakurouter "${WANAKU_ROUTER_NAME}" Ready True || return 1
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
+### Test 7.3: Supply a custom wanaku.yaml
+
+**Description:** `spec.server.configMapRef` names a ConfigMap key that holds a custom `wanaku.yaml`. The operator
+copies the file into the `<router>-server-config` ConfigMap, mounts it at `/etc/wanaku/wanaku.yaml` and records a
+configuration hash on the Server pod template. Barn is not enabled, so the operator does not add a plugin. This test
+requires a Wanaku operator that includes wanaku-ai/wanaku-barn#370.
+
+Run this block in the shared Bash session.
+
+```bash run
+FAIL=0
+CUSTOM_CM="${WANAKU_ROUTER_NAME}-custom-config"
+CUSTOM_YAML='governance:
+  default:
+    mode: enforce
+    no_match: allow
+    on_failure: deny
+'
+oc create configmap "${CUSTOM_CM}" -n "${WANAKU_NAMESPACE}" --from-literal=wanaku.yaml="${CUSTOM_YAML}" \
+  --dry-run=client -o yaml | oc apply -n "${WANAKU_NAMESPACE}" -f - > /dev/null || { echo "FAIL: cannot create ${CUSTOM_CM}"; return 1; }
+oc patch wanakurouter "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" --type=merge \
+  -p "{\"spec\":{\"server\":{\"configMapRef\":{\"name\":\"${CUSTOM_CM}\",\"key\":\"wanaku.yaml\"}}}}" > /dev/null
+
+for i in $(seq 1 20); do
+  CONFIG_HASH=$(oc get deployment "${WANAKU_ROUTER_NAME}-server" -n "${WANAKU_NAMESPACE}" \
+    -o jsonpath='{.spec.template.metadata.annotations.wanaku\.ai/server-config-hash}')
+  [ -n "${CONFIG_HASH}" ] && break
+  sleep 3
+done
+[ -n "${CONFIG_HASH}" ] && echo "PASS: the Server pod template has the configuration hash ${CONFIG_HASH}" \
+  || { echo "FAIL: no configuration hash on the Server pod template"; return 1; }
+MANAGED_YAML=$(oc get configmap "${WANAKU_ROUTER_NAME}-server-config" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.data.wanaku\.yaml}')
+check "managed wanaku.yaml" "${MANAGED_YAML}" "$(printf '%s' "${CUSTOM_YAML}")"
+check "managed ConfigMap owner" \
+  "$(oc get configmap "${WANAKU_ROUTER_NAME}-server-config" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.metadata.ownerReferences[0].kind}')" \
+  "WanakuRouter"
+check "mount path" \
+  "$(oc get deployment "${WANAKU_ROUTER_NAME}-server" -n "${WANAKU_NAMESPACE}" \
+    -o jsonpath='{.spec.template.spec.containers[0].volumeMounts[?(@.name=="server-config")].mountPath}')" \
+  "/etc/wanaku/wanaku.yaml"
+oc rollout status "deployment/${WANAKU_ROUTER_NAME}-server" --timeout=90s -n "${WANAKU_NAMESPACE}" > /dev/null \
+  || { echo "FAIL: the Server rollout did not finish"; return 1; }
+oc exec "deployment/${WANAKU_ROUTER_NAME}-server" -n "${WANAKU_NAMESPACE}" -- cat /etc/wanaku/wanaku.yaml 2>/dev/null \
+  | grep -q "no_match: allow" && echo "PASS: the Server pod reads the custom wanaku.yaml" \
+  || { echo "FAIL: /etc/wanaku/wanaku.yaml in the Server pod does not hold the custom posture"; FAIL=1; }
+[ "${FAIL}" -eq 0 ] || return 1
+export CONFIG_HASH
+```
+
+**Expected result:**
+
+- The output includes `PASS: the Server pod template has the configuration hash <CONFIG_HASH>`.
+- The output includes `PASS: managed wanaku.yaml = ` followed by the content of `CUSTOM_YAML`, without a `plugins` key.
+- The output includes `PASS: managed ConfigMap owner = WanakuRouter`.
+- The output includes `PASS: mount path = /etc/wanaku/wanaku.yaml`.
+- The output includes `PASS: the Server pod reads the custom wanaku.yaml`.
+- The output contains no line starting with `FAIL:`.
+- The commands exit with code 0.
+
+### Test 7.4: A change to the custom ConfigMap restarts the Server
+
+**Description:** The operator watches the referenced ConfigMap. When its content changes, the operator updates the
+managed ConfigMap and the configuration hash, and the Server restarts with the new file.
+
+Run this block in the shared Bash session.
+
+```bash run
+CUSTOM_CM="${WANAKU_ROUTER_NAME}-custom-config"
+OLD_POD=$(oc get pods -n "${WANAKU_NAMESPACE}" -l "app=${WANAKU_ROUTER_NAME}-server,component=wanaku-server" \
+  -o jsonpath='{.items[0].metadata.name}')
+oc create configmap "${CUSTOM_CM}" -n "${WANAKU_NAMESPACE}" \
+  --from-literal=wanaku.yaml="$(printf 'governance:\n  default:\n    mode: audit\n    no_match: allow\n')" \
+  --dry-run=client -o yaml | oc apply -n "${WANAKU_NAMESPACE}" -f - > /dev/null
+
+for i in $(seq 1 20); do
+  NEW_HASH=$(oc get deployment "${WANAKU_ROUTER_NAME}-server" -n "${WANAKU_NAMESPACE}" \
+    -o jsonpath='{.spec.template.metadata.annotations.wanaku\.ai/server-config-hash}')
+  [ -n "${NEW_HASH}" ] && [ "${NEW_HASH}" != "${CONFIG_HASH}" ] && break
+  sleep 3
+done
+[ "${NEW_HASH}" != "${CONFIG_HASH}" ] && echo "PASS: the configuration hash changed to ${NEW_HASH}" \
+  || { echo "FAIL: the configuration hash did not change (${NEW_HASH})"; return 1; }
+oc get configmap "${WANAKU_ROUTER_NAME}-server-config" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.data.wanaku\.yaml}' \
+  | grep -q "mode: audit" && echo "PASS: the managed ConfigMap follows the custom ConfigMap" \
+  || echo "FAIL: the managed ConfigMap does not hold the new content"
+oc rollout status "deployment/${WANAKU_ROUTER_NAME}-server" --timeout=90s -n "${WANAKU_NAMESPACE}" > /dev/null \
+  || { echo "FAIL: the Server rollout did not finish"; return 1; }
+NEW_POD=$(oc get pods -n "${WANAKU_NAMESPACE}" -l "app=${WANAKU_ROUTER_NAME}-server,component=wanaku-server" \
+  --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}')
+[ -n "${NEW_POD}" ] && [ "${NEW_POD}" != "${OLD_POD}" ] && echo "PASS: the Server pod restarted (${OLD_POD} -> ${NEW_POD})" \
+  || echo "FAIL: the Server pod did not restart (${OLD_POD} -> ${NEW_POD})"
+```
+
+**Expected result:**
+
+- The output includes `PASS: the configuration hash changed to <NEW_HASH>`.
+- The output includes `PASS: the managed ConfigMap follows the custom ConfigMap`.
+- The output includes `PASS: the Server pod restarted`.
+- The output contains no line starting with `FAIL:`.
+- The commands exit with code 0.
+
+### Test 7.6: Negative tests - unusable custom configuration references
+
+**Description:** A reference to a ConfigMap that does not exist, to a key that does not exist, to a file that is not
+valid YAML, or to the operator-owned `<router>-server-config` ConfigMap sets `Reconciled=False` with the reason
+`InvalidServerConfig`. The message names the problem. The operator does not change the Server while the reference
+is not usable.
+
+Run this block in the shared Bash session.
+
+```bash run
+FAIL=0
+BAD_CM="${WANAKU_ROUTER_NAME}-bad-config"
+oc create configmap "${BAD_CM}" -n "${WANAKU_NAMESPACE}" --from-literal=wanaku.yaml='governance: [' \
+  --dry-run=client -o yaml | oc apply -n "${WANAKU_NAMESPACE}" -f - > /dev/null
+HASH_BEFORE=$(oc get deployment "${WANAKU_ROUTER_NAME}-server" -n "${WANAKU_NAMESPACE}" \
+  -o jsonpath='{.spec.template.metadata.annotations.wanaku\.ai/server-config-hash}')
+
+expect_invalid_config() { # $1 = configMapRef JSON, $2 = expected message fragment
+  oc patch wanakurouter "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" --type=merge \
+    -p "{\"spec\":{\"server\":{\"configMapRef\":$1}}}" > /dev/null
+  wait_cr_condition wanakurouter "${WANAKU_ROUTER_NAME}" Reconciled False InvalidServerConfig || { FAIL=1; return; }
+  # Wait until the message belongs to this reference, not to the previous one
+  for i in $(seq 1 10); do
+    MESSAGE=$(router_jsonpath '{.status.conditions[?(@.type=="Reconciled")].message}')
+    echo "${MESSAGE}" | grep -qF "$2" && { echo "PASS: InvalidServerConfig message contains '$2'"; return; }
+    sleep 3
+  done
+  echo "FAIL: InvalidServerConfig message is '${MESSAGE}', expected '$2'"; FAIL=1
+}
+
+expect_invalid_config '{"name":"does-not-exist"}' "ConfigMap does-not-exist does not exist"
+expect_invalid_config "{\"name\":\"${WANAKU_ROUTER_NAME}-custom-config\",\"key\":\"missing.yaml\"}" \
+  "ConfigMap ${WANAKU_ROUTER_NAME}-custom-config has no key missing.yaml"
+expect_invalid_config "{\"name\":\"${BAD_CM}\"}" "is not a valid wanaku.yaml"
+expect_invalid_config "{\"name\":\"${WANAKU_ROUTER_NAME}-server-config\"}" "the operator owns that ConfigMap"
+
+check "configuration hash while the reference is not usable" \
+  "$(oc get deployment "${WANAKU_ROUTER_NAME}-server" -n "${WANAKU_NAMESPACE}" \
+    -o jsonpath='{.spec.template.metadata.annotations.wanaku\.ai/server-config-hash}')" "${HASH_BEFORE}"
+
+oc patch wanakurouter "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" --type=merge \
+  -p "{\"spec\":{\"server\":{\"configMapRef\":{\"name\":\"${WANAKU_ROUTER_NAME}-custom-config\"}}}}" > /dev/null
+wait_cr_condition wanakurouter "${WANAKU_ROUTER_NAME}" Reconciled True || FAIL=1
+oc delete configmap "${BAD_CM}" -n "${WANAKU_NAMESPACE}" --ignore-not-found=true > /dev/null
+[ "${FAIL}" -eq 0 ] || return 1
+```
+
+**Expected result:**
+
+- For each of the four references, the output includes `PASS: wanakurouter/<WANAKU_ROUTER_NAME> condition Reconciled=False (reason InvalidServerConfig)`.
+- The output includes `PASS: InvalidServerConfig message contains 'ConfigMap does-not-exist does not exist'`.
+- The output includes `PASS: InvalidServerConfig message contains 'ConfigMap <WANAKU_ROUTER_NAME>-custom-config has no key missing.yaml'`.
+- The output includes `PASS: InvalidServerConfig message contains 'is not a valid wanaku.yaml'`.
+- The output includes `PASS: InvalidServerConfig message contains 'the operator owns that ConfigMap'`.
+- The output includes `PASS: configuration hash while the reference is not usable = <HASH_BEFORE>`.
+- After the valid reference is restored, the output includes `PASS: wanakurouter/<WANAKU_ROUTER_NAME> condition Reconciled=True`.
+- The output contains no line starting with `FAIL:`.
+- The commands exit with code 0.
+
+### Test 7.7: Remove the custom configuration reference
+
+**Description:** Without `spec.server.configMapRef` and without Barn, the Server needs no `wanaku.yaml`. The operator
+deletes the `<router>-server-config` ConfigMap and removes the mount. It does not delete the user ConfigMap.
+
+Run this block in the shared Bash session.
+
+```bash run
+FAIL=0
+oc patch wanakurouter "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" --type=json \
+  -p '[{"op":"remove","path":"/spec/server/configMapRef"}]' > /dev/null
+wait_for_deletion configmap "${WANAKU_ROUTER_NAME}-server-config" "${WANAKU_NAMESPACE}" 45 \
+  && echo "PASS: the managed ConfigMap is removed" || { echo "FAIL: the managed ConfigMap still exists"; FAIL=1; }
+check "server-config volume" \
+  "$(oc get deployment "${WANAKU_ROUTER_NAME}-server" -n "${WANAKU_NAMESPACE}" \
+    -o jsonpath='{.spec.template.spec.volumes[?(@.name=="server-config")].name}')" ""
+oc get configmap "${WANAKU_ROUTER_NAME}-custom-config" -n "${WANAKU_NAMESPACE}" > /dev/null 2>&1 \
+  && echo "PASS: the user ConfigMap is kept" || { echo "FAIL: the user ConfigMap was deleted"; FAIL=1; }
+oc delete configmap "${WANAKU_ROUTER_NAME}-custom-config" -n "${WANAKU_NAMESPACE}" --ignore-not-found=true > /dev/null
+oc rollout status "deployment/${WANAKU_ROUTER_NAME}-server" --timeout=60s -n "${WANAKU_NAMESPACE}" > /dev/null || FAIL=1
+[ "${FAIL}" -eq 0 ] || return 1
+```
+
+**Expected result:**
+
+- The output includes `PASS: the managed ConfigMap is removed`.
+- The output includes `PASS: server-config volume = `.
+- The output includes `PASS: the user ConfigMap is kept`.
+- The output contains no line starting with `FAIL:`.
+- The commands exit with code 0.
+
 ### Test 7.5: Verify the operator logs and restarts
 
 ```bash run
@@ -1303,6 +1494,8 @@ echo "PASS: downloaded source assets removed or no download was owned"
 | 6     | 6.7-6.8 | OIDC login, token accepted by the management and MCP proxies           | Critical |
 | 6     | 6.9     | Secret change restarts the proxies                                     | Medium   |
 | 7     | 7.1-7.2 | Update reconciliation and spec validation                              | Medium   |
+| 7     | 7.3-7.4 | Custom wanaku.yaml through `spec.server.configMapRef`, change rollout  | High     |
+| 7     | 7.6-7.7 | Unusable configuration references, reference removal                   | Medium   |
 | 7     | 7.5     | Operator logs and restarts                                             | Medium   |
 | 9     | 9.1     | Deletion and ownership cascade                                         | Critical |
 | 10    | 10.1    | Full teardown and local credential removal                             | Critical |
