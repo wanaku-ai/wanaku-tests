@@ -5,6 +5,9 @@ import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,6 +32,11 @@ import com.sun.net.httpserver.HttpServer;
  *
  * <p>{@link #getCallCount()} lets a test assert the evaluator was (or was not) invoked, e.g. to
  * prove a statically denied request never reached the evaluator stage.
+ *
+ * <p>Failure scenarios can replace the verdict: {@link #failWithStatus(int)} answers with an HTTP
+ * error, {@link #respondWithContent(String)} returns a fixed message content (for example an empty
+ * or schema-invalid result), {@link #delayResponses(Duration)} holds each response, and
+ * {@link #stop()} makes the endpoint refuse connections.
  */
 public final class DeterministicLlmStub {
 
@@ -39,8 +47,12 @@ public final class DeterministicLlmStub {
     private final ObjectMapper mapper = new ObjectMapper();
     private final AtomicInteger callCount = new AtomicInteger();
     private volatile String denyMarker;
+    private volatile int failureStatus;
+    private volatile String fixedContent;
+    private volatile Duration responseDelay = Duration.ZERO;
 
     private HttpServer server;
+    private ExecutorService executor;
     private String host;
     private int port;
 
@@ -57,16 +69,21 @@ public final class DeterministicLlmStub {
         InetAddress loopback = InetAddress.getLoopbackAddress();
         server = HttpServer.create(new InetSocketAddress(loopback, 0), 0);
         server.createContext(CHAT_COMPLETIONS_PATH, this::handleChatCompletion);
-        server.setExecutor(null);
+        // A held response must not block the next request, so each exchange gets its own thread.
+        executor = Executors.newCachedThreadPool();
+        server.setExecutor(executor);
         server.start();
         host = loopback.getHostAddress();
         port = server.getAddress().getPort();
         LOG.debug("Deterministic LLM stub started on port {} (deny marker: {})", port, denyMarker);
     }
 
+    /** Stops the endpoint. Later connections are refused. Calling it again has no effect. */
     public void stop() {
         if (server != null) {
             server.stop(0);
+            server = null;
+            executor.shutdownNow();
             LOG.debug("Deterministic LLM stub stopped");
         }
     }
@@ -84,6 +101,21 @@ public final class DeterministicLlmStub {
         this.denyMarker = denyMarker;
     }
 
+    /** Answers every chat completion with this HTTP status and no body; {@code 0} restores verdicts. */
+    public void failWithStatus(int status) {
+        this.failureStatus = status;
+    }
+
+    /** Returns this exact message content instead of a verdict; {@code null} restores verdicts. */
+    public void respondWithContent(String content) {
+        this.fixedContent = content;
+    }
+
+    /** Waits this long before each response, to exceed the client timeout of the server. */
+    public void delayResponses(Duration delay) {
+        this.responseDelay = delay;
+    }
+
     private void handleChatCompletion(HttpExchange exchange) throws IOException {
         try {
             if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
@@ -93,16 +125,27 @@ public final class DeterministicLlmStub {
             callCount.incrementAndGet();
 
             String userPrompt = extractUserPrompt(exchange);
-            String marker = denyMarker;
-            boolean deny = marker != null && !marker.isBlank() && userPrompt.contains(marker);
-            String verdict = deny ? "red" : "green";
+            Thread.sleep(responseDelay.toMillis());
+            if (failureStatus != 0) {
+                exchange.sendResponseHeaders(failureStatus, -1);
+                return;
+            }
+            String content = fixedContent;
+            if (content == null) {
+                String marker = denyMarker;
+                boolean deny = marker != null && !marker.isBlank() && userPrompt.contains(marker);
+                content = verdictContent(deny ? "red" : "green");
+            }
 
-            byte[] body = buildChatResponse(verdict).getBytes(StandardCharsets.UTF_8);
+            byte[] body = buildChatResponse(content).getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", "application/json");
             exchange.sendResponseHeaders(200, body.length);
             try (OutputStream os = exchange.getResponseBody()) {
                 os.write(body);
             }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            exchange.close();
         } catch (Exception e) {
             // Catch everything (not just RuntimeException): request-body reads and JSON parsing throw
             // checked IOException/JsonProcessingException. If those escaped, the exchange would never be
@@ -130,18 +173,17 @@ public final class DeterministicLlmStub {
         return sb.toString();
     }
 
-    private String buildChatResponse(String verdict) {
+    private String verdictContent(String verdict) {
         // The safety-review WASM processor accepts either a bare level string or a JSON object with a
         // "level" field; a JSON object is used here so the content is unambiguous.
-        String verdictContent;
-        try {
-            ObjectNode level = mapper.createObjectNode();
-            level.put("level", verdict);
-            verdictContent = mapper.writeValueAsString(level);
+        return mapper.createObjectNode().put("level", verdict).toString();
+    }
 
+    private String buildChatResponse(String content) {
+        try {
             ObjectNode message = mapper.createObjectNode();
             message.put("role", "assistant");
-            message.put("content", verdictContent);
+            message.put("content", content);
             ObjectNode choice = mapper.createObjectNode();
             choice.set("message", message);
             ObjectNode response = mapper.createObjectNode();
