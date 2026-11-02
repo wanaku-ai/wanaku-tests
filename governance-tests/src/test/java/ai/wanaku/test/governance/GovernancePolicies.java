@@ -32,6 +32,26 @@ final class GovernancePolicies {
         return root.toString();
     }
 
+    /** Global posture with every setting explicit; {@code disabledReason} may be {@code null}. */
+    static String posture(String mode, String noMatch, String onFailure, String auditLevel, String disabledReason) {
+        ObjectNode root = MAPPER.createObjectNode();
+        root.set("default", postureNode(mode, noMatch, onFailure, auditLevel, disabledReason));
+        return root.toString();
+    }
+
+    static ObjectNode postureNode(
+            String mode, String noMatch, String onFailure, String auditLevel, String disabledReason) {
+        ObjectNode posture = MAPPER.createObjectNode();
+        posture.put("mode", mode);
+        posture.put("no_match", noMatch);
+        posture.put("on_failure", onFailure);
+        posture.put("audit_level", auditLevel);
+        if (disabledReason != null) {
+            posture.put("disabled_reason", disabledReason);
+        }
+        return posture;
+    }
+
     static String policy(ObjectNode... rules) {
         ObjectNode root = MAPPER.createObjectNode();
         ArrayNode array = root.putArray("rules");
@@ -43,6 +63,17 @@ final class GovernancePolicies {
 
     static ObjectNode denyTool(String id, String toolName, String message) {
         ObjectNode rule = baseRule(id, message);
+        ObjectNode selectors = rule.putObject("selectors");
+        selectors.put("operation", "tools/call");
+        selectors.put("target_type", "tool");
+        selectors.putObject("target_name").put("matcher", "exact").put("value", toolName);
+        return rule;
+    }
+
+    static ObjectNode allowTool(String id, String toolName) {
+        ObjectNode rule = MAPPER.createObjectNode();
+        rule.put("id", id);
+        rule.put("effect", "allow");
         ObjectNode selectors = rule.putObject("selectors");
         selectors.put("operation", "tools/call");
         selectors.put("target_type", "tool");

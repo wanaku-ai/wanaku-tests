@@ -2,9 +2,11 @@ package ai.wanaku.test.client;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +40,18 @@ public class EvaluatorClient {
                 buildRequest(WanakuTestConstants.EVALUATORS_PATH).GET().build();
 
         return executeAndParse(request, "list evaluators");
+    }
+
+    /** Reads the effective governance posture and evaluator readiness for one namespace. */
+    public JsonNode status(String namespace) {
+        LOG.debug("Reading evaluator status for namespace {}", namespace);
+
+        HttpRequest request = buildRequest(WanakuTestConstants.EVALUATORS_PATH + "/status?namespace="
+                        + URLEncoder.encode(namespace, StandardCharsets.UTF_8))
+                .GET()
+                .build();
+
+        return executeAndParse(request, "read evaluator status");
     }
 
     /** Updates evaluators via PUT with a raw JSON body. */
