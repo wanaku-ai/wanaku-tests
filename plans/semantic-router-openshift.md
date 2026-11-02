@@ -45,7 +45,15 @@ does not protect.
 
 Every step is fully automatable.
 
-**Hard timeout rule:** Any single operation (oc wait, polling loop, port-forward setup, etc.) that takes longer than **3 minutes** MUST be considered broken. Mark the test as FAIL immediately and abort — do not wait longer. All `--timeout` values in this plan MUST NOT exceed `180s`.
+Run command blocks in Saci's shared Bash session, including procedure blocks, so helper functions and exported
+variables remain available to later tests. Source each block in that session; a top-level `return 1` fails the
+block without terminating the session. Do not execute blocks as separate scripts or enable `set -e` globally.
+
+**Hard timeout rule:** Saci stops a command block that runs longer than 120 seconds (`limits.operation_timeout_secs`),
+and a stopped block can lose the shared Bash session. Any single operation (oc wait, polling loop, port-forward setup,
+etc.) that takes longer than **100 seconds** MUST be considered broken. Mark the test as FAIL immediately and abort —
+do not wait longer. All `--timeout` values and polling deadlines in this plan MUST NOT exceed `100s`. A test that waits
+for several slow operations splits them into separate blocks, so that each block finishes within the Saci limit.
 
 > [!NOTE]
 > The WSR startup probe allows 10 minutes, because a runtime resolves Maven dependencies at startup. The route in this
@@ -214,7 +222,7 @@ echo "WSR_ROUTING_ENABLED=${WSR_ROUTING_ENABLED}"
 ```bash run
 wait_cr_condition() {
   # $1 = kind, $2 = name, $3 = condition type, $4 = expected status, $5 = expected reason (optional)
-  WCC_END=$(( $(date +%s) + 180 ))
+  WCC_END=$(( $(date +%s) + 100 ))
   while [ "$(date +%s)" -lt "${WCC_END}" ]; do
     WCC_STATUS=$(oc get "$1" "$2" -n "${WANAKU_NAMESPACE}" \
       -o jsonpath="{.status.conditions[?(@.type==\"$3\")].status}" 2>/dev/null)
@@ -245,13 +253,18 @@ export -f wait_cr_condition check
 
 ### Step S.4: Define tool discovery helper
 
+The deadline includes the time of the CLI calls, which start a JVM when `WANAKU_CLI` is a JAR.
+
 ```bash run
 wait_for_tool() {
   # $1 = tool name
-  for i in $(seq 1 40); do
+  WFT_END=$(( $(date +%s) + 75 ))
+  WFT_ATTEMPT=0
+  while [ "$(date +%s)" -lt "${WFT_END}" ]; do
+    WFT_ATTEMPT=$(( WFT_ATTEMPT + 1 ))
     if ${WANAKU_CLI} tools list --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth --plain 2>/dev/null \
         | grep -q "$1"; then
-      echo "PASS: tool $1 is registered in Wanaku Server (attempt ${i})"
+      echo "PASS: tool $1 is registered in Wanaku Server (attempt ${WFT_ATTEMPT})"
       return 0
     fi
     sleep 3
@@ -329,7 +342,8 @@ to install the operator via Helm and verify CRDs, RBAC, and health endpoints. Th
 **Description:** `spec.server.env` sets `WANAKU_AUDIT_INGESTION_ENABLED=true`, so that Wanaku Server accepts the
 semantic audit records of the runtime (Phase 8).
 
-Run this block in the shared Bash session.
+Run these blocks in the shared Bash session. The first block creates the resource and waits until it is Ready. The
+second block verifies Barn and the Server environment.
 
 ```bash run
 cat <<EOF | oc apply -n "${WANAKU_NAMESPACE}" -f -
@@ -351,8 +365,11 @@ spec:
       size: 1Gi
 EOF
 
-oc wait "wanakurouter/${WANAKU_ROUTER_NAME}" --for=condition=Ready --timeout=180s -n "${WANAKU_NAMESPACE}"
+oc wait "wanakurouter/${WANAKU_ROUTER_NAME}" --for=condition=Ready --timeout=100s -n "${WANAKU_NAMESPACE}"
 # Expected output: wanakurouter.wanaku.ai/wanaku-test-router condition met
+```
+
+```bash run
 wait_cr_condition wanakurouter "${WANAKU_ROUTER_NAME}" BarnAvailable True Available || return 1
 
 INGESTION=$(oc get deployment "${WANAKU_ROUTER_NAME}-server" -n "${WANAKU_NAMESPACE}" \
@@ -646,27 +663,41 @@ is ready only after the runtime registered the forward. While the pod is not rea
 > only `/api/v1/status` on that port. Without the health endpoints, `Available` stays `False` and the startup probe
 > restarts the pod.
 
-Run this block in the shared Bash session.
+Run these blocks in the shared Bash session. The first block waits up to 100 seconds and prints the state. The second
+block continues the wait. When the resource is not ready, it prints the pods and the log of the runtime.
 
 ```bash run
-FAIL=0
-wait_cr_condition wanakusemanticrouter "${WSR_NAME}" Reconciled True ReconcileSucceeded || FAIL=1
-wait_cr_condition wanakusemanticrouter "${WSR_NAME}" Available True || FAIL=1
-wait_cr_condition wanakusemanticrouter "${WSR_NAME}" Registered True Registered || FAIL=1
-wait_cr_condition wanakusemanticrouter "${WSR_NAME}" Ready True || FAIL=1
-if [ "${FAIL}" -ne 0 ]; then
+if wait_cr_condition wanakusemanticrouter "${WSR_NAME}" Ready True > /dev/null; then
+  echo "INFO: ${WSR_NAME} is Ready"
+else
+  echo "INFO: ${WSR_NAME} is not Ready yet: $(oc get wanakusemanticrouter "${WSR_NAME}" -n "${WANAKU_NAMESPACE}" \
+    -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}')"
+fi
+```
+
+```bash run
+wait_cr_condition wanakusemanticrouter "${WSR_NAME}" Ready True || {
   oc get pods -l "app=${WSR_NAME}-wsr" -n "${WANAKU_NAMESPACE}"
   oc logs "deployment/${WSR_NAME}-wsr" -n "${WANAKU_NAMESPACE}" --tail=40
   return 1
-fi
+}
+condition() { # $1 = condition type; prints status/reason
+  oc get wanakusemanticrouter "${WSR_NAME}" -n "${WANAKU_NAMESPACE}" \
+    -o jsonpath="{.status.conditions[?(@.type==\"$1\")].status}/{.status.conditions[?(@.type==\"$1\")].reason}"
+}
+FAIL=0
+check "Reconciled" "$(condition Reconciled)" "True/ReconcileSucceeded"
+check "Available" "$(condition Available)" "True/Available"
+check "Registered" "$(condition Registered)" "True/Registered"
+[ "${FAIL}" -eq 0 ] || return 1
 ```
 
 **Expected result:**
 
-- The output includes `PASS: wanakusemanticrouter/<WSR_NAME> condition Reconciled=True (reason ReconcileSucceeded)`.
-- The output includes `PASS: wanakusemanticrouter/<WSR_NAME> condition Available=True`.
-- The output includes `PASS: wanakusemanticrouter/<WSR_NAME> condition Registered=True (reason Registered)`.
 - The output includes `PASS: wanakusemanticrouter/<WSR_NAME> condition Ready=True`.
+- The output includes `PASS: Reconciled = True/ReconcileSucceeded`.
+- The output includes `PASS: Available = True/Available`.
+- The output includes `PASS: Registered = True/Registered`.
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
@@ -875,17 +906,14 @@ echo "${OUTPUT}" | grep -q "${WSR_TOOL}" && echo "PASS: ${WSR_TOOL} is listed at
 
 ---
 
-## Phase 6: Known Issue
+## Phase 6: MCP Endpoint
 
-### Test 6.1: Record status.wanakuEndpoint for the default namespace (known issue)
+### Test 6.1: Verify status.wanakuEndpoint for the default namespace
 
-**Description:** For the forward namespace `default`, the operator copies the router `status.endpoints.mcp` value into
-`status.wanakuEndpoint`. The router publishes that value as `https://<mcp-route-host>/mcp`, without a Wanaku
-namespace. An earlier review found that Wanaku Server rejects the bare `/mcp` path: MCP clients must use
-`${WANAKU_ROUTER_MCP_URL}/default/mcp`. For other namespaces, the operator replaces `/mcp` with `/<namespace>/mcp`.
-
-This test records the current value and the Server response. It does not fail on the known issue. It prints a
-`KNOWN ISSUE:` line while the issue is open, and an `INFO:` line when the endpoint works.
+**Description:** The router publishes `status.endpoints.mcp` as `https://<mcp-route-host>/default/mcp`, the endpoint
+of the `default` Wanaku namespace. The operator sets `status.wanakuEndpoint` of the `WanakuSemanticRouter` to the
+endpoint of its forward namespace: it replaces the path of the router endpoint with `/<namespace>/mcp`. For the
+forward namespace `default`, the two values are equal. MCP clients can list the tool at that endpoint.
 
 Run this block in the shared Bash session.
 
@@ -895,31 +923,26 @@ ROUTER_MCP_ENDPOINT=$(oc get wanakurouter "${WANAKU_ROUTER_NAME}" -n "${WANAKU_N
 WSR_ENDPOINT=$(oc get wanakusemanticrouter "${WSR_NAME}" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.status.wanakuEndpoint}')
 echo "router status.endpoints.mcp:   ${ROUTER_MCP_ENDPOINT}"
 echo "WSR status.wanakuEndpoint:     ${WSR_ENDPOINT}"
-check "router status.endpoints.mcp" "${ROUTER_MCP_ENDPOINT}" "${WANAKU_ROUTER_MCP_URL}/mcp"
-check "status.wanakuEndpoint (default namespace)" "${WSR_ENDPOINT}" "${ROUTER_MCP_ENDPOINT}"
+check "router status.endpoints.mcp" "${ROUTER_MCP_ENDPOINT}" "${WANAKU_ROUTER_MCP_URL}/default/mcp"
+check "status.wanakuEndpoint" "${WSR_ENDPOINT}" "${WANAKU_ROUTER_MCP_URL}/${WSR_FORWARD_NAMESPACE}/mcp"
 
 OUTPUT=$(${WANAKU_CLI} mcp tool list --uri "${WSR_ENDPOINT}" ${WANAKU_CLI_TLS_OPTS} --no-auth --plain 2>&1)
 EXIT_CODE=$?
 echo "${OUTPUT}" | tail -5
 if [ "${EXIT_CODE}" -eq 0 ] && echo "${OUTPUT}" | grep -q "${WSR_TOOL}"; then
-  echo "INFO: ${WSR_ENDPOINT} serves ${WSR_TOOL}. The known issue appears fixed. Update this test."
+  echo "PASS: ${WSR_ENDPOINT} serves ${WSR_TOOL}"
 else
-  echo "KNOWN ISSUE: status.wanakuEndpoint ${WSR_ENDPOINT} has no Wanaku namespace and Wanaku Server rejects it (exit code ${EXIT_CODE}). Use ${WANAKU_ROUTER_MCP_URL}/${WSR_FORWARD_NAMESPACE}/mcp."
+  echo "FAIL: ${WSR_ENDPOINT} does not serve ${WSR_TOOL} (exit code ${EXIT_CODE})"
+  FAIL=1
 fi
 [ "${FAIL}" -eq 0 ] || return 1
 ```
 
-> [!WARNING]
-> **Known issue:** the operator publishes `status.endpoints.mcp` as `<mcp-route>/mcp` without a namespace, and
-> `WanakuSemanticRouter` `status.wanakuEndpoint` repeats it for the `default` namespace. Wanaku Server rejects that
-> path. Report the issue if it is still open. When the operator changes the value (for example to
-> `<mcp-route>/default/mcp`), the two `check` lines fail on purpose: update the expected values.
-
 **Expected result:**
 
 - The output includes `PASS: router status.endpoints.mcp =` with the expected value.
-- The output includes `PASS: status.wanakuEndpoint (default namespace) =` with the expected value.
-- The output includes `KNOWN ISSUE: status.wanakuEndpoint` or `INFO: <WSR_ENDPOINT> serves route_support. The known issue appears fixed. Update this test.`
+- The output includes `PASS: status.wanakuEndpoint =` with the expected value.
+- The output includes `PASS: <WSR_ENDPOINT> serves route_support`.
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
@@ -960,7 +983,7 @@ in the Wanaku namespace `${WSR_FORWARD_NAMESPACE}`. The `plugins` section stays.
 `subPath`, so the running pod does not see the change: restart the Server. The registry (forwards and tools) is on the
 PVC, so it survives the restart. The runtime keeps running, so the `wsr.instance` label does not change.
 
-Run this block in the shared Bash session.
+Run these blocks in the shared Bash session. Each block waits for one slow operation.
 
 ```bash run
 CM="${WANAKU_ROUTER_NAME}-server-config"
@@ -990,11 +1013,19 @@ oc get configmap "${CM}" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.data.wanaku\.ya
   && echo "PASS: plugins section kept" || { echo "FAIL: plugins section lost"; return 1; }
 
 oc rollout restart "deployment/${WANAKU_ROUTER_NAME}-server" -n "${WANAKU_NAMESPACE}"
-oc rollout status "deployment/${WANAKU_ROUTER_NAME}-server" --timeout=180s -n "${WANAKU_NAMESPACE}"
-oc wait "wanakurouter/${WANAKU_ROUTER_NAME}" --for=condition=Ready --timeout=180s -n "${WANAKU_NAMESPACE}"
+oc rollout status "deployment/${WANAKU_ROUTER_NAME}-server" --timeout=100s -n "${WANAKU_NAMESPACE}"
+```
 
+```bash run
 # An invalid governance section stops the Server at startup, so a Ready Server also validates the YAML
+oc wait "wanakurouter/${WANAKU_ROUTER_NAME}" --for=condition=Ready --timeout=100s -n "${WANAKU_NAMESPACE}"
+```
+
+```bash run
 wait_for_tool "${WSR_TOOL}" || return 1
+```
+
+```bash run
 wait_cr_condition wanakusemanticrouter "${WSR_NAME}" Registered True Registered || return 1
 ```
 
@@ -1192,7 +1223,7 @@ echo "${EVENTS}" | grep -q "charged twice" && { echo "FAIL: a record contains su
 `Ready=False`, reason `ValidationError`, message `Reconciled: <message>`. The operator creates no Deployment and no
 Service, and records a `Warning` event with the reason `ValidationError`.
 
-Run this block in the shared Bash session.
+Run these blocks in the shared Bash session. The second block uses the `FAIL` value of the first block.
 
 ```bash run
 cat <<EOF | oc apply -n "${WANAKU_NAMESPACE}" -f -
@@ -1210,6 +1241,9 @@ EOF
 
 FAIL=0
 wait_cr_condition wanakusemanticrouter wsr-bad-router Reconciled False ValidationError || FAIL=1
+```
+
+```bash run
 wait_cr_condition wanakusemanticrouter wsr-bad-router Ready False ValidationError || FAIL=1
 MESSAGE=$(oc get wanakusemanticrouter wsr-bad-router -n "${WANAKU_NAMESPACE}" \
   -o jsonpath='{.status.conditions[?(@.type=="Reconciled")].message}')
@@ -1253,17 +1287,21 @@ termination grace period of 60 seconds. At shutdown, the runtime removes its for
 still belongs to it. Wanaku Server then no longer serves `route_support`, as in
 `SemanticRouterITCase.shouldDeregisterForwardAndToolOnGracefulShutdown`.
 
-Run this block in the shared Bash session.
+Run these blocks in the shared Bash session. The second block uses the `FAIL` value of the first block.
 
 ```bash run
 oc delete wanakusemanticrouter "${WSR_NAME}" -n "${WANAKU_NAMESPACE}" --ignore-not-found=true
 
 FAIL=0
-wait_for_deletion deployment "${WSR_NAME}-wsr" "${WANAKU_NAMESPACE}" 120 || FAIL=1
-wait_for_deletion service "${WSR_NAME}-wsr" "${WANAKU_NAMESPACE}" 60 || FAIL=1
+wait_for_deletion deployment "${WSR_NAME}-wsr" "${WANAKU_NAMESPACE}" 70 || FAIL=1
+wait_for_deletion service "${WSR_NAME}-wsr" "${WANAKU_NAMESPACE}" 30 || FAIL=1
+```
 
+```bash run
+# The deadline includes the time of the CLI calls
 GONE=false
-for i in $(seq 1 30); do
+GONE_END=$(( $(date +%s) + 75 ))
+while [ "$(date +%s)" -lt "${GONE_END}" ]; do
   if ! ${WANAKU_CLI} forwards list --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth --plain 2>/dev/null \
       | grep -q "^${WSR_NAME}[[:space:]]"; then
     GONE=true
@@ -1353,7 +1391,7 @@ echo "PASS: downloaded source assets removed or no download was owned"
 | 4 | 4.5 | Resource status and runtime status endpoint | High |
 | 5 | 5.1 | Self-registered forward with `wsr.*` labels | Critical |
 | 5 | 5.2 | Tool discovery (`route_support`) | Critical |
-| 6 | 6.1 | `status.wanakuEndpoint` without a namespace (known issue) | Medium |
+| 6 | 6.1 | `status.wanakuEndpoint` serves the tool at `/default/mcp` | High |
 | 7 | 7.1 | Fail-safe governance denies the tool call | Critical |
 | 7 | 7.2 | Test governance configuration (test-only workaround) | Critical |
 | 7 | 7.3 | Semantic routing: billing, technical, unclassified (skipped without `TYPESAFE_API_KEY`) | Critical |
