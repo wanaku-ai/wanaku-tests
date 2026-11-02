@@ -25,6 +25,7 @@ public class TestConfiguration {
     private final String actionPolicyJson;
     private final String governanceJson;
     private final String auditJson;
+    private final String extraWanakuConfig;
     private final boolean persistenceEnabled;
     private final String llmConnectionUrl;
 
@@ -46,6 +47,7 @@ public class TestConfiguration {
         this.actionPolicyJson = builder.actionPolicyJson;
         this.governanceJson = builder.governanceJson;
         this.auditJson = builder.auditJson;
+        this.extraWanakuConfig = builder.extraWanakuConfig;
         this.persistenceEnabled = builder.persistenceEnabled;
         this.llmConnectionUrl = builder.llmConnectionUrl;
     }
@@ -108,6 +110,7 @@ public class TestConfiguration {
                 .actionPolicyJson(actionPolicyJson)
                 .governanceJson(governanceJson)
                 .auditJson(auditJson)
+                .extraWanakuConfig(extraWanakuConfig)
                 .persistenceEnabled(persistenceEnabled)
                 .llmConnectionUrl(llmConnectionUrl);
     }
@@ -350,6 +353,15 @@ public class TestConfiguration {
         return auditJson;
     }
 
+    /**
+     * YAML lines appended verbatim to the bootstrap config, for settings that have no dedicated
+     * builder field (for example startup {@code evaluators:} or {@code evaluator_startup_failure:}).
+     * Returns {@code null} when unset.
+     */
+    public String getExtraWanakuConfig() {
+        return extraWanakuConfig;
+    }
+
     public boolean isPersistenceEnabled() {
         return persistenceEnabled;
     }
@@ -381,6 +393,7 @@ public class TestConfiguration {
         private String actionPolicyJson;
         private String governanceJson;
         private String auditJson;
+        private String extraWanakuConfig;
         private boolean persistenceEnabled = true;
         private String llmConnectionUrl;
 
@@ -466,6 +479,11 @@ public class TestConfiguration {
 
         public Builder auditJson(String auditJson) {
             this.auditJson = auditJson;
+            return this;
+        }
+
+        public Builder extraWanakuConfig(String extraWanakuConfig) {
+            this.extraWanakuConfig = extraWanakuConfig;
             return this;
         }
 
