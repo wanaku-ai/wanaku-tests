@@ -16,6 +16,9 @@ The plan covers the three supported ways to run a CIC on OpenShift:
 3. **A plain `Deployment` registered with `wanaku forwards add`** (Phase 8), as described in `docs/operator.md`
    ("Registering Capability Services").
 
+Phase 11 creates a `WanakuIntegration` with `wanaku cloud run integration`, and covers `wanaku cloud status integration`
+and `wanaku cloud delete integration`.
+
 The removed `WanakuCamelRoute` and `WanakuCapability` CRDs are not tested. `WanakuIntegration` replaces them.
 
 **Components under test:**
@@ -1412,9 +1415,331 @@ wait_for_deletion wanakuservicecatalog cic-test-service-catalogs "${WANAKU_NAMES
 
 ---
 
-## Phase 11: Post-Test Verification
+## Phase 11: WanakuIntegration Created With `wanaku cloud run integration`
 
-### Test 11.1: Verify the operator pod is healthy and the logs have no unexpected errors
+`wanaku cloud run integration` takes a Camel YAML route file. It checks that the file has an `ai-tool:` route with a
+served tag, writes the file into the `<name>-routes` ConfigMap, and creates the `<name>` `WanakuIntegration`. The name
+comes from the file name: `cic-cloud.camel.yaml` gives `cic-cloud`. The forward name defaults to the resource name.
+The phase uses the `default` Wanaku namespace, which the test governance configuration of Phase 5 allows.
+
+The commands use `--context`, `--namespace` and `--router`, so a target stored in `$WANAKU_HOME/cloud.properties` has
+no effect. [cloud-run-semantic.md](cloud-run-semantic.md) covers `wanaku cloud target`.
+
+### Test 11.1: Write the route file and verify that the command rejects a file without an MCP tool
+
+**Description:** The command checks the file before it contacts the cluster. A file without an `ai-tool:` route that
+has a served tag gives exit code 2 and creates nothing.
+
+Run this block in the shared Bash session.
+
+```bash run
+FAIL=0
+# A CLI without the command prints the help of "cloud run" instead, also with exit code 0
+if ${WANAKU_CLI} cloud run integration --help 2>&1 | grep -q "Usage: wanaku cloud run integration"; then
+  echo "PASS: the Wanaku CLI has the cloud run integration command"
+else
+  echo "FAIL: the Wanaku CLI (${WANAKU_CLI}) has no cloud run integration command"
+  return 1
+fi
+
+CIC_CLOUD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/wanaku-cic-cloud.XXXXXX") || return 1
+export CIC_CLOUD_DIR
+export CIC_CLOUD_CONTEXT=$(oc config current-context)
+cat > "${CIC_CLOUD_DIR}/cic-cloud.camel.yaml" <<'EOF'
+- route:
+    id: cic-cloud-echo
+    from:
+      uri: ai-tool:cic-cloud-echo
+      parameters:
+        tags: wanaku
+        description: "Echo back the input message with a cloud prefix"
+        parameter.message: string
+        parameter.message.description: "The message to echo back"
+      steps:
+        - setBody:
+            expression:
+              simple:
+                expression: "cloud-${header.message}"
+EOF
+# The same route with a tag that the capability does not serve
+sed 's/tags: wanaku/tags: other/' "${CIC_CLOUD_DIR}/cic-cloud.camel.yaml" > "${CIC_CLOUD_DIR}/cic-no-tool.camel.yaml"
+
+OUTPUT=$(${WANAKU_CLI} cloud run integration "${CIC_CLOUD_DIR}/cic-no-tool.camel.yaml" --context "${CIC_CLOUD_CONTEXT}" \
+  --namespace "${WANAKU_NAMESPACE}" --router "${WANAKU_ROUTER_NAME}" --plain 2>&1)
+EXIT_CODE=$?
+echo "${OUTPUT}"
+check "exit code" "${EXIT_CODE}" "2"
+echo "${OUTPUT}" | grep -q "has no MCP tool" && echo "PASS: the command reports the missing MCP tool" \
+  || { echo "FAIL: the command does not report the missing MCP tool"; FAIL=1; }
+oc get wanakuintegration cic-no-tool -n "${WANAKU_NAMESPACE}" > /dev/null 2>&1 \
+  && { echo "FAIL: WanakuIntegration cic-no-tool was created"; FAIL=1; } \
+  || echo "PASS: no WanakuIntegration was created for the rejected file"
+[ "${FAIL}" -eq 0 ] || return 1
+```
+
+**Expected result:**
+
+- The output includes `PASS: the Wanaku CLI has the cloud run integration command`.
+- The output includes `PASS: exit code =` with the expected value.
+- The output includes `PASS: the command reports the missing MCP tool`.
+- The output includes `PASS: no WanakuIntegration was created for the rejected file`.
+- The output contains no line starting with `FAIL:`.
+- The commands exit with code 0.
+
+### Test 11.2: Submit the route file without waiting
+
+**Description:** `--image` and `--image-pull-policy` select the CIC image under test. `--no-wait` returns after the
+submission. The command makes the `WanakuIntegration` the owner of the `cic-cloud-routes` ConfigMap, and labels both
+with `app.kubernetes.io/managed-by=wanaku-cli`.
+
+Run this block in the shared Bash session.
+
+```bash run
+OUTPUT=$(${WANAKU_CLI} cloud run integration "${CIC_CLOUD_DIR}/cic-cloud.camel.yaml" --context "${CIC_CLOUD_CONTEXT}" \
+  --namespace "${WANAKU_NAMESPACE}" --router "${WANAKU_ROUTER_NAME}" \
+  --image "${CIC_IMAGE}" --image-pull-policy Always --no-wait --plain 2>&1)
+EXIT_CODE=$?
+echo "${OUTPUT}"
+FAIL=0
+check "exit code" "${EXIT_CODE}" "0"
+for LINE in "Submitted WanakuIntegration cic-cloud in namespace ${WANAKU_NAMESPACE}" \
+    "Follow it with: wanaku cloud status integration cic-cloud"; do
+  echo "${OUTPUT}" | grep -qF "${LINE}" && echo "PASS: the command prints '${LINE}'" \
+    || { echo "FAIL: the command does not print '${LINE}'"; FAIL=1; }
+done
+
+CM_JSON=$(oc get configmap cic-cloud-routes -n "${WANAKU_NAMESPACE}" -o json) \
+  || { echo "FAIL: ConfigMap cic-cloud-routes not found"; return 1; }
+check "ConfigMap keys" "$(echo "${CM_JSON}" | jq -r '.data | keys | join(",")')" "cic-cloud.camel.yaml"
+check "ConfigMap content" "$(echo "${CM_JSON}" | jq -r '.data["cic-cloud.camel.yaml"]')" \
+  "$(cat "${CIC_CLOUD_DIR}/cic-cloud.camel.yaml")"
+check "ConfigMap owner" "$(echo "${CM_JSON}" | jq -r '.metadata.ownerReferences[0] | .kind + "/" + .name')" \
+  "WanakuIntegration/cic-cloud"
+
+INT_JSON=$(oc get wanakuintegration cic-cloud -n "${WANAKU_NAMESPACE}" -o json) \
+  || { echo "FAIL: WanakuIntegration cic-cloud not found"; return 1; }
+check "label app.kubernetes.io/managed-by" \
+  "$(echo "${INT_JSON}" | jq -r '.metadata.labels["app.kubernetes.io/managed-by"]')" "wanaku-cli"
+check "spec.routerRef" "$(echo "${INT_JSON}" | jq -r '.spec.routerRef')" "${WANAKU_ROUTER_NAME}"
+check "spec.routes.configMapRef" "$(echo "${INT_JSON}" | jq -r '.spec.routes.configMapRef | .name + "/" + .main')" \
+  "cic-cloud-routes/cic-cloud.camel.yaml"
+check "spec.mcp.tags" "$(echo "${INT_JSON}" | jq -r '.spec.mcp.tags')" "wanaku"
+check "spec.registration" "$(echo "${INT_JSON}" | jq -r '.spec.registration | "\(.enabled)/\(.namespace)"')" \
+  "true/default"
+check "spec.image" "$(echo "${INT_JSON}" | jq -r '.spec.image')" "${CIC_IMAGE}"
+check "spec.imagePullPolicy" "$(echo "${INT_JSON}" | jq -r '.spec.imagePullPolicy')" "Always"
+[ "${FAIL}" -eq 0 ] || return 1
+```
+
+**Expected result:**
+
+- The output includes `PASS: exit code =` with the expected value.
+- The output includes `PASS: the command prints 'Submitted WanakuIntegration cic-cloud in namespace <WANAKU_NAMESPACE>'`.
+- The output includes `PASS: the command prints 'Follow it with: wanaku cloud status integration cic-cloud'`.
+- The output includes `PASS: ConfigMap keys =` with the expected value.
+- The output includes `PASS: ConfigMap content =` with the expected value.
+- The output includes `PASS: ConfigMap owner =` with the expected value.
+- The output includes `PASS: label app.kubernetes.io/managed-by =` with the expected value.
+- The output includes `PASS: spec.routerRef =` with the expected value.
+- The output includes `PASS: spec.routes.configMapRef =` with the expected value.
+- The output includes `PASS: spec.mcp.tags =` with the expected value.
+- The output includes `PASS: spec.registration =` with the expected value.
+- The output includes `PASS: spec.image =` with the expected value.
+- The output includes `PASS: spec.imagePullPolicy =` with the expected value.
+- The output contains no line starting with `FAIL:`.
+- The commands exit with code 0.
+
+### Test 11.3: Verify the WanakuIntegration becomes Ready
+
+Run these blocks in the shared Bash session. The first block waits for `Reconciled` and `Available`. The second
+waits for `Registered` and `Ready`. Each block prints the runtime log when a condition is not met.
+
+```bash run
+wait_cr_condition wanakuintegration cic-cloud Reconciled True ReconcileSucceeded \
+  && wait_cr_condition wanakuintegration cic-cloud Available True Available \
+  || { oc logs deployment/cic-cloud-cic -n "${WANAKU_NAMESPACE}" --tail=30; return 1; }
+```
+
+```bash run
+wait_cr_condition wanakuintegration cic-cloud Registered True Registered \
+  && wait_cr_condition wanakuintegration cic-cloud Ready True \
+  || { oc logs deployment/cic-cloud-cic -n "${WANAKU_NAMESPACE}" --tail=30; return 1; }
+```
+
+**Expected result:**
+
+- The output includes `PASS: wanakuintegration/cic-cloud condition Ready=True`.
+- The output contains no line starting with `FAIL:`.
+- The commands exit with code 0.
+
+### Test 11.4: Run the command again and wait for the ready integration
+
+**Description:** Without `--no-wait`, the command waits until the integration is ready. The route file did not
+change, so the runtime does not restart and the command returns immediately. It prints the forward name and the stop
+command.
+
+Run this block in the shared Bash session.
+
+```bash run
+OUTPUT=$(${WANAKU_CLI} cloud run integration "${CIC_CLOUD_DIR}/cic-cloud.camel.yaml" --context "${CIC_CLOUD_CONTEXT}" \
+  --namespace "${WANAKU_NAMESPACE}" --router "${WANAKU_ROUTER_NAME}" \
+  --image "${CIC_IMAGE}" --image-pull-policy Always --timeout 90 --plain 2>&1)
+EXIT_CODE=$?
+echo "${OUTPUT}"
+FAIL=0
+check "exit code" "${EXIT_CODE}" "0"
+for LINE in "WanakuIntegration cic-cloud is ready" "Forward: cic-cloud" \
+    "To stop and remove it, run: wanaku cloud delete integration cic-cloud"; do
+  echo "${OUTPUT}" | grep -qF "${LINE}" && echo "PASS: the command prints '${LINE}'" \
+    || { echo "FAIL: the command does not print '${LINE}'"; FAIL=1; }
+done
+[ "${FAIL}" -eq 0 ] || return 1
+```
+
+**Expected result:**
+
+- The output includes `PASS: exit code =` with the expected value.
+- The output includes `PASS: the command prints 'WanakuIntegration cic-cloud is ready'`.
+- The output includes `PASS: the command prints 'Forward: cic-cloud'`.
+- The output includes `PASS: the command prints 'To stop and remove it, run: wanaku cloud delete integration cic-cloud'`.
+- The output contains no line starting with `FAIL:`.
+- The commands exit with code 0.
+
+### Test 11.5: Show the status with wanaku cloud status integration
+
+**Description:** The command prints each condition as `<type>=<status> (<reason>): <message>`, and the status
+fields. It exits with code 0 when the integration is ready. In plain mode, the command can print the values without
+line breaks, so the test finds the values anywhere in the output.
+
+Run this block in the shared Bash session.
+
+```bash run
+OUTPUT=$(${WANAKU_CLI} cloud status integration cic-cloud --context "${CIC_CLOUD_CONTEXT}" \
+  --namespace "${WANAKU_NAMESPACE}" --router "${WANAKU_ROUTER_NAME}" --plain 2>&1)
+EXIT_CODE=$?
+echo "${OUTPUT}"
+FAIL=0
+check "exit code" "${EXIT_CODE}" "0"
+for VALUE in "Ready=True" "Registered=True (Registered)" "forwardName: cic-cloud" \
+    "mcpAddress: http://cic-cloud-cic.${WANAKU_NAMESPACE}.svc:9090/mcp"; do
+  echo "${OUTPUT}" | grep -qF "${VALUE}" && echo "PASS: status prints '${VALUE}'" \
+    || { echo "FAIL: status does not print '${VALUE}'"; FAIL=1; }
+done
+[ "${FAIL}" -eq 0 ] || return 1
+```
+
+**Expected result:**
+
+- The output includes `PASS: exit code =` with the expected value.
+- The output includes `PASS: status prints 'Ready=True'`.
+- The output includes `PASS: status prints 'Registered=True (Registered)'`.
+- The output includes `PASS: status prints 'forwardName: cic-cloud'`.
+- The output includes `PASS: status prints 'mcpAddress: http://cic-cloud-cic.<WANAKU_NAMESPACE>.svc:9090/mcp'`.
+- The output contains no line starting with `FAIL:`.
+- The commands exit with code 0.
+
+### Test 11.6: Invoke the tool through the MCP Route
+
+**Description:** The route returns the message with the `cloud-` prefix.
+
+Run this block in the shared Bash session.
+
+```bash run
+wait_for_tool cic-cloud-echo || return 1
+
+OUTPUT=$(${WANAKU_CLI} mcp tool --uri "${WANAKU_ROUTER_MCP_URL}/default/mcp" ${WANAKU_CLI_TLS_OPTS} --no-auth \
+  --name cic-cloud-echo --param message=hello 2>&1)
+EXIT_CODE=$?
+echo "${OUTPUT}"
+if [ "${EXIT_CODE}" -eq 0 ] && echo "${OUTPUT}" | grep -q "cloud-hello"; then
+  echo "PASS: cic-cloud-echo returned cloud-hello"
+else
+  echo "FAIL: unexpected tool result (exit code ${EXIT_CODE})"
+  return 1
+fi
+```
+
+**Expected result:**
+
+- The output includes `PASS: tool cic-cloud-echo is registered in Wanaku Server`.
+- The output includes `PASS: cic-cloud-echo returned cloud-hello`.
+- The output contains no line starting with `FAIL:`.
+- The commands exit with code 0.
+
+### Test 11.7: Delete the integration with wanaku cloud delete integration
+
+**Description:** Kubernetes deletes the runtime Deployment and the routes ConfigMap through the owner references. The
+runtime removes its forward at shutdown. A second delete fails, because the integration does not exist.
+
+Run these blocks in the shared Bash session. The first block deletes the integration and waits for the Deployment
+and the ConfigMap. The second verifies that the forward and the tool are removed, and that a second delete fails.
+
+```bash run
+OUTPUT=$(${WANAKU_CLI} cloud delete integration cic-cloud --context "${CIC_CLOUD_CONTEXT}" \
+  --namespace "${WANAKU_NAMESPACE}" --router "${WANAKU_ROUTER_NAME}" --plain 2>&1)
+EXIT_CODE=$?
+echo "${OUTPUT}"
+FAIL=0
+check "exit code" "${EXIT_CODE}" "0"
+echo "${OUTPUT}" | grep -qF "Deleted WanakuIntegration cic-cloud" && echo "PASS: the command reports the deletion" \
+  || { echo "FAIL: the command does not report the deletion"; FAIL=1; }
+wait_for_deletion deployment cic-cloud-cic "${WANAKU_NAMESPACE}" 60 || FAIL=1
+wait_for_deletion configmap cic-cloud-routes "${WANAKU_NAMESPACE}" 30 || FAIL=1
+[ "${FAIL}" -eq 0 ] || return 1
+```
+
+```bash run
+FAIL=0
+GONE=false
+for i in $(seq 1 12); do
+  if ! ${WANAKU_CLI} forwards list --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth --plain 2>/dev/null \
+      | grep -q "^cic-cloud[[:space:]]"; then
+    GONE=true
+    break
+  fi
+  sleep 3
+done
+[ "${GONE}" = "true" ] && echo "PASS: forward cic-cloud removed by the runtime at shutdown" \
+  || { echo "FAIL: forward cic-cloud is still registered"; FAIL=1; }
+
+OUTPUT=$(${WANAKU_CLI} tools list --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth --plain 2>&1)
+echo "${OUTPUT}" | grep -q "cic-cloud-echo" && { echo "FAIL: cic-cloud-echo is still registered"; FAIL=1; } \
+  || echo "PASS: the tool of the deleted integration is gone"
+
+OUTPUT=$(${WANAKU_CLI} cloud delete integration cic-cloud --context "${CIC_CLOUD_CONTEXT}" \
+  --namespace "${WANAKU_NAMESPACE}" --router "${WANAKU_ROUTER_NAME}" --plain 2>&1)
+EXIT_CODE=$?
+echo "${OUTPUT}"
+check "second delete exit code" "${EXIT_CODE}" "1"
+echo "${OUTPUT}" | grep -qF "WanakuIntegration cic-cloud does not exist in namespace ${WANAKU_NAMESPACE}" \
+  && echo "PASS: the second delete reports the missing integration" \
+  || { echo "FAIL: the second delete does not report the missing integration"; FAIL=1; }
+
+# Remove only the directory that Test 11.1 created
+case "${CIC_CLOUD_DIR}" in
+  "${TMPDIR:-/tmp}"/wanaku-cic-cloud.*) rm -rf "${CIC_CLOUD_DIR}" ;;
+esac
+[ "${FAIL}" -eq 0 ] || return 1
+```
+
+**Expected result:**
+
+- The output includes `PASS: exit code =` with the expected value.
+- The output includes `PASS: the command reports the deletion`.
+- The output includes `PASS: deployment/cic-cloud-cic deleted`.
+- The output includes `PASS: configmap/cic-cloud-routes deleted`.
+- The output includes `PASS: forward cic-cloud removed by the runtime at shutdown`.
+- The output includes `PASS: the tool of the deleted integration is gone`.
+- The output includes `PASS: second delete exit code =` with the expected value.
+- The output includes `PASS: the second delete reports the missing integration`.
+- The output contains no line starting with `FAIL:`.
+- The commands exit with code 0.
+
+---
+
+## Phase 12: Post-Test Verification
+
+### Test 12.1: Verify the operator pod is healthy and the logs have no unexpected errors
 
 ```bash run
 OPERATOR_POD=$(oc get pods -l app.kubernetes.io/name=wanaku-operator -n "${WANAKU_NAMESPACE}" -o jsonpath='{.items[0].metadata.name}')
@@ -1442,11 +1767,11 @@ fi
 
 ---
 
-## Phase 12: Cleanup
+## Phase 13: Cleanup
 
-### Step 12.0: Delete remaining resources
+### Step 13.0: Delete remaining resources
 
-Delete the leftover resources of this plan. Then run the full teardown in Step 12.1.
+Delete the leftover resources of this plan. Then run the full teardown in Step 13.1.
 
 ```bash run
 oc delete deployment,service cic-manual -n "${WANAKU_NAMESPACE}" --ignore-not-found=true
@@ -1462,7 +1787,7 @@ echo "PASS: CIC test resources deleted"
 
 ---
 
-### Step 12.1: Run full teardown
+### Step 13.1: Run full teardown
 
 Follow [common/cleanup.md](common/cleanup.md).
 
@@ -1494,8 +1819,13 @@ Follow [common/cleanup.md](common/cleanup.md).
 | 8 | 8.4 | Forward removal removes its tools | High |
 | 9 | 9.1-9.2 | WanakuIntegration validation errors | High |
 | 10 | 10.1-10.2 | Deletion removes the runtimes and their forwards | Critical |
-| 11 | 11.1 | Operator health and logs | Medium |
-| 12 | — | Cleanup | Critical |
+| 11 | 11.1 | `wanaku cloud run integration` rejects a file without an MCP tool | High |
+| 11 | 11.2-11.4 | `wanaku cloud run integration` creates the ConfigMap and the WanakuIntegration, which becomes Ready | Critical |
+| 11 | 11.5 | `wanaku cloud status integration` | High |
+| 11 | 11.6 | Tool invocation of the CLI-created integration | Critical |
+| 11 | 11.7 | `wanaku cloud delete integration` removes the runtime and its forward | Critical |
+| 12 | 12.1 | Operator health and logs | Medium |
+| 13 | — | Cleanup | Critical |
 | Setup | S.1 | Verify prerequisites | Setup |
 | Setup | S.2 | Set environment variables | Setup |
 | Setup | S.3 | Define condition and assertion helpers | Setup |
@@ -1504,6 +1834,6 @@ Follow [common/cleanup.md](common/cleanup.md).
 | Setup | 0.0 | Log in to OpenShift | Setup |
 | Setup | 1.0 | Prepare the namespace | Setup |
 | Setup | 2.0 | Install the operator | Setup |
-| Setup | 12.0 | Delete remaining resources | Setup |
+| Setup | 13.0 | Delete remaining resources | Setup |
 | Setup | 9.0 | Define the negative test helper | Setup |
-| Setup | 12.1 | Run full teardown | Setup |
+| Setup | 13.1 | Run full teardown | Setup |
