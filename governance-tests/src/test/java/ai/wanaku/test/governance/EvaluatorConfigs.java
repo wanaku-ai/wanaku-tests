@@ -11,12 +11,18 @@ final class EvaluatorConfigs {
 
     private EvaluatorConfigs() {}
 
-    /** An LLM evaluator on the deterministic stub connection. {@code resultSchema} may be {@code null}. */
+    /**
+     * An LLM evaluator on the deterministic stub connection. A {@code null} namespace matches every
+     * namespace; {@code resultSchema} may be {@code null}.
+     */
     static ObjectNode llm(
             String name, String method, String namespace, String operation, Path processor, ObjectNode resultSchema) {
         ObjectNode root = GovernanceTestBase.MAPPER.createObjectNode();
         ObjectNode evaluator = root.putArray("evaluators").addObject().put("name", name);
-        evaluator.putObject("trigger").put("method", method).put("namespace", namespace);
+        ObjectNode trigger = evaluator.putObject("trigger").put("method", method);
+        if (namespace != null) {
+            trigger.put("namespace", namespace);
+        }
         ObjectNode engine = evaluator
                 .putObject("engine")
                 .put("type", "llm")
