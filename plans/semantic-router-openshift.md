@@ -235,7 +235,7 @@ wait_cr_condition() {
 check() { # $1 = description, $2 = actual, $3 = expected
   if [ "$2" = "$3" ]; then echo "PASS: $1 = $2"; else echo "FAIL: $1 = '$2', expected '$3'"; FAIL=1; fi
 }
-# The tests run as separate bash scripts: export the helpers so that those scripts inherit them
+
 export -f wait_cr_condition check
 ```
 
@@ -259,6 +259,7 @@ wait_for_tool() {
   echo "FAIL: tool $1 not registered in Wanaku Server"
   return 1
 }
+
 export -f wait_for_tool
 ```
 
