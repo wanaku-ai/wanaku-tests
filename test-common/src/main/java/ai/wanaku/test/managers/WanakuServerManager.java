@@ -4,8 +4,10 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ai.wanaku.test.WanakuTestConstants;
@@ -153,6 +155,28 @@ public class WanakuServerManager extends ProcessManager {
             throw new IllegalStateException("Cannot stop an externally managed Wanaku server");
         }
         super.stop();
+    }
+
+    /**
+     * Starts the server for a configuration that it must reject at startup, and waits for the process
+     * to exit. Call {@link #prepare()} first and {@link #stop()} after to remove the generated files.
+     *
+     * @return the exit code of the server process
+     * @throws IllegalStateException if the server is still running after the timeout
+     */
+    public int startExpectingExit(String testName, Duration timeout) throws IOException, InterruptedException {
+        logFile = createLogFile(testName);
+        ProcessBuilder builder = new ProcessBuilder(buildCommand());
+        configureEnvironment(builder.environment());
+        builder.redirectOutput(logFile);
+        builder.redirectErrorStream(true);
+        Process rejected = builder.start();
+        if (!rejected.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
+            rejected.destroyForcibly().waitFor();
+            throw new IllegalStateException("wanaku-server did not exit within " + timeout
+                    + " although its configuration is invalid. Check logs: " + logFile.getAbsolutePath());
+        }
+        return rejected.exitValue();
     }
 
     public int getHttpPort() {
@@ -315,6 +339,9 @@ public class WanakuServerManager extends ProcessManager {
         }
         if (config.getAuditJson() != null) {
             lines.add("audit: " + config.getAuditJson());
+        }
+        if (config.getExtraWanakuConfig() != null) {
+            lines.add(config.getExtraWanakuConfig());
         }
         lines.add("");
 
