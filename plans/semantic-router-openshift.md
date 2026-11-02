@@ -67,10 +67,18 @@ Every step is fully automatable.
 ### Environment variables
 
 Step 1 of [common/namespace-setup.md](common/namespace-setup.md) derives a unique `WANAKU_NAMESPACE` for this run.
+Step S.0 reuses the current directory when it contains the Wanaku Barn operator chart; otherwise it downloads it
+from `wanaku-ai/wanaku-barn`. Set `WANAKU_BARN_REF` to a branch, tag or commit (default: `main`) to select the source
+version. To use an existing Wanaku Barn checkout instead, explicitly set `WANAKU_REPO_ROOT` to its root; an
+invalid explicit path fails rather than triggering a download. Downloaded sources are isolated in a temporary
+directory and removed in Step 11.2.
+
 Step S.2 sets the other variables. All image tags default to `latest` and can be overridden.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `WANAKU_REPO_ROOT` | not set | Root of a Wanaku Barn checkout that contains the operator chart. When it is not set, Step S.0 uses the current directory or downloads the source. |
+| `WANAKU_BARN_REF` | `main` | The Wanaku Barn branch, tag or commit to download when no checkout is available (Step S.0) |
 | `WSR_IMAGE` | `quay.io/wanaku/wanaku-semantic-router:latest` | WSR runtime image (the operator default) |
 | `WSR_CAMEL_VERSION` | `4.23.0` | The Camel version of the WSR image. The route manifest (`camel.version`) must match it. |
 | `TYPESAFE_API_KEY` | not set | Credential of the expert provider. When it is not set, the plan stores a placeholder value in the Secret and skips the routing and semantic audit tests. |
@@ -96,6 +104,52 @@ tool list of the management API.
 ---
 
 ## Phase S: Setup
+
+### Step S.0: Prepare the operator Helm chart
+
+Reuse a supplied Wanaku Barn checkout, or download its source archive from the official repository. Keep the
+chart available through Helm teardown. Run this block in the shared Bash session.
+
+```bash run
+WANAKU_DOWNLOADED_SOURCE_DIR=""
+export WANAKU_BARN_REF="${WANAKU_BARN_REF:-main}"
+if [ -n "${WANAKU_REPO_ROOT+x}" ]; then
+  if [ ! -r "${WANAKU_REPO_ROOT}/apps/wanaku-operator/deploy/helm/wanaku-operator/Chart.yaml" ]; then
+    echo "FAIL: supplied WANAKU_REPO_ROOT lacks the operator chart"
+    return 1
+  fi
+  export WANAKU_REPO_ROOT
+  echo "PASS: existing Wanaku Barn source assets reused"
+elif [ -r "./apps/wanaku-operator/deploy/helm/wanaku-operator/Chart.yaml" ]; then
+  export WANAKU_REPO_ROOT="${PWD}"
+  echo "PASS: existing Wanaku Barn source assets reused"
+else
+  for CMD in curl tar; do
+    command -v "${CMD}" > /dev/null 2>&1 || { echo "FAIL: ${CMD} is required to download source assets"; return 1; }
+  done
+  WANAKU_DOWNLOADED_SOURCE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/wanaku-operator-source.XXXXXX") || return 1
+  mkdir "${WANAKU_DOWNLOADED_SOURCE_DIR}/repo" || return 1
+  curl --fail --location --connect-timeout 10 --max-time 90 \
+    "https://github.com/wanaku-ai/wanaku-barn/archive/${WANAKU_BARN_REF}.tar.gz" \
+    --output "${WANAKU_DOWNLOADED_SOURCE_DIR}/source.tar.gz" \
+    || { echo "FAIL: Wanaku Barn source archive download failed"; return 1; }
+  tar -xzf "${WANAKU_DOWNLOADED_SOURCE_DIR}/source.tar.gz" \
+    --strip-components=1 -C "${WANAKU_DOWNLOADED_SOURCE_DIR}/repo" \
+    || { echo "FAIL: Wanaku Barn source archive extraction failed"; return 1; }
+  if [ ! -r "${WANAKU_DOWNLOADED_SOURCE_DIR}/repo/apps/wanaku-operator/deploy/helm/wanaku-operator/Chart.yaml" ]; then
+    echo "FAIL: downloaded source lacks the operator chart"
+    return 1
+  fi
+  export WANAKU_REPO_ROOT="${WANAKU_DOWNLOADED_SOURCE_DIR}/repo"
+  echo "PASS: Wanaku Barn source assets downloaded"
+fi
+```
+
+**Expected result:**
+
+- The output includes `PASS: existing Wanaku Barn source assets reused` or `PASS: Wanaku Barn source assets downloaded`.
+- The output contains no line starting with `FAIL:`.
+- The commands exit with code 0.
 
 ### Step S.1: Verify prerequisites
 
@@ -129,7 +183,6 @@ ${WANAKU_CLI:-wanaku} --help > /dev/null 2>&1 && echo "PASS: the Wanaku CLI runs
 ### Step S.2: Set environment variables
 
 ```bash run
-export WANAKU_REPO_ROOT="${WANAKU_REPO_ROOT:-.}"
 export WANAKU_SERVER_IMAGE="${WANAKU_SERVER_IMAGE:-quay.io/wanaku/wanaku-server:latest}"
 export WANAKU_BARN_IMAGE="${WANAKU_BARN_IMAGE:-quay.io/wanaku/wanaku-barn-backend:latest}"
 export WSR_IMAGE="${WSR_IMAGE:-quay.io/wanaku/wanaku-semantic-router:latest}"
@@ -1268,6 +1321,21 @@ Follow [common/cleanup.md](common/cleanup.md).
 
 - All invoked procedure steps pass (inferred).
 
+### Step 11.2: Remove downloaded source assets
+
+```bash run
+if [ -n "${WANAKU_DOWNLOADED_SOURCE_DIR}" ]; then
+  rm -rf "${WANAKU_DOWNLOADED_SOURCE_DIR}" || return 1
+  unset WANAKU_DOWNLOADED_SOURCE_DIR
+fi
+echo "PASS: downloaded source assets removed or no download was owned"
+```
+
+**Expected result:**
+
+- The output includes `PASS: downloaded source assets removed or no download was owned`.
+- The commands exit with code 0.
+
 ## Test Summary Matrix
 
 | Phase | Test ID | Test Name | Priority |
@@ -1290,6 +1358,7 @@ Follow [common/cleanup.md](common/cleanup.md).
 | 9 | 9.1 | Non-existent routerRef: `ValidationError`, not Ready | High |
 | 10 | 10.1 | Deletion removes the runtime, its forward and its tool | Critical |
 | 11 | — | Cleanup | Critical |
+| Setup | S.0 | Prepare the operator Helm chart | Setup |
 | Setup | S.1 | Verify prerequisites | Setup |
 | Setup | S.2 | Set environment variables | Setup |
 | Setup | S.3 | Define condition and assertion helpers | Setup |
