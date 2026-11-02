@@ -153,9 +153,9 @@ fi
 
 ### Step S.1: Verify prerequisites
 
-Run this block as a separate `bash` script, not in the shared session.
+Run this block in the shared Bash session.
 
-```bash
+```bash run
 FAIL=0
 for CMD in oc helm curl jq; do
   if ! command -v "${CMD}" > /dev/null 2>&1; then
@@ -166,7 +166,7 @@ for CMD in oc helm curl jq; do
   fi
 done
 ${WANAKU_CLI:-wanaku} --help > /dev/null 2>&1 && echo "PASS: the Wanaku CLI runs" || { echo "FAIL: the Wanaku CLI does not run"; FAIL=1; }
-[ "${FAIL}" -eq 0 ] && echo "PASS: all prerequisites met" || { echo "FAIL: one or more prerequisites missing"; exit 1; }
+[ "${FAIL}" -eq 0 ] && echo "PASS: all prerequisites met" || { echo "FAIL: one or more prerequisites missing"; return 1; }
 ```
 
 **Expected result:**
@@ -271,12 +271,6 @@ export -f wait_for_tool
 
 Follow [common/wait-for-deletion.md](common/wait-for-deletion.md).
 
-Then export the helper, so that the separate test scripts inherit it:
-
-```bash run
-export -f wait_for_deletion
-```
-
 **Expected result:**
 
 - The block defines the function without errors (inferred).
@@ -335,9 +329,9 @@ to install the operator via Helm and verify CRDs, RBAC, and health endpoints. Th
 **Description:** `spec.server.env` sets `WANAKU_AUDIT_INGESTION_ENABLED=true`, so that Wanaku Server accepts the
 semantic audit records of the runtime (Phase 8).
 
-Run this block as a separate `bash` script, not in the shared session.
+Run this block in the shared Bash session.
 
-```bash
+```bash run
 cat <<EOF | oc apply -n "${WANAKU_NAMESPACE}" -f -
 apiVersion: "wanaku.ai/v1alpha1"
 kind: WanakuRouter
@@ -359,12 +353,12 @@ EOF
 
 oc wait "wanakurouter/${WANAKU_ROUTER_NAME}" --for=condition=Ready --timeout=180s -n "${WANAKU_NAMESPACE}"
 # Expected output: wanakurouter.wanaku.ai/wanaku-test-router condition met
-wait_cr_condition wanakurouter "${WANAKU_ROUTER_NAME}" BarnAvailable True Available || exit 1
+wait_cr_condition wanakurouter "${WANAKU_ROUTER_NAME}" BarnAvailable True Available || return 1
 
 INGESTION=$(oc get deployment "${WANAKU_ROUTER_NAME}-server" -n "${WANAKU_NAMESPACE}" \
   -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="WANAKU_AUDIT_INGESTION_ENABLED")].value}')
 [ "${INGESTION}" = "true" ] && echo "PASS: semantic audit ingestion is enabled on the Server" \
-  || { echo "FAIL: WANAKU_AUDIT_INGESTION_ENABLED is '${INGESTION}'"; exit 1; }
+  || { echo "FAIL: WANAKU_AUDIT_INGESTION_ENABLED is '${INGESTION}'"; return 1; }
 ```
 
 > [!NOTE]
@@ -421,9 +415,9 @@ list of files (`kamelets=` accepts a comma-separated list of files in one direct
 > into the `..data` directory. WSR rejects only directory symlinks for Kamelets, and it reads the files through
 > `Files.isRegularFile`, which follows links.
 
-Run this block as a separate `bash` script, not in the shared session.
+Run this block in the shared Bash session.
 
-```bash
+```bash run
 # The Secret value is not printed
 oc create secret generic wsr-llm-credentials \
   --from-literal=api-key="${TYPESAFE_API_KEY:-placeholder-routing-tests-are-skipped}" \
@@ -576,7 +570,7 @@ KEYS=$(oc get configmap wsr-support-files -n "${WANAKU_NAMESPACE}" -o json | jq 
 check "ConfigMap keys" "${KEYS}" "semantic-router.properties,service.properties,support.camel.yaml,support.dependencies.txt,wsr-billing-action.kamelet.yaml,wsr-technical-action.kamelet.yaml"
 oc get secret wsr-llm-credentials -n "${WANAKU_NAMESPACE}" -o jsonpath='{.data.api-key}' | grep -q . \
   && echo "PASS: Secret wsr-llm-credentials has the api-key key" || { echo "FAIL: Secret key api-key missing"; FAIL=1; }
-[ "${FAIL}" -eq 0 ] || exit 1
+[ "${FAIL}" -eq 0 ] || return 1
 ```
 
 **Expected result:**
@@ -593,9 +587,9 @@ not select an expert, so `spec.properties` enables the `supportExpert` bean with
 (`wsr.experts`, `wsr.expert.supportExpert.class`). The operator passes each property to the runtime as `-p KEY=VALUE`.
 The API key stays in the Secret: the property holds only the reference `{{env:TYPESAFE_API_KEY}}`.
 
-Run this block as a separate `bash` script, not in the shared session.
+Run this block in the shared Bash session.
 
-```bash
+```bash run
 OPTIONAL_PROPERTIES=""
 [ -n "${TYPESAFE_BASE_URL}" ] && OPTIONAL_PROPERTIES="${OPTIONAL_PROPERTIES}
     camel.component.typesafe-ai.base-url: \"${TYPESAFE_BASE_URL}\""
@@ -630,7 +624,7 @@ spec:
 EOF
 
 oc get wanakusemanticrouter "${WSR_NAME}" -n "${WANAKU_NAMESPACE}" -o name
-[ $? -eq 0 ] && echo "PASS: WanakuSemanticRouter ${WSR_NAME} exists" || { echo "FAIL: WanakuSemanticRouter not created"; exit 1; }
+[ $? -eq 0 ] && echo "PASS: WanakuSemanticRouter ${WSR_NAME} exists" || { echo "FAIL: WanakuSemanticRouter not created"; return 1; }
 ```
 
 **Expected result:**
@@ -652,9 +646,9 @@ is ready only after the runtime registered the forward. While the pod is not rea
 > only `/api/v1/status` on that port. Without the health endpoints, `Available` stays `False` and the startup probe
 > restarts the pod.
 
-Run this block as a separate `bash` script, not in the shared session.
+Run this block in the shared Bash session.
 
-```bash
+```bash run
 FAIL=0
 wait_cr_condition wanakusemanticrouter "${WSR_NAME}" Reconciled True ReconcileSucceeded || FAIL=1
 wait_cr_condition wanakusemanticrouter "${WSR_NAME}" Available True || FAIL=1
@@ -663,7 +657,7 @@ wait_cr_condition wanakusemanticrouter "${WSR_NAME}" Ready True || FAIL=1
 if [ "${FAIL}" -ne 0 ]; then
   oc get pods -l "app=${WSR_NAME}-wsr" -n "${WANAKU_NAMESPACE}"
   oc logs "deployment/${WSR_NAME}-wsr" -n "${WANAKU_NAMESPACE}" --tail=40
-  exit 1
+  return 1
 fi
 ```
 
@@ -682,9 +676,9 @@ fi
 the runtime as `WSR_*` environment variables, and the properties as `-p` options after the `runtime` command, in key
 order.
 
-Run this block as a separate `bash` script, not in the shared session.
+Run this block in the shared Bash session.
 
-```bash
+```bash run
 FAIL=0
 DEPLOY="${WSR_NAME}-wsr"
 wsr_jsonpath() { oc get deployment "${DEPLOY}" -n "${WANAKU_NAMESPACE}" -o jsonpath="$1"; }
@@ -726,7 +720,7 @@ svc_jsonpath() { oc get service "${DEPLOY}" -n "${WANAKU_NAMESPACE}" -o jsonpath
 check "Service port" "$(svc_jsonpath '{.spec.ports[0].port}')" "8090"
 check "Service port name" "$(svc_jsonpath '{.spec.ports[0].name}')" "mcp"
 check "publishNotReadyAddresses" "$(svc_jsonpath '{.spec.publishNotReadyAddresses}')" "true"
-[ "${FAIL}" -eq 0 ] || exit 1
+[ "${FAIL}" -eq 0 ] || return 1
 ```
 
 **Expected result:**
@@ -768,9 +762,9 @@ check "publishNotReadyAddresses" "$(svc_jsonpath '{.spec.publishNotReadyAddresse
 ConfigMap source, `source` is `local-files` and `revision` is `local`. The `digest` is a SHA-256 value of the snapshot
 resources.
 
-Run this block as a separate `bash` script, not in the shared session.
+Run this block in the shared Bash session.
 
-```bash
+```bash run
 FAIL=0
 cr_jsonpath() { oc get wanakusemanticrouter "${WSR_NAME}" -n "${WANAKU_NAMESPACE}" -o jsonpath="$1"; }
 check "status.forwardName" "$(cr_jsonpath '{.status.forwardName}')" "${WSR_NAME}"
@@ -796,7 +790,7 @@ check "runtime forwardName" "$(echo "${STATUS}" | jq -r '.forwardName')" "${WSR_
 check "runtime audit enabled" "$(echo "${STATUS}" | jq -r '.audit.enabled')" "true"
 echo "${STATUS}" | jq -r '.digest' | grep -qE '^[a-f0-9]{64}$' \
   && echo "PASS: runtime digest is a SHA-256 value" || { echo "FAIL: runtime digest is not a SHA-256 value"; FAIL=1; }
-[ "${FAIL}" -eq 0 ] || exit 1
+[ "${FAIL}" -eq 0 ] || return 1
 ```
 
 **Expected result:**
@@ -823,14 +817,14 @@ echo "${STATUS}" | jq -r '.digest' | grep -qE '^[a-f0-9]{64}$' \
 the labels `wsr.instance` (the runtime instance), `wsr.revision` (`local`) and `wsr.digest`. The CLI does not print
 forward labels, so `curl` reads `GET /api/v1/forwards/{name}`.
 
-Run this block as a separate `bash` script, not in the shared session.
+Run this block in the shared Bash session.
 
-```bash
+```bash run
 OUTPUT=$(${WANAKU_CLI} forwards list --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth --plain 2>&1)
 echo "${OUTPUT}"
 echo "${OUTPUT}" | grep -q "^${WSR_NAME}[[:space:]]*http://${WSR_NAME}-wsr.${WANAKU_NAMESPACE}.svc:8090/mcp" \
   && echo "PASS: forward ${WSR_NAME} is listed with the runtime address" \
-  || { echo "FAIL: forward ${WSR_NAME} not listed"; exit 1; }
+  || { echo "FAIL: forward ${WSR_NAME} not listed"; return 1; }
 
 FORWARD=$(curl -s ${CURL_TLS_OPTS} "${WANAKU_ROUTER_URL}/api/v1/forwards/${WSR_NAME}")
 echo "${FORWARD}" | jq '.data | {name, namespace, available, labels}'
@@ -842,7 +836,7 @@ check "forward label wsr.revision" "$(echo "${FORWARD}" | jq -r '.data.labels["w
   && echo "PASS: forward label wsr.instance is set" || { echo "FAIL: forward label wsr.instance missing"; FAIL=1; }
 echo "${FORWARD}" | jq -r '.data.labels["wsr.digest"] // empty' | grep -qE '^[a-f0-9]{64}$' \
   && echo "PASS: forward label wsr.digest is a SHA-256 value" || { echo "FAIL: forward label wsr.digest missing"; FAIL=1; }
-[ "${FAIL}" -eq 0 ] || exit 1
+[ "${FAIL}" -eq 0 ] || return 1
 ```
 
 **Expected result:**
@@ -861,15 +855,15 @@ echo "${FORWARD}" | jq -r '.data.labels["wsr.digest"] // empty' | grep -qE '^[a-
 **Description:** The runtime serves one tool, `route_support`. Wanaku Server lists it in the management API and serves
 it at `/default/mcp`.
 
-Run this block as a separate `bash` script, not in the shared session.
+Run this block in the shared Bash session.
 
-```bash
-wait_for_tool "${WSR_TOOL}" || exit 1
+```bash run
+wait_for_tool "${WSR_TOOL}" || return 1
 
 OUTPUT=$(${WANAKU_CLI} mcp tool list --uri "${WANAKU_ROUTER_MCP_URL}/${WSR_FORWARD_NAMESPACE}/mcp" ${WANAKU_CLI_TLS_OPTS} --no-auth --plain 2>&1)
 echo "${OUTPUT}"
 echo "${OUTPUT}" | grep -q "${WSR_TOOL}" && echo "PASS: ${WSR_TOOL} is listed at /${WSR_FORWARD_NAMESPACE}/mcp" \
-  || { echo "FAIL: ${WSR_TOOL} not listed at /${WSR_FORWARD_NAMESPACE}/mcp"; exit 1; }
+  || { echo "FAIL: ${WSR_TOOL} not listed at /${WSR_FORWARD_NAMESPACE}/mcp"; return 1; }
 ```
 
 **Expected result:**
@@ -893,9 +887,9 @@ namespace. An earlier review found that Wanaku Server rejects the bare `/mcp` pa
 This test records the current value and the Server response. It does not fail on the known issue. It prints a
 `KNOWN ISSUE:` line while the issue is open, and an `INFO:` line when the endpoint works.
 
-Run this block as a separate `bash` script, not in the shared session.
+Run this block in the shared Bash session.
 
-```bash
+```bash run
 FAIL=0
 ROUTER_MCP_ENDPOINT=$(oc get wanakurouter "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.status.endpoints.mcp}')
 WSR_ENDPOINT=$(oc get wanakusemanticrouter "${WSR_NAME}" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.status.wanakuEndpoint}')
@@ -912,7 +906,7 @@ if [ "${EXIT_CODE}" -eq 0 ] && echo "${OUTPUT}" | grep -q "${WSR_TOOL}"; then
 else
   echo "KNOWN ISSUE: status.wanakuEndpoint ${WSR_ENDPOINT} has no Wanaku namespace and Wanaku Server rejects it (exit code ${EXIT_CODE}). Use ${WANAKU_ROUTER_MCP_URL}/${WSR_FORWARD_NAMESPACE}/mcp."
 fi
-[ "${FAIL}" -eq 0 ] || exit 1
+[ "${FAIL}" -eq 0 ] || return 1
 ```
 
 > [!WARNING]
@@ -938,9 +932,9 @@ fi
 **Description:** Without a governance configuration, Wanaku Server denies `tools/call` before it forwards the call.
 The expert provider is not called, so this test also runs when `TYPESAFE_API_KEY` is not set.
 
-Run this block as a separate `bash` script, not in the shared session.
+Run this block in the shared Bash session.
 
-```bash
+```bash run
 OUTPUT=$(${WANAKU_CLI} mcp tool --uri "${WANAKU_ROUTER_MCP_URL}/${WSR_FORWARD_NAMESPACE}/mcp" ${WANAKU_CLI_TLS_OPTS} --no-auth \
   --name "${WSR_TOOL}" --param message=billing 2>&1)
 EXIT_CODE=$?
@@ -949,7 +943,7 @@ if echo "${OUTPUT}" | grep -qE "No governance policy permits this action|evaluat
   echo "PASS: the tool call is denied by the fail-safe governance default (exit code ${EXIT_CODE})"
 else
   echo "FAIL: the tool call was not denied"
-  exit 1
+  return 1
 fi
 ```
 
@@ -966,9 +960,9 @@ in the Wanaku namespace `${WSR_FORWARD_NAMESPACE}`. The `plugins` section stays.
 `subPath`, so the running pod does not see the change: restart the Server. The registry (forwards and tools) is on the
 PVC, so it survives the restart. The runtime keeps running, so the `wsr.instance` label does not change.
 
-Run this block as a separate `bash` script, not in the shared session.
+Run this block in the shared Bash session.
 
-```bash
+```bash run
 CM="${WANAKU_ROUTER_NAME}-server-config"
 GOV_FILE=$(mktemp)
 oc get configmap "${CM}" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.data.wanaku\.yaml}' > "${GOV_FILE}"
@@ -991,17 +985,17 @@ oc set data "configmap/${CM}" -n "${WANAKU_NAMESPACE}" --from-file=wanaku.yaml="
 rm -f "${GOV_FILE}"
 
 oc get configmap "${CM}" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.data.wanaku\.yaml}' | grep -q "^governance:" \
-  && echo "PASS: governance section added" || { echo "FAIL: governance section missing"; exit 1; }
+  && echo "PASS: governance section added" || { echo "FAIL: governance section missing"; return 1; }
 oc get configmap "${CM}" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.data.wanaku\.yaml}' | grep -q "wanaku-barn-api" \
-  && echo "PASS: plugins section kept" || { echo "FAIL: plugins section lost"; exit 1; }
+  && echo "PASS: plugins section kept" || { echo "FAIL: plugins section lost"; return 1; }
 
 oc rollout restart "deployment/${WANAKU_ROUTER_NAME}-server" -n "${WANAKU_NAMESPACE}"
 oc rollout status "deployment/${WANAKU_ROUTER_NAME}-server" --timeout=180s -n "${WANAKU_NAMESPACE}"
 oc wait "wanakurouter/${WANAKU_ROUTER_NAME}" --for=condition=Ready --timeout=180s -n "${WANAKU_NAMESPACE}"
 
 # An invalid governance section stops the Server at startup, so a Ready Server also validates the YAML
-wait_for_tool "${WSR_TOOL}" || exit 1
-wait_cr_condition wanakusemanticrouter "${WSR_NAME}" Registered True Registered || exit 1
+wait_for_tool "${WSR_TOOL}" || return 1
+wait_cr_condition wanakusemanticrouter "${WSR_NAME}" Registered True Registered || return 1
 ```
 
 **Expected result:**
@@ -1029,12 +1023,12 @@ The test is skipped when `TYPESAFE_API_KEY` is not set. A real model can classif
 fixture. When the test fails with a real model, compare the label in the semantic audit records (Test 8.2) before you
 report a defect.
 
-Run this block as a separate `bash` script, not in the shared session.
+Run this block in the shared Bash session.
 
-```bash
+```bash run
 if [ "${WSR_ROUTING_ENABLED}" != "true" ]; then
   echo "SKIP: TYPESAFE_API_KEY is not set -- skip Test 7.3 and Test 8.2"
-  exit 0
+  return 0
 fi
 
 FAIL=0
@@ -1053,7 +1047,7 @@ invoke() { # $1 = message, $2 = expected answer
 invoke "billing: I was charged twice on my last invoice and I need a refund" "Billing demo response"
 invoke "technical: the service has an outage and the login page shows an error" "Technical demo response"
 invoke "unclassified: what is the capital of France" "No suitable support action."
-[ "${FAIL}" -eq 0 ] || { oc logs "deployment/${WSR_NAME}-wsr" -n "${WANAKU_NAMESPACE}" --tail=30; exit 1; }
+[ "${FAIL}" -eq 0 ] || { oc logs "deployment/${WSR_NAME}-wsr" -n "${WANAKU_NAMESPACE}" --tail=30; return 1; }
 ```
 
 **Expected result:**
@@ -1076,13 +1070,13 @@ reason code, because the `no_match: allow` posture allowed it. The CLI has no au
 `GET /api/v1/audit/events`. The response is
 `{"data":{"events":[...],"limit":..,"offset":..,"total":..},"error":null}`.
 
-Run this block as a separate `bash` script, not in the shared session.
+Run this block in the shared Bash session.
 
-```bash
+```bash run
 FAIL=0
 EVENTS=$(curl -s ${CURL_TLS_OPTS} "${WANAKU_ROUTER_URL}/api/v1/audit/events?target=${WSR_TOOL}&operation=tools/call")
 echo "${EVENTS}" | jq -e '.data.events' > /dev/null 2>&1 && echo "PASS: audit events endpoint returns events" \
-  || { echo "FAIL: unexpected audit response: ${EVENTS}"; exit 1; }
+  || { echo "FAIL: unexpected audit response: ${EVENTS}"; return 1; }
 echo "${EVENTS}" | jq -c '[.data.events[] | {operation, target, decision, reason_code, namespace}]'
 
 BLOCKED=$(echo "${EVENTS}" | jq '[.data.events[] | select(.decision=="block" and .reason_code=="governance_no_match")] | length')
@@ -1096,7 +1090,7 @@ if [ "${WSR_ROUTING_ENABLED}" = "true" ]; then
 else
   echo "SKIP: no allowed calls to check (TYPESAFE_API_KEY is not set)"
 fi
-[ "${FAIL}" -eq 0 ] || exit 1
+[ "${FAIL}" -eq 0 ] || return 1
 ```
 
 **Expected result:**
@@ -1117,12 +1111,12 @@ label that the expert selected, expert `supportExpert`) and a `decision` record 
 `camel-semantic`. The records contain no submitted content (`attributes.semantic.input` is not set). The test finds the
 records by the `wsr.instance` label of the forward, as `SemanticRouterITCase` does.
 
-Run this block as a separate `bash` script, not in the shared session.
+Run this block in the shared Bash session.
 
-```bash
+```bash run
 if [ "${WSR_ROUTING_ENABLED}" != "true" ]; then
   echo "SKIP: TYPESAFE_API_KEY is not set -- no semantic records to check"
-  exit 0
+  return 0
 fi
 
 INSTANCE=$(curl -s ${CURL_TLS_OPTS} "${WANAKU_ROUTER_URL}/api/v1/forwards/${WSR_NAME}" | jq -r '.data.labels["wsr.instance"]')
@@ -1158,7 +1152,7 @@ check "decisions linked to an evaluation" "$(ev '([.data.events[] | select(.attr
   | [.data.events[] | select(.attributes.semantic.category=="decision") | select((.source.evidence | length) == 1 and (.source.evidence[0] as $e | $ids | index($e)) != null)] | length')" "3"
 echo "${EVENTS}" | grep -q "charged twice" && { echo "FAIL: a record contains submitted content"; FAIL=1; } \
   || echo "PASS: no record contains submitted content"
-[ "${FAIL}" -eq 0 ] || exit 1
+[ "${FAIL}" -eq 0 ] || return 1
 ```
 
 > [!NOTE]
@@ -1198,9 +1192,9 @@ echo "${EVENTS}" | grep -q "charged twice" && { echo "FAIL: a record contains su
 `Ready=False`, reason `ValidationError`, message `Reconciled: <message>`. The operator creates no Deployment and no
 Service, and records a `Warning` event with the reason `ValidationError`.
 
-Run this block as a separate `bash` script, not in the shared session.
+Run this block in the shared Bash session.
 
-```bash
+```bash run
 cat <<EOF | oc apply -n "${WANAKU_NAMESPACE}" -f -
 apiVersion: "wanaku.ai/v1alpha1"
 kind: WanakuSemanticRouter
@@ -1233,7 +1227,7 @@ oc get events -n "${WANAKU_NAMESPACE}" --field-selector involvedObject.name=wsr-
   || echo "WARN: no ValidationError event found (the operator ignores event write failures)"
 
 oc delete wanakusemanticrouter wsr-bad-router -n "${WANAKU_NAMESPACE}" --ignore-not-found=true
-[ "${FAIL}" -eq 0 ] || exit 1
+[ "${FAIL}" -eq 0 ] || return 1
 ```
 
 **Expected result:**
@@ -1259,9 +1253,9 @@ termination grace period of 60 seconds. At shutdown, the runtime removes its for
 still belongs to it. Wanaku Server then no longer serves `route_support`, as in
 `SemanticRouterITCase.shouldDeregisterForwardAndToolOnGracefulShutdown`.
 
-Run this block as a separate `bash` script, not in the shared session.
+Run this block in the shared Bash session.
 
-```bash
+```bash run
 oc delete wanakusemanticrouter "${WSR_NAME}" -n "${WANAKU_NAMESPACE}" --ignore-not-found=true
 
 FAIL=0
@@ -1289,7 +1283,7 @@ OUTPUT=$(${WANAKU_CLI} mcp tool list --uri "${WANAKU_ROUTER_MCP_URL}/${WSR_FORWA
 echo "${OUTPUT}" | grep -q "${WSR_TOOL}" \
   && { echo "FAIL: ${WSR_TOOL} is still served at /${WSR_FORWARD_NAMESPACE}/mcp"; FAIL=1; } \
   || echo "PASS: ${WSR_TOOL} is no longer served at /${WSR_FORWARD_NAMESPACE}/mcp"
-[ "${FAIL}" -eq 0 ] || exit 1
+[ "${FAIL}" -eq 0 ] || return 1
 ```
 
 **Expected result:**
