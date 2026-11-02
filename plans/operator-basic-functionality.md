@@ -1307,8 +1307,9 @@ HASH_BEFORE=$(oc get deployment "${WANAKU_ROUTER_NAME}-server" -n "${WANAKU_NAME
   -o jsonpath='{.spec.template.metadata.annotations.wanaku\.ai/server-config-hash}')
 
 expect_invalid_config() { # $1 = configMapRef JSON, $2 = expected message fragment
-  oc patch wanakurouter "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" --type=merge \
-    -p "{\"spec\":{\"server\":{\"configMapRef\":$1}}}" > /dev/null
+  # Replace the whole reference: a merge patch keeps the key of the previous reference
+  oc patch wanakurouter "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" --type=json \
+    -p "[{\"op\":\"add\",\"path\":\"/spec/server/configMapRef\",\"value\":$1}]" > /dev/null
   wait_cr_condition wanakurouter "${WANAKU_ROUTER_NAME}" Reconciled False InvalidServerConfig || { FAIL=1; return; }
   # Wait until the message belongs to this reference, not to the previous one
   for i in $(seq 1 10); do
@@ -1329,8 +1330,8 @@ check "configuration hash while the reference is not usable" \
   "$(oc get deployment "${WANAKU_ROUTER_NAME}-server" -n "${WANAKU_NAMESPACE}" \
     -o jsonpath='{.spec.template.metadata.annotations.wanaku\.ai/server-config-hash}')" "${HASH_BEFORE}"
 
-oc patch wanakurouter "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" --type=merge \
-  -p "{\"spec\":{\"server\":{\"configMapRef\":{\"name\":\"${WANAKU_ROUTER_NAME}-custom-config\"}}}}" > /dev/null
+oc patch wanakurouter "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" --type=json \
+  -p "[{\"op\":\"add\",\"path\":\"/spec/server/configMapRef\",\"value\":{\"name\":\"${WANAKU_ROUTER_NAME}-custom-config\",\"key\":\"wanaku.yaml\"}}]" > /dev/null
 wait_cr_condition wanakurouter "${WANAKU_ROUTER_NAME}" Reconciled True || FAIL=1
 oc delete configmap "${BAD_CM}" -n "${WANAKU_NAMESPACE}" --ignore-not-found=true > /dev/null
 [ "${FAIL}" -eq 0 ] || return 1
