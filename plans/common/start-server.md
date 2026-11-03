@@ -232,7 +232,7 @@ fi
 ### Step 6: Verify the CLI can connect
 
 Use the CLI jar from this repository (see
-[contributing-test-plans.md](../../../docs/contributing-test-plans.md#use-the-wanaku-cli-not-raw-api-clients)).
+[Write a test plan](../../docs/test-plans/write-a-test-plan.md#use-the-wanaku-cli-not-raw-api-clients)).
 Wanaku Server has no built-in authentication, so pass `--no-auth`.
 
 Run this block as a separate `bash` script, not in the shared session.
