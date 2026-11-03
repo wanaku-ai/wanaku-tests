@@ -8,6 +8,8 @@ on:
     paths-ignore:
       - .github/**
       - README.md
+      - docs/**
+      - "**/*.md"
       - LICENSE
 
 env:

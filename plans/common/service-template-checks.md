@@ -1,7 +1,6 @@
 # Procedure: Service Template Checks
 
-Reusable checks for a built-in service template. The service template test plans (for example
-[openai-chat-tool-template.md](../openai-chat-tool-template.md)) use these checks for the parts that are the same for
+Reusable checks for a built-in service template. The service template test plans use these checks for the parts that are the same for
 every template: the source structure, the listing, the instantiation and the tool registration in Wanaku Server.
 Each plan adds only the checks that are specific to its template (route content, backend setup, invocation).
 
@@ -255,7 +254,7 @@ echo "${OUTPUT}" | grep -q "${TEMPLATE_NAME}" \
 ### Test B.4: The template detail, properties and package endpoints
 
 The CLI has no command for the template detail, the property list and the current package. `curl` is acceptable
-here (see [contributing-test-plans.md](../../../docs/contributing-test-plans.md)).
+here (see [Write a test plan](../../docs/test-plans/write-a-test-plan.md)).
 
 ```bash run
 DETAIL=$(curl -s "${WANAKU_BARN_URL}/api/v1/service-template/get?name=${TEMPLATE_NAME}")

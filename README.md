@@ -27,12 +27,14 @@ This framework tests Wanaku capabilities:
 Tests require Router, HTTP Capability, File Provider, and CLI JARs. Choose one option:
 
 **Option A: Download from GitHub releases (recommended)**
+
 ```bash
 ./artifacts/download.sh 0.1.0             # release
 ./artifacts/download.sh 0.1.1-SNAPSHOT    # snapshot (early-access)
 ```
 
 **Option B: Copy from local Wanaku build**
+
 ```bash
 WANAKU_DIR=/path/to/wanaku
 EXAMPLES_DIR=/path/to/wanaku-examples
@@ -44,7 +46,8 @@ cp -r $WANAKU_DIR/wanaku/cli/target/quarkus-app artifacts/wanaku-cli-0.1.0
 ```
 
 After setup:
-```
+
+```text
 artifacts/
 ├── wanaku-router-backend-0.1.0/
 │   ├── quarkus-run.jar
@@ -65,12 +68,14 @@ artifacts/
 CLI tests require `wanaku` CLI. Choose one option:
 
 **Option A: Use CLI JAR from artifacts**
+
 ```bash
 # Set system property to point to CLI JAR
 mvn clean install -Dwanaku.test.cli.path=../artifacts/wanaku-cli-0.1.0/quarkus-run.jar
 ```
 
 **Option B: Install globally via jbang**
+
 ```bash
 jbang app install wanaku@wanaku-ai/wanaku
 
@@ -157,10 +162,10 @@ mvn clean install -Dwanaku.test.cli.path=../artifacts/wanaku-cli-0.1.0/quarkus-r
 
 ## Project Structure
 
-```
+```text
 wanaku-tests/
 ├── artifacts/             # Wanaku JARs (not in git)
-├── load/                  # k6 load tests for the MCP request path (see load/README.md)
+├── load/                  # k6 load tests for the MCP request path (see docs/load-tests/run-load-tests.md)
 ├── http-capability-tests/ # HTTP capability tests (18 tests)
 │   └── src/test/java/ai/wanaku/test/http/
 │       ├── HttpToolCliITCase.java          # CLI tool management (3)
@@ -198,7 +203,7 @@ wanaku-tests/
 
 After test run, logs are in `http-capability-tests/target/logs/`:
 
-```
+```text
 target/logs/
 ├── test-framework.log           # Test framework output
 ├── router/                      # Router process logs (per test class)
@@ -210,7 +215,7 @@ target/logs/
 
 ## Architecture
 
-```
+```text
 ┌─────────────┐     ┌──────────┐     ┌───────────────────┐
 │  Keycloak   │────▶│  Router  │◀────│  HTTP Capability  │
 │  (Auth)     │     │  (MCP)   │     │  (Tool Service)   │
@@ -221,6 +226,7 @@ target/logs/
 ```
 
 **Lifecycle:**
+
 - Suite-scoped: Keycloak, Router (shared across tests in a class)
 - Test-scoped: HTTP Capability (fresh per test)
 
@@ -231,6 +237,7 @@ The `full-integration-test` workflow builds all Wanaku components from source be
 Each component accepts a repository (`owner/repo`) and branch input. All default to the `wanaku-ai` org on `main`.
 
 **Build all from a release branch (e.g. 0.2.x):**
+
 ```bash
 gh workflow run full-integration-test.yml \
   -f wanaku_branch=0.2.x \
@@ -241,6 +248,7 @@ gh workflow run full-integration-test.yml \
 ```
 
 **Build only wanaku from a specific branch (others use main):**
+
 ```bash
 gh workflow run full-integration-test.yml \
   -f wanaku_branch=0.2.x \
@@ -248,6 +256,7 @@ gh workflow run full-integration-test.yml \
 ```
 
 **Build from a fork:**
+
 ```bash
 gh workflow run full-integration-test.yml \
   -f wanaku_repo=<your github ID>/wanaku \
@@ -319,16 +328,15 @@ local deterministic model fixture; no external model service or API key is requi
 ## Modules
 
 - [HTTP Capability Tests](http-capability-tests/README.md) — HTTP tool registration and invocation
-- [Resources Tests](resources-tests/README.md) — file resource management via REST API, MCP, and CLI
-- [Cross-Capability Tests](cross-capability-tests/README.md) — router restart and mixed-capability scenarios
-- [Camel Integration Capability Tests](camel-integration-capability-tests/README.md) — CIC tools, resources, PostgreSQL, multi-instance
-- [Saci test image](saci/README.md) — a [Midnight Saci](https://github.com/orpiske/midnight-saci) worker image with `wanaku-server` and the `wanaku` CLI, for Saci test plans
+- [Resources Tests](docs/integration-tests/resources.md) — file resource management via REST API, MCP, and CLI
+- [Camel Integration Capability Tests](docs/integration-tests/camel-integration-capability.md) — CIC tools, resources, PostgreSQL, multi-instance
+- [Saci test image](docs/test-plans/saci-worker-image.md) — a [Midnight Saci](https://github.com/orpiske/midnight-saci) worker image with `wanaku-server` and the `wanaku` CLI, for Saci test plans
 
 ### A2A integration tests
 
 The `a2a-tests` module tests the managed A2A 0.3 JSON-RPC proxy introduced in
 [Wanaku PR #2071](https://github.com/wanaku-ai/wanaku/pull/2071), using a custom
-agent hosted by Camel Integration Capability. See [the module README](a2a-tests/README.md)
+agent hosted by Camel Integration Capability. See [A2A proxy tests](docs/integration-tests/a2a.md)
 for protocol compatibility, prerequisites, and coverage.
 
 ```bash

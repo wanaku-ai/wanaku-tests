@@ -1,0 +1,29 @@
+# Lint the contributor docs and the READMEs. The Saci test plans (plans/) follow the Saci plan format and are not
+# linted here.
+config:
+  MD004:
+    style: "dash"
+  MD013: false
+  MD024:
+    siblings_only: true
+  MD025: false
+  MD033: false
+  MD036: false
+  MD060: false
+
+globs:
+  - "docs/**/*.md"
+  - "*.md"
+  - "**/README.md"
+
+ignores:
+  - ".claude/**"
+  - ".bob/**"
+  - ".specify/**"
+  - "specs/**"
+  - "plans/**"
+  - "http-capability-tests/**"
+  - "CLAUDE.md"
+  - "AGENTS.md"
+  - "**/target/**"
+  - "**/node_modules/**"
