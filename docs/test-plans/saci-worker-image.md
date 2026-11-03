@@ -17,7 +17,7 @@ The image is `quay.io/orpiske/saci-worker` with these additions:
 | `wanaku-keycloak-admin` | `/usr/local/bin/wanaku-keycloak-admin` | The `wanaku-keycloak-admin` archive of the same wanaku-barn release |
 | `test-mcp-server` | `/usr/local/bin/test-mcp-server` | `/deployments` of `FIXTURE_IMAGE`, the [`fixtures/test-mcp-server`](../../fixtures/test-mcp-server) image |
 | `oc`, `kubectl` | `/usr/local/bin/oc`, `/usr/local/bin/kubectl` | The OpenShift client archive for `OC_VERSION` from [mirror.openshift.com](https://mirror.openshift.com/pub/openshift-v4/clients/ocp/) |
-| `helm` | `/usr/local/bin/helm` | The Helm `HELM_VERSION` archive from [get.helm.sh](https://get.helm.sh) |
+| `helm` | `/usr/local/bin/helm` | The Helm `HELM_VERSION` archive from `get.helm.sh` |
 | `openssl` | `/usr/bin/openssl` | The Fedora `openssl` package |
 | `unzip` | `/usr/bin/unzip` | The Fedora `unzip` package |
 
@@ -33,7 +33,7 @@ resources. To use a different port, run
 `QUARKUS_HTTP_PORT=<port> test-mcp-server`.
 
 The base image also supplies `bash`, `curl`, `jq`, `git` and the other
-[worker utilities](https://github.com/orpiske/midnight-saci/blob/main/docs/worker.md#the-image).
+[worker utilities](https://orpiske.github.io/midnight-saci/operate/worker-image.html#what-the-image-contains).
 The image runs as UID 10001 in group 0, and `HOME` is `/workspace`.
 
 ## Build the image
