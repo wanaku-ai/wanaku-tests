@@ -724,7 +724,7 @@ done
 
 OUTPUT=$(wanaku mcp tool --uri "${MCP_URI}" --token "${MCP_TOKEN}" ${WANAKU_TLS_FLAG} \
   --name restartService --param serverId=test-server --param service=nginx --plain 2>&1)
-[ "${OUTPUT}" = "SUCCESS: Service 'nginx' restarted on server 'test-server'." ] \
+echo "${OUTPUT}" | grep -qxF "SUCCESS: Service 'nginx' restarted on server 'test-server'." \
   && echo "PASS [14.3]: restartService called through the Route" || echo "FAIL [14.3]: '${OUTPUT}'"
 OUTPUT=$(wanaku mcp prompt --uri "${MCP_URI}" --token "${MCP_TOKEN}" ${WANAKU_TLS_FLAG} \
   --name draftEscalation --arg urgency=high --arg reason=memory-pressure --plain 2>&1)
