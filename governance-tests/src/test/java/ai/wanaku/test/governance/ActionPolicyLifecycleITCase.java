@@ -213,7 +213,7 @@ class ActionPolicyLifecycleITCase extends GovernanceTestBase {
                 .thenAssertResults();
     }
 
-    private void ensureCaptureForward() throws Exception {
+    private void ensureCaptureForward() {
         var forwards = new ai.wanaku.test.client.ForwardsClient(server.getBaseUrl(), null);
         String forwardName = "capture-fwd-" + NAMESPACE;
         if (forwards.exists(forwardName)) {

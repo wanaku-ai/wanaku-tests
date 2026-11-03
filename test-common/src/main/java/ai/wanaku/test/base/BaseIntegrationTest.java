@@ -38,7 +38,7 @@ public abstract class BaseIntegrationTest {
     }
 
     @BeforeEach
-    void setupTestInfrastructure(TestInfo testInfo) throws IOException {
+    void setupTestInfrastructure(TestInfo testInfo) {
         testName = testInfo.getDisplayName();
         String testMethodName = testInfo.getTestMethod().map(m -> m.getName()).orElse("unknown");
         LOG.info("[{}] >>> {}", testMethodName, testName);
@@ -66,7 +66,7 @@ public abstract class BaseIntegrationTest {
     }
 
     @AfterEach
-    void teardownTestInfrastructure() throws IOException {
+    void teardownTestInfrastructure() {
         LOG.debug("Tearing down test: {}", testName);
 
         if (mcpClient != null) {

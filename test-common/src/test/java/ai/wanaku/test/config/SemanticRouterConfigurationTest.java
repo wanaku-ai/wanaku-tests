@@ -22,7 +22,7 @@ class SemanticRouterConfigurationTest {
     }
 
     @Test
-    void explicitPathOverridesDiscoveryEvenIfArtifactIsAbsent() throws Exception {
+    void explicitPathOverridesDiscoveryEvenIfArtifactIsAbsent() {
         withProperties(artifacts.resolve("missing.jar").toString(), () -> assertThat(
                         TestConfiguration.fromSystemProperties().getSemanticRouterJarPath())
                 .isEqualTo(artifacts.resolve("missing.jar")));
