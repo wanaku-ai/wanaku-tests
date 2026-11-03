@@ -4,6 +4,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ai.wanaku.test.WanakuTestConstants;
@@ -36,17 +37,17 @@ public class SkipThresholdExtension implements TestWatcher, BeforeAllCallback {
     }
 
     @Override
-    public void testSuccessful(ExtensionContext context) {
+    public void testSuccessful(@NonNull ExtensionContext context) {
         getTracker(context).recordExecuted();
     }
 
     @Override
-    public void testFailed(ExtensionContext context, Throwable cause) {
+    public void testFailed(@NonNull ExtensionContext context, Throwable cause) {
         getTracker(context).recordExecuted();
     }
 
     @Override
-    public void testAborted(ExtensionContext context, Throwable cause) {
+    public void testAborted(@NonNull ExtensionContext context, Throwable cause) {
         if (isKnownLimitation(context)) {
             getTracker(context).recordExcluded();
         } else {
@@ -55,7 +56,7 @@ public class SkipThresholdExtension implements TestWatcher, BeforeAllCallback {
     }
 
     @Override
-    public void testDisabled(ExtensionContext context, Optional<String> reason) {
+    public void testDisabled(@NonNull ExtensionContext context, @NonNull Optional<String> reason) {
         if (isKnownLimitation(context)) {
             getTracker(context).recordExcluded();
         } else {

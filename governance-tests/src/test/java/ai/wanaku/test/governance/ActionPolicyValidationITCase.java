@@ -8,6 +8,7 @@ import ai.wanaku.test.client.McpTestClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -218,7 +219,7 @@ class ActionPolicyValidationITCase extends GovernanceTestBase {
 
     private record InvalidPolicy(String name, int status, String error, Consumer<ObjectNode> change) {
         @Override
-        public String toString() {
+        public @NonNull String toString() {
             return name;
         }
     }
