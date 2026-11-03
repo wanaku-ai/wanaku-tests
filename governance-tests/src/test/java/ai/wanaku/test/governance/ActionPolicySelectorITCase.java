@@ -2,6 +2,7 @@ package ai.wanaku.test.governance;
 
 import java.util.Map;
 import java.util.stream.Stream;
+import org.jspecify.annotations.NonNull;
 import ai.wanaku.test.client.ActionPolicyClient;
 import ai.wanaku.test.client.McpTestClient;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -247,14 +248,14 @@ class ActionPolicySelectorITCase extends GovernanceTestBase {
 
     record SelectorCase(String description, String selectors, String namespace, boolean denied) {
         @Override
-        public String toString() {
+        public @NonNull String toString() {
             return description;
         }
     }
 
     record MatcherCase(String description, String matcher, String pattern, String candidate, boolean denied) {
         @Override
-        public String toString() {
+        public @NonNull String toString() {
             return description;
         }
     }
