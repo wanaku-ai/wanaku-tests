@@ -40,8 +40,6 @@ wanaku-tests/
   load/                   # k6 load tests
 ```
 
-`http-capability-tests/` is not a module of the build.
-
 ### test-common layout
 
 - `base/` - BaseIntegrationTest, SharedInfrastructure (one server per module), SkipThresholdExtension

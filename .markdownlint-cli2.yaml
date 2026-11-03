@@ -22,7 +22,6 @@ ignores:
   - ".specify/**"
   - "specs/**"
   - "plans/**"
-  - "http-capability-tests/**"
   - "CLAUDE.md"
   - "AGENTS.md"
   - "**/target/**"
