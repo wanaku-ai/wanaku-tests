@@ -13,3 +13,4 @@ Both kinds use the **fixtures** in this repository.
 - [Test plans](test-plans/index.md): the end-to-end test plans for Midnight Saci.
 - [Fixtures and mocks](fixtures/index.md): the servers and components that the tests use.
 - [Load tests](load-tests/index.md): the k6 load tests for the MCP request path.
+- [Reference](reference/index.md): system properties and CI workflows.
