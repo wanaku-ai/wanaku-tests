@@ -1,6 +1,7 @@
 package ai.wanaku.test.model;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -81,9 +82,7 @@ public class HttpToolConfig {
          * Marks properties as required.
          */
         public Builder required(String... names) {
-            for (String name : names) {
-                config.requiredProperties.add(name);
-            }
+            config.requiredProperties.addAll(Arrays.asList(names));
             return this;
         }
 
