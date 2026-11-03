@@ -18,8 +18,6 @@ Each Maven module of this repository tests one area of Wanaku. All modules need 
 `test-common` is the shared framework. It has no tests of its own that need a server. See
 [Test framework](framework.md).
 
-The `http-capability-tests/` directory is not a module of the build. Maven does not build or run it.
-
 ## Test classes
 
 The test classes end in `ITCase`, so the Maven failsafe plugin runs them in the `verify` phase. To find the classes
