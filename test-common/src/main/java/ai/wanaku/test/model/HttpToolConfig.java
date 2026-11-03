@@ -18,7 +18,7 @@ public class HttpToolConfig {
     private String uri;
     private String method = "GET";
     private Map<String, Object> inputSchema;
-    private List<String> requiredProperties = new ArrayList<>();
+    private final List<String> requiredProperties = new ArrayList<>();
 
     private HttpToolConfig() {}
 
