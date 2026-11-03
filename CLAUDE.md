@@ -1,6 +1,11 @@
 # wanaku-tests
 
-Integration test framework for Wanaku (MCP Router). Tests run against real processes (Wanaku server, capability providers, Keycloak) managed via ProcessManager lifecycle. The Wanaku server is a Rust native binary.
+Integration tests and Midnight Saci test plans for Wanaku (governed action proxy for AI agents). The integration
+tests run against real processes (Wanaku Server, capabilities, fixtures) managed via the ProcessManager lifecycle. The
+Wanaku Server is a Rust native binary.
+
+The contributor documentation is in `docs/` (start at `docs/index.md`). It is the source of truth for how to run the
+tests, the system properties, the CI workflows, the test plans and the fixtures. Do not copy its content here.
 
 ## Build & Run
 
@@ -8,94 +13,52 @@ Integration test framework for Wanaku (MCP Router). Tests run against real proce
 # Build without tests
 mvn -DskipTests package
 
-# Run all integration tests (requires JARs in artifacts/)
-mvn verify
+# Build the fixtures that most modules need
+mvn -DskipTests package -f fixtures/test-mcp-server/pom.xml
+mvn -DskipTests package -f fixtures/governance-capture-server/pom.xml
 
-# Run a specific test module
-mvn verify -pl resources-tests
-
-# Download artifacts first
-cd artifacts && ./download.sh
+# Run a module against a local server build
+mvn verify -pl router-tests -am -Dwanaku.test.server.binary=/path/to/wanaku/target/debug/wanaku-server
 ```
 
 Tests use maven-failsafe-plugin (`*ITCase.java` suffix). Spotless (Palantir format) auto-applies at compile.
+See `docs/integration-tests/run-locally.md`, `docs/integration-tests/modules.md` and
+`docs/reference/system-properties.md`.
 
 ## Project Structure
 
-```
+```text
 wanaku-tests/
-  pom.xml                        # Parent POM (Java 21, modules, dependency management)
-  artifacts/                     # Wanaku JARs (not in git, downloaded via download.sh)
-  test-common/                   # Shared infrastructure (base classes, clients, managers, utils)
-  http-capability-tests/         # HTTP tool service integration tests
-  resources-tests/               # File resource provider integration tests
-  camel-integration-capability-tests/  # Camel Integration Capability tests
+  pom.xml                 # Parent POM (Java 21, modules, dependency management)
+  docs/                   # Contributor documentation
+  test-common/            # Shared framework (base classes, clients, managers, stubs, utils)
+  router-tests/  mcp-forwarding-tests/  resources-tests/  governance-tests/
+  camel-integration-capability-tests/  semantic-router-tests/  a2a-tests/
+  fixtures/               # test-mcp-server, governance-capture-server, evaluator-block
+  plans/                  # Midnight Saci test plans (plans/common: shared procedures)
+  saci/                   # Saci worker image
+  load/                   # k6 load tests
 ```
+
+`http-capability-tests/` is not a module of the build.
 
 ### test-common layout
 
-- `base/` - BaseIntegrationTest (layered lifecycle: suite-scoped infra, test-scoped capabilities)
-- `managers/` - ProcessManager hierarchy (WanakuServerManager, HttpCapabilityManager, ResourceProviderManager, CamelCapabilityManager, KeycloakManager)
-- `client/` - RouterClient (REST), McpTestClient (MCP protocol), ServiceClient (services API), CLIExecutor, DataStoreClient
-- `config/` - TestConfiguration (system-properties-driven, builder pattern), TargetConfiguration, OidcCredentials
-- `model/` - HttpToolConfig, ResourceConfig, ToolInfo, ResourceReference
+- `base/` - BaseIntegrationTest, SharedInfrastructure (one server per module), SkipThresholdExtension
+- `managers/` - ProcessManager hierarchy (WanakuServerManager, CamelCapabilityManager, MockMcpServerManager, SemanticRouterManager, OpaServerManager)
+- `client/` - RouterClient (REST), McpTestClient (MCP protocol), CLIExecutor, ForwardsClient, NamespaceClient and other API clients
+- `config/` - TestConfiguration (system-properties-driven, builder pattern)
+- `stub/` - DeterministicLlmStub
 - `utils/` - PortUtils, HealthCheckUtils, LogUtils
 
-## Key System Properties
-
-- `wanaku.test.artifacts.dir` - path to artifacts directory (default: "artifacts")
-- `wanaku.test.server.binary` - wanaku-server binary path
-- `wanaku.test.camel-capability.jar` - CIC JAR path
-- `wanaku.test.cli.path` - CLI path (JAR or binary)
-- `wanaku.test.timeout` - global timeout in seconds (default: 60)
-- `wanaku.test.skip.threshold` - max allowed skip percentage before build fails (default: 30)
-- `wanaku.test.server.mcp-id-filter` - add the `wanaku_mcp_id` filter to the generated server pipeline (default: false). Enable for servers that include wanaku-ai/wanaku#1849; older servers abort on the unknown filter type. The `full-integration-test` workflow sets this automatically by inspecting the built server's `default.yaml`.
-- `wanaku.test.server.forward-headers` - comma-separated allowlist of request headers the server may forward to downstream MCP servers, set as the `WANAKU_FORWARD_HEADERS` env var (default: unset). Header forwarding is default-deny (wanaku-ai/wanaku#873); the `mcp-forwarding-tests` module sets this to `Authorization` so `McpHeaderForwardingITCase` can verify forwarding. Left unset, the server keeps its default-deny posture.
-- `wanaku.test.external.mgmt.port` - connect to an already-running server management API on this port (skip launching server)
-- `wanaku.test.external.mcp.port` - connect to an already-running server MCP endpoint on this port (requires mgmt.port too)
-- `wanaku.test.external.cic.url` - connect to an already-running CIC MCP endpoint at this URL (skip launching CIC)
-
-### Debugging with external instances
-
-To run tests against already-running server and CIC instances (useful for debugging):
-
-```bash
-mvn verify -pl camel-integration-capability-tests \
-  -Dwanaku.test.external.mgmt.port=8080 \
-  -Dwanaku.test.external.mcp.port=8081 \
-  -Dwanaku.test.external.cic.url=http://localhost:9000/mcp
-```
-
-You can also use only the server properties (the framework will still launch CIC) or only the CIC property (the framework will still launch the server).
-
-When debugging the `mcp-forwarding-tests` against an external server, the framework does not launch the server and therefore cannot set `WANAKU_FORWARD_HEADERS`. Start your external server with `WANAKU_FORWARD_HEADERS=Authorization` yourself, otherwise `McpHeaderForwardingITCase` fails with "Missing required argument: authorization".
-
-## Test Lifecycle
-
-1. `@BeforeAll` (suite-scoped, static): Keycloak container + Wanaku server process
-2. `@BeforeEach` (test-scoped): capability providers + MCP client
-3. Test execution
-4. `@AfterEach`: capability teardown + resource cleanup
-5. `@AfterAll`: Server + Keycloak shutdown
-
-Tests gracefully skip when required binaries are missing (check `isServerRunning()`, `isMcpClientAvailable()`, etc.).
-
-### Wanaku Server Mode
-
-When `wanaku.test.server.binary` is set and the binary exists, the framework starts the Wanaku server:
-- WanakuServerManager starts a Rust binary
-- Two ports: management API (dynamic) + MCP server (dynamic, separate port)
-- No Keycloak/OIDC — all clients use null access tokens
-- Capability providers start as standalone gRPC servers; the test harness registers them via `POST /api/v1/services`
-- DataStore, ServiceCatalog, and Authentication tests are skipped (not native in the server)
-- Health check uses `/healthz` instead of `/q/health/ready`
+See `docs/integration-tests/framework.md` for the lifecycle.
 
 ## Code Style & Conventions
 
 - Java 21, formatted by Spotless with Palantir Java Format (auto-applied at compile)
 - Wildcard imports are forbidden; import order enforced by Spotless
 - Test classes: `*ITCase.java` (failsafe convention)
-- Base classes per module: `HttpCapabilityTestBase`, `ResourceTestBase`, `CamelCapabilityTestBase`
+- Base classes per module: `RouterTestBase`, `ResourceTestBase`, `CamelCapabilityTestBase`, `GovernanceTestBase`, ...
 - Assertions: AssertJ; async waits: Awaitility
 - Ports allocated dynamically via `PortUtils.findAvailablePort()`
 
@@ -126,59 +89,15 @@ Prioritize clarity, stability, and ease of maintenance:
 
 ## Verifying Changes on CI
 
-In many cases, you want to make sure that the changes work on CI. 
+Run the `full-integration-test` workflow on your own fork. See `docs/integration-tests/run-in-github-ci.md` for the
+commands and the inputs.
 
-To do so trigger a CI build on YOUR OWN fork using your work branch:
+## Documentation
 
-```shell
-gh workflow run integration-tests.yml --ref <work branch> -f version=<Wanaku version to use> -R <your github ID>/wanaku-tests
-```
-
-## Testing From Source
-
-The `full-integration-test` workflow builds all Wanaku components from source before running the integration tests. This is useful for validating unreleased changes across repositories.
-
-Each component accepts a repository (`owner/repo`) and branch. All default to the `wanaku-ai` org on `main`.
-
-### Build all from a release branch (e.g. 0.2.x)
-
-```shell
-gh workflow run full-integration-test.yml \
-  -f wanaku_branch=0.2.x \
-  -f sdk_branch=0.2.x \
-  -f cic_branch=0.2.x \
-  -f barn_branch=0.2.x \
-  -R <your github ID>/wanaku-tests
-```
-
-### Build only wanaku from a specific branch (others use main)
-
-```shell
-gh workflow run full-integration-test.yml \
-  -f wanaku_branch=0.2.x \
-  -R <your github ID>/wanaku-tests
-```
-
-### Build from a fork
-
-```shell
-gh workflow run full-integration-test.yml \
-  -f wanaku_repo=<your github ID>/wanaku \
-  -f wanaku_branch=my-feature-branch \
-  -R <your github ID>/wanaku-tests
-```
-
-### Available inputs
-
-| Input | Default | Description |
-|-------|---------|-------------|
-| `wanaku_repo` | `wanaku-ai/wanaku` | Wanaku repository (includes Rust server code) |
-| `wanaku_branch` | `main` | Wanaku branch |
-| `sdk_repo` | `wanaku-ai/wanaku-capabilities-java-sdk` | SDK repository |
-| `sdk_branch` | `main` | SDK branch |
-| `cic_repo` | `wanaku-ai/camel-integration-capability` | CIC repository |
-| `cic_branch` | `main` | CIC branch |
-| `barn_repo` | `wanaku-ai/wanaku-barn` | Wanaku Barn repository (Java components, CLI) |
-| `barn_branch` | `main` | Wanaku Barn branch |
+- Write the contributor docs in `docs/`. Each folder has an `index.md` hub that lists every page in it.
+- When you add a page, add it to the hub of its folder.
+- When you move a page out of a directory, leave a short pointer file at the old path.
+- Use ASD-STE100 Simplified Technical English for technical text.
+- Follow `docs/contributing/documentation.md`, and run its checks before you push.
 
 <!-- MANUAL ADDITIONS END -->

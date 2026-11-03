@@ -18,7 +18,9 @@ comment on the pull request. See
 
 The documentation for contributors is in [`docs/`](docs/index.md):
 
+- [Get started](docs/get-started/index.md): an overview, and a first run for your pull request.
 - [Integration tests](docs/integration-tests/index.md): run the tests in CI and locally, and write new tests.
 - [Test plans](docs/test-plans/index.md): run and write the end-to-end test plans.
 - [Fixtures and mocks](docs/fixtures/index.md): the servers and components that the tests use.
 - [Load tests](docs/load-tests/index.md): k6 load tests for the MCP request path.
+- [Reference](docs/reference/index.md): system properties and CI workflows.
