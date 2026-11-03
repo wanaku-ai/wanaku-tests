@@ -130,10 +130,7 @@ class McpHeaderForwardingITCase extends McpForwardingTestBase {
         headerMcpClient
                 .when()
                 .toolsCall("echoAuthHeader", Map.of("marker", "fwd-test"), response -> {
-                    LOG.info(
-                            "echoAuthHeader response: isError={}, content={}",
-                            response.isError(),
-                            response.content());
+                    LOG.info("echoAuthHeader response: isError={}, content={}", response.isError(), response.content());
 
                     assertThat(response.isError()).isFalse();
                     assertThat(response.content()).isNotEmpty();

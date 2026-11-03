@@ -25,7 +25,7 @@ public class CLIExecutor {
 
     private final String cliPath;
     private final Map<String, String> environment = new HashMap<>();
-    private Duration timeout = Duration.ofSeconds(30);
+    private final Duration timeout = Duration.ofSeconds(30);
 
     public CLIExecutor(String cliPath) {
         this.cliPath = cliPath;
