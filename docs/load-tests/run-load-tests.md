@@ -128,3 +128,7 @@ A green circle marks an improvement of more than 5%. A red circle marks a regres
   `wanaku tools list`.
 - **Latency grows at high VU counts:** each iteration opens a new MCP session. At high concurrency, session setup
   and connection queuing dominate the p95.
+
+## Next steps
+
+- [Test MCP server](../fixtures/test-mcp-server.md)

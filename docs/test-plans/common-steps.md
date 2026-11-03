@@ -10,7 +10,7 @@ and says which variables must be set before and after it. The setup of the OpenS
 |-----------|--------------|
 | [start-server.md](../../plans/common/start-server.md) | Builds and starts Wanaku Server locally, with no authentication and no Kubernetes. |
 | [start-barn.md](../../plans/common/start-barn.md) | Builds and starts the Wanaku Barn backend next to Wanaku Server. |
-| [start-test-mcp-server.md](../../plans/common/start-test-mcp-server.md) | Starts an upstream test MCP server and registers it with Wanaku Server as a forward. |
+| [start-test-mcp-server.md](../../plans/common/start-test-mcp-server.md) | Starts the MCP reference server (`@modelcontextprotocol/server-everything`) and registers it with Wanaku Server as a forward. |
 | [start-cic.md](../../plans/common/start-cic.md) | Runs a local Camel Integration Capability and registers it as a forward. |
 | [container-runtime.md](../../plans/common/container-runtime.md) | Finds and configures a local container runtime (Docker or Podman). |
 | [service-template-checks.md](../../plans/common/service-template-checks.md) | Checks that are the same for every built-in service template. |

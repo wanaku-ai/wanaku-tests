@@ -1,6 +1,6 @@
-# Deterministic evaluator block fixture
+# Evaluator block
 
-`block.wat` implements Wanaku's `evaluator-action` component interface. Every
+[`block.wat`](../../fixtures/evaluator-block/block.wat) implements Wanaku's `evaluator-action` component interface. Every
 evaluation calls `wanaku:evaluator/response.block` with the literal message
 `mcp-cli-evaluator-block`. Use it with `engine.type: passthrough`; it needs no
 LLM, network service, SDK build, or credentials.
@@ -22,3 +22,8 @@ base64 < /tmp/mcp-evaluator-block.wasm | tr -d '\n'
 Replace the `base64 -d` heredoc in Test 5.6 of `plans/mcp-cli-commands.md` after
 changing this fixture. The plan creates its WASM file in the owned server's
 temporary directory and removes it after restoring the evaluator configuration.
+
+## Next steps
+
+- [Fixtures and mocks](index.md)
+- [Test plan catalog](../test-plans/catalog.md)
