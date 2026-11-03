@@ -1,4 +1,4 @@
-# Saci test image
+# Saci worker image
 
 [Midnight Saci](https://github.com/orpiske/midnight-saci) runs Markdown test
 plans in a worker container. The [`Containerfile`](../../saci/Containerfile) in this
@@ -134,3 +134,8 @@ wanaku tools list --no-auth
 
 The server stores its registry in `$HOME/.wanaku/server`, in the run workspace.
 Each run starts with an empty registry.
+
+## Next steps
+
+- [Run a test plan](run-a-test-plan.md)
+- [Test MCP server](../fixtures/test-mcp-server.md)

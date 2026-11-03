@@ -1,6 +1,10 @@
-# Writing Test Plans
+# Write a test plan
 
-Test plans are Markdown documents under `plans/` designed for execution by both humans and AI agents.
+Test plans are Markdown documents in [`plans/`](../../plans) for both humans and AI agents. Midnight Saci runs them.
+The Markdown must follow the Saci plan format. Read
+[Write a test plan](https://orpiske.github.io/midnight-saci/write-plans/write-a-test-plan.html) and the
+[test plan format](https://orpiske.github.io/midnight-saci/reference/test-plan-format.html) of Saci first. This page
+adds the rules for Wanaku plans.
 
 ## Structure
 
@@ -85,7 +89,11 @@ The main plan should only contain logic unique to that test scenario. If a step 
 
 ## Use the Wanaku CLI, not raw API clients
 
-Test plans **must** use the Wanaku CLI for all interactions with Wanaku Server, Wanaku Barn and Keycloak. Use either a native binary installed on the system or — preferably — the CLI jar file built from the wanaku-barn codebase (`java -jar apps/wanaku-cli/target/quarkus-app/quarkus-run.jar`). For Keycloak administration (users, credentials, realm), use the standalone `wanaku-keycloak-admin` binary (`java -jar apps/wanaku-keycloak-admin/target/quarkus-app/quarkus-run.jar` in wanaku-barn).
+Test plans **must** use the Wanaku CLI for all interactions with Wanaku Server, Wanaku Barn and Keycloak. The
+[Saci worker image](saci-worker-image.md) has `wanaku` on the `PATH`. Outside the image, use a `wanaku` binary that is
+installed on the system, or the CLI jar file built from wanaku-barn
+(`java -jar apps/wanaku-cli/target/quarkus-app/quarkus-run.jar`). For Keycloak administration (users, credentials,
+realm), use the standalone `wanaku-keycloak-admin` binary. The image also has it on the `PATH`.
 
 Do **not** use `curl`, `wget`, `httpie`, or other HTTP clients to call Wanaku or Keycloak APIs unless the test is specifically oriented to verify HTTP-level behavior (e.g., checking raw HTTP status codes on health endpoints, testing Streamable HTTP headers, or verifying endpoint reachability before the CLI can connect), or the API has no CLI command (for example the enable/disable, audit and metrics routes of Wanaku Server).
 
@@ -156,6 +164,11 @@ Keep these differences from the Java router in mind:
 - Wanaku Server does not export OpenTelemetry traces or Prometheus metrics. It exposes `GET /api/v1/metrics` and the
   audit trail (`GET /api/v1/audit/events`). Barn still supports OpenTelemetry.
 
+## Do not put credentials in a plan
+
+Generate a value when the plan creates the account, and read it from the environment when the plan uses an existing
+system. See [Credentials](credentials.md).
+
 ## Cleanup must be idempotent
 
 Use `--ignore-not-found=true` on all delete commands and `2>/dev/null || true` on wait commands. A cleanup phase that fails on missing resources makes re-runs painful.
@@ -173,3 +186,11 @@ Use `--ignore-not-found=true` on all delete commands and `2>/dev/null || true` o
 - [ ] Negative tests are included
 - [ ] Cleanup is idempotent
 - [ ] Shell constructs are POSIX-compatible
+- [ ] The plan contains no password, token or client secret
+- [ ] The plan is in the [Test plan catalog](catalog.md)
+
+## Next steps
+
+- [Common procedures](common-steps.md)
+- [Credentials](credentials.md)
+- [Test plan catalog](catalog.md)
