@@ -59,7 +59,7 @@ class McpHeaderForwardingITCase extends McpForwardingTestBase {
         waitForToolDiscovery();
     }
 
-    private void waitForToolDiscovery() throws Exception {
+    private void waitForToolDiscovery() {
         Awaitility.await()
                 .atMost(30, TimeUnit.SECONDS)
                 .pollInterval(2, TimeUnit.SECONDS)

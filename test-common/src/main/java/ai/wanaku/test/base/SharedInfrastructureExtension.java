@@ -6,7 +6,7 @@ import org.junit.jupiter.api.extension.ExtensionContext;
 public class SharedInfrastructureExtension implements BeforeAllCallback {
 
     @Override
-    public void beforeAll(ExtensionContext context) throws Exception {
+    public void beforeAll(ExtensionContext context) {
         SharedInfrastructure infra = context.getRoot()
                 .getStore(ExtensionContext.Namespace.GLOBAL)
                 .getOrComputeIfAbsent(
