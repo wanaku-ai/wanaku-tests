@@ -1,6 +1,18 @@
-# Infrastructure Auto-Remediation MCP Server
+# Test MCP server
 
-A mock MCP (Model Context Protocol) server for testing LLM intent-extraction and decision-making. Built with Quarkus and the `quarkus-mcp-server-http` extension.
+The test MCP server in [`fixtures/test-mcp-server`](../../fixtures/test-mcp-server) is a mock "infrastructure
+auto-remediation" MCP (Model Context Protocol) server, built with Quarkus and the `quarkus-mcp-server-http` extension.
+It gives the tests real tools, resources and prompts to discover through a Wanaku forward.
+
+These tests and plans use it:
+
+- The `router-tests`, `mcp-forwarding-tests` and `resources-tests` modules. They start the JAR at
+  `fixtures/test-mcp-server/target/quarkus-app/quarkus-run.jar` with `MockMcpServerManager`.
+- The test plans [`mcp-cli-commands.md`](../../plans/mcp-cli-commands.md) and
+  [`openshift-mcp-deployment.md`](../../plans/openshift-mcp-deployment.md). The
+  [Saci worker image](../test-plans/saci-worker-image.md) contains it as `test-mcp-server`. The common procedure
+  [`start-test-mcp-server.md`](../../plans/common/start-test-mcp-server.md) uses another server, the MCP reference
+  server `@modelcontextprotocol/server-everything`.
 
 ## What it exposes
 
@@ -18,6 +30,14 @@ A mock MCP (Model Context Protocol) server for testing LLM intent-extraction and
 | `restartService` | `serverId`, `service` | Returns a simulated restart confirmation |
 | `scaleDeployment` | `target`, `replicas` | Returns success if replicas <= 5; returns a policy-block error otherwise |
 | `escalateTicket` | `reason`, `urgency` (low/medium/high) | Returns a mock ticket ID |
+| `echoAuthHeader` | `marker` | Returns the `Authorization` header of the request and the marker, for the header forwarding tests |
+
+### Prompts
+
+| Prompt | Description |
+|---|---|
+| `summarizeIncident` | Summarizes a server incident for the ops team |
+| `draftEscalation` | Drafts an escalation message for on-call engineers |
 
 ## Build
 
@@ -108,6 +128,8 @@ oc rollout restart deployment/test-mcp-server
 oc rollout status deployment/test-mcp-server
 ```
 
+## Use it from an MCP client
+
 ### Claude Desktop configuration
 
 Add to your `claude_desktop_config.json`:
@@ -137,3 +159,8 @@ Add to `.claude/settings.json`:
   }
 }
 ```
+
+## Next steps
+
+- [Fixtures and mocks](index.md)
+- [MCP forwarding and resources tests](../integration-tests/modules.md)
