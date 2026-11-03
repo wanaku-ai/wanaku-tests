@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import io.quarkiverse.mcp.server.ToolResponse;
@@ -67,6 +68,16 @@ public abstract class CamelCapabilityTestBase extends BaseIntegrationTest {
         }
 
         Path fixtureDir = TestFixtures.load(fixtureName, FIXTURES_TARGET_DIR);
+        CamelCapabilityManager manager = getManager(serviceName, fixtureDir);
+
+        registerForwardWithRetry(serviceName, manager.getMcpUrl(), namespace);
+        reconnectMcpClient(namespace);
+
+        camelManagers.add(manager);
+        return manager;
+    }
+
+    private @NonNull CamelCapabilityManager getManager(String serviceName, Path fixtureDir) throws IOException {
         Path routesRef = fixtureDir.resolve("routes.camel.yaml");
         Path depsRef = fixtureDir.resolve("dependencies.txt");
 
@@ -78,11 +89,6 @@ public abstract class CamelCapabilityTestBase extends BaseIntegrationTest {
 
         manager.setLogContext("camel-capability", getClass().getSimpleName(), serviceName);
         manager.start(serviceName);
-
-        registerForwardWithRetry(serviceName, manager.getMcpUrl(), namespace);
-        reconnectMcpClient(namespace);
-
-        camelManagers.add(manager);
         return manager;
     }
 
