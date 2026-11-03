@@ -6,7 +6,7 @@ directory extends the Saci worker image with the Wanaku binaries and the test
 MCP server fixture, so a plan can start a Wanaku server, connect it to an MCP
 server and test it with the CLI.
 
-## Contents
+## What the image contains
 
 The image is `quay.io/orpiske/saci-worker` with these additions:
 
