@@ -57,7 +57,8 @@ mvn verify -pl router-tests -am \
   -Dwanaku.test.cli.path=/path/to/wanaku-barn/apps/wanaku-cli/target/quarkus-app/quarkus-run.jar
 ```
 
-The [module list](modules.md) gives the properties of each module. The governance, semantic router and A2A modules
+The [module list](modules.md) gives the properties of each module, and
+[System properties](../reference/system-properties.md) lists all of them. The governance, semantic router and A2A modules
 have their own pages.
 
 ## Missing artifacts
