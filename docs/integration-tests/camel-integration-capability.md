@@ -1,79 +1,43 @@
-# Camel Integration Capability Tests
+# Camel Integration Capability tests
 
-Integration tests for the [Camel Integration Capability](https://github.com/wanaku-ai/camel-integration-capability) (CIC) — a universal Camel-based capability runner that exposes Apache Camel routes as MCP tools and resources.
+The `camel-integration-capability-tests` module tests the
+[Camel Integration Capability](https://github.com/wanaku-ai/camel-integration-capability) (CIC) with the Wanaku
+Server. CIC exposes Apache Camel routes as MCP tools. The tests start CIC with an echo tool route, register it as a
+forward, and use the tool through MCP and the CLI.
+
+## Test classes
+
+| Class | What it tests |
+|-------|---------------|
+| `EchoToolDefaultNamespaceITCase` | The echo tool appears in the `default` namespace, answers a call, and goes away when CIC stops. A call after that fails. |
+| `EchoToolCustomNamespaceITCase` | The same lifecycle in the `integration-test` namespace. |
+| `EchoToolCliITCase` | `wanaku forwards add`, the tool list, the tool details and `wanaku forwards remove` through the CLI. |
 
 ## Prerequisites
 
-Required artifacts are downloaded via:
+| Artifact | Property |
+|----------|----------|
+| `wanaku-server` binary | `wanaku.test.server.binary` |
+| CIC JAR with dependencies (`camel-integration-capability-main-*-jar-with-dependencies.jar`) | `wanaku.test.camel-capability.jar` |
+| `wanaku` CLI (`EchoToolCliITCase` only) | `wanaku.test.cli.path` |
+
+When you do not set `wanaku.test.camel-capability.jar`, the tests use the first JAR in an
+`artifacts/camel-integration-capability*` directory.
+
+## Run the tests
 
 ```bash
-cd ..
-./artifacts/download.sh 0.1.0
+mvn verify -pl camel-integration-capability-tests -am \
+  -Dwanaku.test.server.binary=/path/to/wanaku/target/debug/wanaku-server \
+  -Dwanaku.test.camel-capability.jar=/path/to/camel-integration-capability-main-jar-with-dependencies.jar
 ```
 
-Docker is required for Keycloak (all tests) and PostgreSQL (database tests).
+To use a CIC that already runs, set `wanaku.test.external.cic.url`. See
+[Debug with external instances](debug-with-external-instances.md).
 
-## Run Tests
+The routes come from the [CIC route fixtures](../../camel-integration-capability-tests/src/test/resources/fixtures).
 
-```bash
-# All CIC tests
-mvn clean install -pl camel-integration-capability-tests
+## Next steps
 
-# Specific test class
-mvn clean install -pl camel-integration-capability-tests -Dtest=CamelBasicToolITCase
-
-# Single test
-mvn clean install -pl camel-integration-capability-tests -Dtest=CamelBasicToolITCase#shouldInvokeSimpleToolViaMcp
-```
-
-## Test Classes
-
-| Class | Tests | Fixture | Description |
-|-------|-------|---------|-------------|
-| `CamelBasicToolITCase` | 6 | simple-tool/ | Register, invoke, params, explicit mapping, DataStore |
-| `CamelFileResourceITCase` | 5 | file-resource/ | List, read, non-existent file, resource switching, DataStore |
-| `CamelPostgresToolITCase` | 3 | postgres-tool/ | JDBC query, error handling, DataStore (requires PostgreSQL) |
-| `CamelMultiInstanceITCase` | 2 | cross-fixture | Multiple CIC instances running simultaneously |
-
-**Total: 16 tests**
-
-## Architecture
-
-```text
-┌─────────────┐     ┌──────────┐     ┌─────────────────────────────┐
-│  Keycloak   │────▶│  Router  │◀────│  CIC Instance(s)            │
-│  (Auth)     │     │  (MCP)   │     │  (Camel routes as tools/    │
-└─────────────┘     └──────────┘     │   resources via gRPC)       │
-                         │           └─────────────────────────────┘
-                         │                       │
-                    Test Framework          ┌────┴────┐
-                                           │PostgreSQL│ (for DB tests)
-                                           └─────────┘
-```
-
-**Lifecycle:**
-
-- Suite-scoped: Keycloak, Router, PostgreSQL (shared across tests in a class)
-- Test-scoped: CIC instances (fresh per test, stopped in @AfterEach)
-
-## Fixtures
-
-Each test scenario has a fixture directory under `src/test/resources/fixtures/`:
-
-```text
-fixtures/
-├── simple-tool/            # 3 routes + 3 tools in one CIC instance
-│   ├── routes.camel.yaml   # direct: routes (greeting, weather, explicit mapping)
-│   └── rules.yaml          # MCP tool definitions with parameter mappings
-├── file-resource/           # File-reading route as MCP resource
-│   ├── routes.camel.yaml   # file: route with ${FILE_DIR}/${FILE_NAME} placeholders
-│   └── rules.yaml          # MCP resource definition
-├── postgres-tool/           # PostgreSQL JDBC route
-│   ├── routes.camel.yaml   # JDBC route with ${JDBC_URL}/${DB_USER}/${DB_PASSWORD}
-│   ├── rules.yaml          # MCP tool with parameterized query
-│   ├── dependencies.txt    # org.postgresql:postgresql:42.7.4
-│   └── seed.sql            # CREATE TABLE + test data
-└── multi-instance-tool/     # Tool for multi-instance test
-```
-
-Placeholders (`${VAR}`) are substituted at runtime by `TestFixtures.load()`.
+- [Integration test modules](modules.md)
+- [Run the integration tests on your machine](run-locally.md)
