@@ -17,10 +17,9 @@ deployed catalogs and the deletion of the Barn resources.
 | Wanaku Server   | Deployed by the operator (`spec.server`). The management Route `<router>` serves the Barn plugin proxy. Authentication is disabled.                        |
 | Wanaku Barn     | Deployed by the operator because `spec.barn.enabled` is `true`. Deployment `<router>-barn`, Service `barn-<router>` (port 8080 to container port 8180). |
 
-Barn is not exposed outside the cluster. The CLI reaches it through `oc port-forward` (Step S.5). All
-`wanaku service` commands use `--host "${WANAKU_BARN_URL}"`. Without `--host`, the CLI uses `http://localhost:8080`,
-the default address of Wanaku Server. Wanaku Server serves the Barn API only under its plugin proxy path (Test 3.7),
-not at `/api/v1/service-catalog`, which the CLI calls, so always pass `--host`.
+Barn is not exposed outside the cluster. The `wanaku service` commands reach Barn through the plugin proxy path of
+Wanaku Server (Test 3.7), so they use `--host "${WANAKU_ROUTER_URL}"`. The plan uses `oc port-forward` (Step S.5) only
+to check Barn directly.
 
 A deployed catalog does not create tools by itself. Barn only stores it. Serving a catalog through a Camel
 Integration Capability runtime is covered by [camel-integration-capability.md](camel-integration-capability.md). The
@@ -612,7 +611,7 @@ Run this block in the shared Bash session.
 ```bash run
 start_barn_port_forward || return 1
 
-OUTPUT=$(${WANAKU_CLI} service catalog list --host "${WANAKU_BARN_URL}" --no-auth --plain 2>&1)
+OUTPUT=$(${WANAKU_CLI} service catalog list --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth --plain 2>&1)
 EXIT_CODE=$?
 echo "${OUTPUT}"
 [ "${EXIT_CODE}" -eq 0 ] && echo "PASS: the CLI can list the Barn service catalogs" \
@@ -725,7 +724,7 @@ Run this block in the shared Bash session.
 
 ```bash run
 start_barn_port_forward || return 1
-OUTPUT=$(${WANAKU_CLI} service catalog list --host "${WANAKU_BARN_URL}" --no-auth --plain 2>&1)
+OUTPUT=$(${WANAKU_CLI} service catalog list --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth --plain 2>&1)
 stop_barn_port_forward
 echo "${OUTPUT}"
 echo "${OUTPUT}" | grep -q "^${OP_CATALOG_NAME}" \
@@ -1032,7 +1031,7 @@ done
 
 ```bash run
 OUTPUT=$(${WANAKU_CLI} service validate --plain --path="${CATALOG_DIR}" \
-  --host "${WANAKU_BARN_URL}" --no-auth 2>&1)
+  --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth 2>&1)
 EXIT_CODE=$?
 echo "${OUTPUT}"
 [ "${EXIT_CODE}" -eq 0 ] && echo "${OUTPUT}" | grep -q "Service catalog '${TEST_CATALOG_NAME}' is valid" \
@@ -1053,7 +1052,7 @@ printf 'catalog.name=invalid-catalog\ncatalog.description=Invalid\ncatalog.servi
   > "${BAD_DIR}/index.properties"
 printf -- '- route:\n    id: broken\n    steps: []\n' > "${BAD_DIR}/sys/sys.camel.yaml"
 
-OUTPUT=$(${WANAKU_CLI} service validate --plain --path="${BAD_DIR}" --host "${WANAKU_BARN_URL}" --no-auth 2>&1)
+OUTPUT=$(${WANAKU_CLI} service validate --plain --path="${BAD_DIR}" --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth 2>&1)
 EXIT_CODE=$?
 echo "${OUTPUT}"
 [ "${EXIT_CODE}" -ne 0 ] && echo "${OUTPUT}" | grep -q "required property 'from' not found" \
@@ -1112,7 +1111,7 @@ done
 Run this block in the shared Bash session.
 
 ```bash run
-OUTPUT=$(${WANAKU_CLI} service deploy --plain --path="${CATALOG_DIR}" --host "${WANAKU_BARN_URL}" --no-auth 2>&1)
+OUTPUT=$(${WANAKU_CLI} service deploy --plain --path="${CATALOG_DIR}" --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth 2>&1)
 EXIT_CODE=$?
 echo "${OUTPUT}"
 [ "${EXIT_CODE}" -eq 0 ] && echo "${OUTPUT}" | grep -q "Service catalog '${TEST_CATALOG_NAME}' deployed successfully" \
@@ -1128,7 +1127,7 @@ echo "${OUTPUT}"
 ### Test 6.2: The catalog is in the list
 
 ```bash run
-OUTPUT=$(${WANAKU_CLI} service catalog list --plain --host "${WANAKU_BARN_URL}" --no-auth 2>&1)
+OUTPUT=$(${WANAKU_CLI} service catalog list --plain --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth 2>&1)
 echo "${OUTPUT}" | grep -q "^${TEST_CATALOG_NAME}[[:space:]]" \
   && echo "PASS: ${TEST_CATALOG_NAME} is in the catalog list" || echo "FAIL: ${TEST_CATALOG_NAME} not listed"
 ```
@@ -1145,7 +1144,7 @@ Barn does not delete a removed catalog. It hides it, keeps its versions and rese
 cases.
 
 ```bash run
-OUTPUT=$(${WANAKU_CLI} service catalog remove --plain --host "${WANAKU_BARN_URL}" --no-auth \
+OUTPUT=$(${WANAKU_CLI} service catalog remove --plain --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth \
   --name="${TEST_CATALOG_NAME}" 2>&1)
 EXIT_CODE=$?
 [ "${EXIT_CODE}" -eq 0 ] && echo "${OUTPUT}" | grep -q "Successfully removed service catalog '${TEST_CATALOG_NAME}'" \
@@ -1160,11 +1159,11 @@ EXIT_CODE=$?
 ### Test 6.4: The catalog is not listed, and it is in the removed list
 
 ```bash run
-${WANAKU_CLI} service catalog list --plain --host "${WANAKU_BARN_URL}" --no-auth 2>&1 \
+${WANAKU_CLI} service catalog list --plain --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth 2>&1 \
   | grep -q "^${TEST_CATALOG_NAME}[[:space:]]" \
   && echo "FAIL: removed catalog is still listed" || echo "PASS: removed catalog is not listed"
 
-${WANAKU_CLI} service removed --plain --host "${WANAKU_BARN_URL}" --no-auth 2>&1 \
+${WANAKU_CLI} service removed --plain --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth 2>&1 \
   | grep -q "^${TEST_CATALOG_NAME}[[:space:]]" \
   && echo "PASS: catalog is in the removed list" || echo "FAIL: catalog is not in the removed list"
 ```
@@ -1178,12 +1177,12 @@ ${WANAKU_CLI} service removed --plain --host "${WANAKU_BARN_URL}" --no-auth 2>&1
 ### Test 6.5: Restore the catalog
 
 ```bash run
-OUTPUT=$(${WANAKU_CLI} service restore --plain --host "${WANAKU_BARN_URL}" --no-auth \
+OUTPUT=$(${WANAKU_CLI} service restore --plain --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth \
   --name="${TEST_CATALOG_NAME}" 2>&1)
 EXIT_CODE=$?
 [ "${EXIT_CODE}" -eq 0 ] && echo "${OUTPUT}" | grep -q "Restored '${TEST_CATALOG_NAME}'" \
   && echo "PASS: catalog restored" || echo "FAIL: restore failed (exit code ${EXIT_CODE})"
-${WANAKU_CLI} service catalog list --plain --host "${WANAKU_BARN_URL}" --no-auth 2>&1 \
+${WANAKU_CLI} service catalog list --plain --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth 2>&1 \
   | grep -q "^${TEST_CATALOG_NAME}[[:space:]]" \
   && echo "PASS: restored catalog is listed" || echo "FAIL: restored catalog is not listed"
 ```
@@ -1201,7 +1200,7 @@ ${WANAKU_CLI} service catalog list --plain --host "${WANAKU_BARN_URL}" --no-auth
 ### Test 7.1: List the templates
 
 ```bash run
-OUTPUT=$(${WANAKU_CLI} service template list --plain --host "${WANAKU_BARN_URL}" --no-auth 2>&1)
+OUTPUT=$(${WANAKU_CLI} service template list --plain --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth 2>&1)
 EXIT_CODE=$?
 [ "${EXIT_CODE}" -eq 0 ] && echo "PASS: template list succeeded" || echo "FAIL: template list failed"
 for TEMPLATE in echo-tool kafka-tool sql-tool github-pullrequest-source-tool; do
@@ -1222,14 +1221,14 @@ done
 ### Test 7.2: Instantiate the echo-tool template
 
 ```bash run
-OUTPUT=$(${WANAKU_CLI} service template instantiate --plain --host "${WANAKU_BARN_URL}" --no-auth \
+OUTPUT=$(${WANAKU_CLI} service template instantiate --plain --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth \
   --name echo-tool --property "echo.separator= | " --service-name "${TEST_ECHO_CATALOG}" 2>&1)
 EXIT_CODE=$?
 echo "${OUTPUT}"
 [ "${EXIT_CODE}" -eq 0 ] && echo "${OUTPUT}" | grep -q "Service catalog created successfully from template 'echo-tool'" \
   && echo "PASS: echo-tool instantiated" || echo "FAIL: echo-tool instantiation failed (exit code ${EXIT_CODE})"
 
-${WANAKU_CLI} service catalog list --plain --host "${WANAKU_BARN_URL}" --no-auth 2>&1 \
+${WANAKU_CLI} service catalog list --plain --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth 2>&1 \
   | grep -q "^${TEST_ECHO_CATALOG}[[:space:]]" \
   && echo "PASS: ${TEST_ECHO_CATALOG} is listed" || echo "FAIL: ${TEST_ECHO_CATALOG} not listed"
 ```
@@ -1243,7 +1242,7 @@ ${WANAKU_CLI} service catalog list --plain --host "${WANAKU_BARN_URL}" --no-auth
 ### Test 7.3: The instantiated catalog has the supplied value
 
 ```bash run
-${WANAKU_CLI} service versions download --plain --host "${WANAKU_BARN_URL}" --no-auth \
+${WANAKU_CLI} service versions download --plain --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth \
   --name="${TEST_ECHO_CATALOG}" --version=1 --output="${TEST_WORK_DIR}/echo.zip" > /dev/null 2>&1
 unzip -p "${TEST_WORK_DIR}/echo.zip" echo/service.properties | grep -q '^echo.separator=' \
   && unzip -p "${TEST_WORK_DIR}/echo.zip" echo/service.properties | grep '^echo.separator=' | grep -q '|' \
@@ -1266,7 +1265,7 @@ unzip -p "${TEST_WORK_DIR}/echo.zip" echo/service.properties | grep -q '^echo.se
 > catalog and system names.
 
 ```bash run
-OUTPUT=$(${WANAKU_CLI} service instructions --plain --host "${WANAKU_BARN_URL}" --no-auth \
+OUTPUT=$(${WANAKU_CLI} service instructions --plain --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth \
   --name="${TEST_CATALOG_NAME}" --model=local 2>&1)
 EXIT_CODE=$?
 echo "${OUTPUT}"
@@ -1339,7 +1338,7 @@ for CMD in expose package; do
     && echo "PASS: ${CMD} with a missing path rejected" || echo "FAIL: ${CMD} with a missing path accepted"
 done
 ${WANAKU_CLI} service deploy --plain --path=/tmp/nonexistent-catalog-99999 \
-  --host "${WANAKU_BARN_URL}" --no-auth > /dev/null 2>&1
+  --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth > /dev/null 2>&1
 [ $? -ne 0 ] && echo "PASS: deploy with a missing path rejected" || echo "FAIL: deploy with a missing path accepted"
 ```
 
@@ -1372,7 +1371,7 @@ ${WANAKU_CLI} service deploy --plain --path="${CATALOG_DIR}" --host "http://loca
 ### Test 8.6: Instantiate an unknown template fails
 
 ```bash run
-OUTPUT=$(${WANAKU_CLI} service template instantiate --plain --host "${WANAKU_BARN_URL}" --no-auth \
+OUTPUT=$(${WANAKU_CLI} service template instantiate --plain --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth \
   --name nonexistent-template-99999 --property key=value 2>&1)
 [ $? -ne 0 ] && echo "${OUTPUT}" | grep -q "does not exist" \
   && echo "PASS: unknown template rejected" || echo "FAIL: unknown template accepted"
@@ -1386,12 +1385,12 @@ OUTPUT=$(${WANAKU_CLI} service template instantiate --plain --host "${WANAKU_BAR
 ### Test 8.7: Instructions without --name, without --model, or for an unknown catalog fail
 
 ```bash run
-${WANAKU_CLI} service instructions --plain --host "${WANAKU_BARN_URL}" --no-auth --model=local > /dev/null 2>&1
+${WANAKU_CLI} service instructions --plain --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth --model=local > /dev/null 2>&1
 [ $? -ne 0 ] && echo "PASS: instructions without --name rejected" || echo "FAIL: instructions without --name accepted"
-${WANAKU_CLI} service instructions --plain --host "${WANAKU_BARN_URL}" --no-auth \
+${WANAKU_CLI} service instructions --plain --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth \
   --name="${TEST_CATALOG_NAME}" > /dev/null 2>&1
 [ $? -ne 0 ] && echo "PASS: instructions without --model rejected" || echo "FAIL: instructions without --model accepted"
-${WANAKU_CLI} service instructions --plain --host "${WANAKU_BARN_URL}" --no-auth \
+${WANAKU_CLI} service instructions --plain --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth \
   --name=nonexistent-catalog-99999 --model=local > /dev/null 2>&1
 [ $? -ne 0 ] && echo "PASS: instructions for an unknown catalog rejected" \
   || echo "FAIL: instructions for an unknown catalog accepted"
@@ -1407,12 +1406,12 @@ ${WANAKU_CLI} service instructions --plain --host "${WANAKU_BARN_URL}" --no-auth
 ### Test 8.8: Catalog remove and restore with bad input fail
 
 ```bash run
-${WANAKU_CLI} service catalog remove --plain --host "${WANAKU_BARN_URL}" --no-auth > /dev/null 2>&1
+${WANAKU_CLI} service catalog remove --plain --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth > /dev/null 2>&1
 [ $? -ne 0 ] && echo "PASS: remove without --name rejected" || echo "FAIL: remove without --name accepted"
-${WANAKU_CLI} service catalog remove --plain --host "${WANAKU_BARN_URL}" --no-auth \
+${WANAKU_CLI} service catalog remove --plain --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth \
   --name=nonexistent-catalog-99999 > /dev/null 2>&1
 [ $? -ne 0 ] && echo "PASS: remove of an unknown catalog rejected" || echo "FAIL: remove of an unknown catalog accepted"
-${WANAKU_CLI} service restore --plain --host "${WANAKU_BARN_URL}" --no-auth \
+${WANAKU_CLI} service restore --plain --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth \
   --name=nonexistent-catalog-99999 > /dev/null 2>&1
 [ $? -ne 0 ] && echo "PASS: restore of an unknown catalog rejected" || echo "FAIL: restore of an unknown catalog accepted"
 ```
@@ -1426,13 +1425,14 @@ ${WANAKU_CLI} service restore --plain --host "${WANAKU_BARN_URL}" --no-auth \
 
 ### Test 8.9: Wanaku Server does not serve `/api/v1/service-catalog`
 
-This test confirms that the `service` commands need `--host "${WANAKU_BARN_URL}"`. The CLI calls
-`/api/v1/service-catalog` on its host, and Wanaku Server serves the Barn API only under its plugin proxy path (Test 3.7).
+This test confirms that Wanaku Server serves the Barn API only under its plugin proxy path (Test 3.7). With
+`--direct-access`, the CLI calls `/api/v1/service-catalog` on its host without the plugin path.
 
 ```bash run
-${WANAKU_CLI} service catalog list --plain --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth > /dev/null 2>&1
+${WANAKU_CLI} service catalog list --plain --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --direct-access \
+  --no-auth > /dev/null 2>&1
 [ $? -ne 0 ] && echo "PASS: Wanaku Server does not serve the service catalog API" \
-  || echo "FAIL: service catalog list succeeded against Wanaku Server"
+  || echo "FAIL: service catalog list --direct-access succeeded against Wanaku Server"
 ```
 
 **Expected result:**
@@ -1446,10 +1446,10 @@ Run this block in the shared Bash session.
 
 ```bash run
 for NAME in "${TEST_CATALOG_NAME}" "${TEST_ECHO_CATALOG}"; do
-  ${WANAKU_CLI} service catalog remove --plain --host "${WANAKU_BARN_URL}" --no-auth \
+  ${WANAKU_CLI} service catalog remove --plain --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth \
     --name="${NAME}" > /dev/null 2>&1 || true
 done
-OUTPUT=$(${WANAKU_CLI} service catalog list --plain --host "${WANAKU_BARN_URL}" --no-auth 2>&1)
+OUTPUT=$(${WANAKU_CLI} service catalog list --plain --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth 2>&1)
 echo "${OUTPUT}" | grep -Eq "^(${TEST_CATALOG_NAME}|${TEST_ECHO_CATALOG})[[:space:]]" \
   && echo "FAIL: test catalogs still listed" || echo "PASS: test catalogs removed"
 stop_barn_port_forward
@@ -1544,7 +1544,7 @@ start_barn_port_forward || {
     --request-timeout=5s --pod-running-timeout=5s | grep -E 'ERROR|WARN|Caused by' | tail -n 15
   return 1
 }
-OUTPUT=$(${WANAKU_CLI} service catalog list --host "${WANAKU_BARN_URL}" --no-auth --plain 2>&1)
+OUTPUT=$(${WANAKU_CLI} service catalog list --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth --plain 2>&1)
 stop_barn_port_forward
 echo "${OUTPUT}" | grep -q "^${OP_CATALOG_NAME}" \
   && echo "PASS: ${OP_CATALOG_NAME} is still in Barn after Barn was enabled again" \
@@ -1606,8 +1606,8 @@ oc delete wanakuservicecatalog op-test-service-catalogs -n "${WANAKU_NAMESPACE}"
 wait_for_deletion wanakuservicecatalog op-test-service-catalogs "${WANAKU_NAMESPACE}" 30 || return 1
 
 start_barn_port_forward || return 1
-ACTIVE=$(${WANAKU_CLI} service catalog list --host "${WANAKU_BARN_URL}" --no-auth --plain 2>&1)
-REMOVED=$(${WANAKU_CLI} service removed --host "${WANAKU_BARN_URL}" --no-auth --plain 2>&1)
+ACTIVE=$(${WANAKU_CLI} service catalog list --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth --plain 2>&1)
+REMOVED=$(${WANAKU_CLI} service removed --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth --plain 2>&1)
 stop_barn_port_forward
 
 echo "${ACTIVE}" | grep -q "^${OP_CATALOG_NAME}" \
