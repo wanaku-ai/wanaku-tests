@@ -721,7 +721,7 @@ check "WSR_REGISTRATION_URL" "$(wsr_env WSR_REGISTRATION_URL)" "http://server-${
 check "WSR_BARN_URL" "$(wsr_env WSR_BARN_URL)" "http://barn-${WANAKU_ROUTER_NAME}:8080"
 check "WSR_NAME" "$(wsr_env WSR_NAME)" "${WSR_NAME}"
 check "WSR_NAMESPACE" "$(wsr_env WSR_NAMESPACE)" "${WSR_FORWARD_NAMESPACE}"
-check "WSR_MCP_ADDRESS" "$(wsr_env WSR_MCP_ADDRESS)" "http://${DEPLOY}.${WANAKU_NAMESPACE}.svc:8090/mcp"
+check "WSR_MCP_ADDRESS" "$(wsr_env WSR_MCP_ADDRESS)" 'http://$(POD_IP):8090/mcp'
 check "WSR_BIND" "$(wsr_env WSR_BIND)" "0.0.0.0"
 check "WSR_MCP_PORT" "$(wsr_env WSR_MCP_PORT)" "8090"
 check "WSR_STATUS_PORT" "$(wsr_env WSR_STATUS_PORT)" "8091"
@@ -853,7 +853,7 @@ Run this block in the shared Bash session.
 ```bash run
 OUTPUT=$(${WANAKU_CLI} forwards list --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth --plain 2>&1)
 echo "${OUTPUT}"
-echo "${OUTPUT}" | grep -q "^${WSR_NAME}[[:space:]]*http://${WSR_NAME}-wsr.${WANAKU_NAMESPACE}.svc:8090/mcp" \
+echo "${OUTPUT}" | grep -Eq "^${WSR_NAME}[[:space:]]+http://[0-9.]+:8090/mcp" \
   && echo "PASS: forward ${WSR_NAME} is listed with the runtime address" \
   || { echo "FAIL: forward ${WSR_NAME} not listed"; return 1; }
 

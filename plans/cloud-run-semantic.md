@@ -1153,7 +1153,7 @@ Run this block in the shared Bash session.
 OUTPUT=$(${WANAKU_CLI} forwards list --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth --plain 2>&1)
 echo "${OUTPUT}"
 FAIL=0
-echo "${OUTPUT}" | grep -q "^${WSR_TOOL}[[:space:]]*http://${WSR_NAME}-wsr.${WANAKU_NAMESPACE}.svc:8090/mcp" \
+echo "${OUTPUT}" | grep -Eq "^${WSR_TOOL}[[:space:]]+http://[0-9.]+:8090/mcp" \
   && echo "PASS: forward ${WSR_TOOL} is listed with the runtime address" \
   || { echo "FAIL: forward ${WSR_TOOL} is not listed with the runtime address"; FAIL=1; }
 
