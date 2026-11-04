@@ -1001,7 +1001,8 @@ The rollout keeps the pod of Phase 6, which has no expert settings and restarts,
 (`maxUnavailable: 0`). Until then, `Ready` can report the `CrashLoopBackOff` of that old pod.
 
 Run these blocks in the shared Bash session. The first block waits up to 100 seconds and prints the state. The second
-block continues the wait. When the resource is not ready, it prints the log and the events of the newest pod.
+block continues the wait. When the resource is not ready, it prints the log, the log of the previous run, the last
+termination message (the WSR startup failure) and the events of the newest pod.
 
 ```bash run
 if wait_cr_condition wanakusemanticrouter "${WSR_NAME}" Ready True > /dev/null; then
@@ -1018,6 +1019,10 @@ wait_cr_condition wanakusemanticrouter "${WSR_NAME}" Ready True || {
   NEW_POD=$(oc get pods -l "app=${WSR_NAME}-wsr" -n "${WANAKU_NAMESPACE}" --sort-by=.metadata.creationTimestamp \
     -o jsonpath='{.items[-1:].metadata.name}')
   oc logs "${NEW_POD}" -n "${WANAKU_NAMESPACE}" --tail=40
+  # A crash-looping container restarts: show the log and the startup failure of the last terminated run
+  oc logs "${NEW_POD}" -n "${WANAKU_NAMESPACE}" --previous --tail=40 2>/dev/null
+  echo "last termination message: $(oc get pod "${NEW_POD}" -n "${WANAKU_NAMESPACE}" \
+    -o jsonpath='{.status.containerStatuses[0].lastState.terminated.message}')"
   oc get events -n "${WANAKU_NAMESPACE}" --field-selector "involvedObject.name=${NEW_POD}" | tail -10
   return 1
 }
