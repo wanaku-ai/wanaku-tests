@@ -26,7 +26,7 @@ The removed `WanakuCamelRoute` and `WanakuCapability` CRDs are not tested. `Wana
 | Component | How the plan uses it |
 |-----------|----------------------|
 | Wanaku operator | Reconciles `WanakuRouter`, `WanakuServiceCatalog` and `WanakuIntegration` |
-| Wanaku Server | Deployment `<router>-server`. Management API through the `<router>` Route, MCP through the `<router>-mcp` Route. The runtimes register with `http://server-<router>:8080`. |
+| Wanaku Server | Deployment `<router>-server`. Management API through the `<router>-management` Ingress, MCP through the `<router>-mcp` Ingress. The runtimes register with `http://server-<router>:8080`. |
 | Wanaku Barn | Required: `spec.barn.enabled: true`. Stores the service catalog. The runtimes use `http://barn-<router>:8080` (`REGISTRATION_URL`). |
 | CIC runtime | Image `quay.io/wanaku/camel-integration-capability`. MCP and health endpoints on port 9090. |
 
@@ -264,7 +264,7 @@ export CIC_CATALOG_NAMESPACE="${CIC_CATALOG_NAMESPACE:-cic-catalog-ns}"
 export CIC_GOVERNED_NAMESPACES="${CIC_GOVERNED_NAMESPACES:-default,${CIC_CATALOG_NAMESPACE}}"
 # Wanaku CLI: an installed binary, or "java -jar ${WANAKU_REPO_ROOT}/apps/wanaku-cli/target/quarkus-app/quarkus-run.jar"
 export WANAKU_CLI="${WANAKU_CLI:-wanaku}"
-# The operator creates edge-terminated Routes. Set these to empty values when the ingress certificate is trusted.
+# OpenShift creates edge-terminated Routes from the operator Ingresses. Set these to empty values when the ingress certificate is trusted.
 export WANAKU_CLI_TLS_OPTS="${WANAKU_CLI_TLS_OPTS---insecure}"
 export CURL_TLS_OPTS="${CURL_TLS_OPTS--k}"
 # Isolate credentials per test run to avoid contention
@@ -376,6 +376,12 @@ kind: WanakuRouter
 metadata:
   name: ${WANAKU_ROUTER_NAME}
 spec:
+  exposure:
+    listeners:
+      management:
+        host: ${WANAKU_ROUTER_NAME}-${WANAKU_NAMESPACE}.${OPENSHIFT_APPS_DOMAIN}
+      mcp:
+        host: ${WANAKU_ROUTER_NAME}-mcp-${WANAKU_NAMESPACE}.${OPENSHIFT_APPS_DOMAIN}
   imagePullPolicy: Always
   server:
     image: ${WANAKU_SERVER_IMAGE}
@@ -404,8 +410,8 @@ Run this block in the shared Bash session so that the exported `WANAKU_ROUTER_UR
 variables are available to all later steps.
 
 ```bash run
-export WANAKU_ROUTER_URL="https://$(oc get route "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.host}')"
-export WANAKU_ROUTER_MCP_URL="https://$(oc get route "${WANAKU_ROUTER_NAME}-mcp" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.host}')"
+export WANAKU_ROUTER_URL="https://$(oc get ingress "${WANAKU_ROUTER_NAME}-management" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.rules[0].host}')"
+export WANAKU_ROUTER_MCP_URL="https://$(oc get ingress "${WANAKU_ROUTER_NAME}-mcp" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.rules[0].host}')"
 echo "management: ${WANAKU_ROUTER_URL}"
 echo "mcp:        ${WANAKU_ROUTER_MCP_URL}"
 

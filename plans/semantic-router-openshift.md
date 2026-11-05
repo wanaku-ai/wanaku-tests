@@ -20,7 +20,7 @@ not test the publication flow.
 | Component | How the plan uses it |
 |-----------|----------------------|
 | Wanaku operator | Reconciles `WanakuRouter` and `WanakuSemanticRouter` |
-| Wanaku Server | Deployment `<router>-server`. Management API through the `<router>` Route, MCP through the `<router>-mcp` Route. The runtime registers with `http://server-<router>:8080` (`WSR_REGISTRATION_URL`). |
+| Wanaku Server | Deployment `<router>-server`. Management API through the `<router>-management` Ingress, MCP through the `<router>-mcp` Ingress. The runtime registers with `http://server-<router>:8080` (`WSR_REGISTRATION_URL`). |
 | Wanaku Barn | Enabled (`spec.barn.enabled: true`). The `configMapRef` source does not read from Barn. Barn is enabled because the operator creates the `<router>-server-config` ConfigMap (`wanaku.yaml`) only when Barn is enabled, and Phase 7 changes that file. The operator then also sets `WSR_BARN_URL`. |
 | WSR runtime | Image `quay.io/wanaku/wanaku-semantic-router`. Deployment and Service `<name>-wsr`. MCP on port 8090, status and health endpoints on port 8091. |
 | Expert provider | A TypeSafe AI compatible endpoint. Phases 7 and 8 call it. They are skipped when `TYPESAFE_API_KEY` is not set. |
@@ -204,7 +204,7 @@ export WSR_TOOL="route_support"
 export WSR_FORWARD_NAMESPACE="default"
 # Wanaku CLI: an installed binary, or "java -jar <wanaku-barn>/apps/wanaku-cli/target/quarkus-app/quarkus-run.jar"
 export WANAKU_CLI="${WANAKU_CLI:-wanaku}"
-# The operator creates edge-terminated Routes. Set these to empty values when the ingress certificate is trusted.
+# OpenShift creates edge-terminated Routes from the operator Ingresses. Set these to empty values when the ingress certificate is trusted.
 export WANAKU_CLI_TLS_OPTS="${WANAKU_CLI_TLS_OPTS---insecure}"
 export CURL_TLS_OPTS="${CURL_TLS_OPTS--k}"
 # Phases 7 and 8 call the expert provider only when a credential is set
@@ -352,6 +352,12 @@ kind: WanakuRouter
 metadata:
   name: ${WANAKU_ROUTER_NAME}
 spec:
+  exposure:
+    listeners:
+      management:
+        host: ${WANAKU_ROUTER_NAME}-${WANAKU_NAMESPACE}.${OPENSHIFT_APPS_DOMAIN}
+      mcp:
+        host: ${WANAKU_ROUTER_NAME}-mcp-${WANAKU_NAMESPACE}.${OPENSHIFT_APPS_DOMAIN}
   imagePullPolicy: Always
   server:
     image: ${WANAKU_SERVER_IMAGE}
@@ -392,8 +398,8 @@ INGESTION=$(oc get deployment "${WANAKU_ROUTER_NAME}-server" -n "${WANAKU_NAMESP
 ### Test 3.2: Read the Route URLs and verify the Server is reachable
 
 ```bash run
-export WANAKU_ROUTER_URL="https://$(oc get route "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.host}')"
-export WANAKU_ROUTER_MCP_URL="https://$(oc get route "${WANAKU_ROUTER_NAME}-mcp" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.host}')"
+export WANAKU_ROUTER_URL="https://$(oc get ingress "${WANAKU_ROUTER_NAME}-management" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.rules[0].host}')"
+export WANAKU_ROUTER_MCP_URL="https://$(oc get ingress "${WANAKU_ROUTER_NAME}-mcp" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.rules[0].host}')"
 echo "management: ${WANAKU_ROUTER_URL}"
 echo "mcp:        ${WANAKU_ROUTER_MCP_URL}"
 

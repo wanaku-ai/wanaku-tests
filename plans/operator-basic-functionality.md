@@ -12,7 +12,7 @@ and `WanakuServiceCatalog` are covered by [operator-service-catalog.md](operator
 | Component       | How the plan uses it                                                                                                                                                                                 |
 |-----------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Wanaku operator | Installed with Helm. Reconciles `WanakuRouter`.                                                                                                                                                      |
-| Wanaku Server   | Deployed by the operator (`spec.server`). Deployment `<router>-server`, Service `server-<router>` (ports 8080 management, 8081 MCP, 8083 inference, 8084 A2A), Routes `<router>` and `<router>-mcp`. |
+| Wanaku Server   | Deployed by the operator (`spec.server`). Deployment `<router>-server`, Service `server-<router>` (ports 8080 management, 8081 MCP, 8083 inference, 8084 A2A), Ingresses `<router>-management` and `<router>-mcp`. |
 | oauth2-proxy    | Deployed by the operator in Phase 6 (`spec.auth.enabled: true`). Deployment `<router>-oauth2-proxy`, Service `oauth2-proxy-<router>` (ports 4180 MCP, 4181 management).                              |
 | Keycloak        | OIDC provider for Phase 6 (see [common/keycloak-setup.md](common/keycloak-setup.md)).                                                                                                                |
 
@@ -256,7 +256,7 @@ export WANAKU_SERVER_IMAGE="${WANAKU_SERVER_IMAGE:-quay.io/wanaku/wanaku-server:
 export WANAKU_ROUTER_NAME="${WANAKU_ROUTER_NAME:-wanaku-test-router}"
 # Wanaku CLI: an installed binary, or "java -jar ${WANAKU_REPO_ROOT}/apps/wanaku-cli/target/quarkus-app/quarkus-run.jar"
 export WANAKU_CLI="${WANAKU_CLI:-wanaku}"
-# The operator creates edge-terminated Routes. Set these to empty values when the ingress certificate is trusted.
+# OpenShift creates edge-terminated Routes from the operator Ingresses. Set these to empty values when the ingress certificate is trusted.
 export WANAKU_CLI_TLS_OPTS="${WANAKU_CLI_TLS_OPTS---insecure}"
 export CURL_TLS_OPTS="${CURL_TLS_OPTS--k}"
 # Isolate credentials per test run to avoid contention (see #1697)
@@ -383,6 +383,12 @@ kind: WanakuRouter
 metadata:
   name: ${WANAKU_ROUTER_NAME}
 spec:
+  exposure:
+    listeners:
+      management:
+        host: ${WANAKU_ROUTER_NAME}-${WANAKU_NAMESPACE}.${OPENSHIFT_APPS_DOMAIN}
+      mcp:
+        host: ${WANAKU_ROUTER_NAME}-mcp-${WANAKU_NAMESPACE}.${OPENSHIFT_APPS_DOMAIN}
   imagePullPolicy: Always
   server:
     image: ${WANAKU_SERVER_IMAGE}
@@ -550,50 +556,49 @@ done
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
-### Test 3.8: Verify the OpenShift Routes
+### Test 3.8: Verify the Ingresses and the generated Routes
 
-**Description:** Without `spec.exposure`, the operator creates two Routes on OpenShift. The `<router>` Route sends
-`/` to the management port 8080. The `<router>-mcp` Route sends `/` to the MCP port 8081. Both use edge TLS
-termination with a redirect from HTTP.
+**Description:** With `spec.exposure.listeners`, the operator creates one Ingress for each listener. The
+`<router>-management` Ingress sends `/` to the management port 8080. The `<router>-mcp` Ingress sends `/` to the MCP
+port 8081. The operator does not create Routes. OpenShift creates an edge-terminated Route from each Ingress.
 
 Run this block in the shared Bash session.
 
 ```bash run
 FAIL=0
-for ENTRY in "${WANAKU_ROUTER_NAME}:8080" "${WANAKU_ROUTER_NAME}-mcp:8081"; do
-  ROUTE=$(echo "${ENTRY}" | cut -d: -f1)
+for ENTRY in "management:8080:${WANAKU_ROUTER_NAME}" "mcp:8081:${WANAKU_ROUTER_NAME}-mcp"; do
+  LISTENER=$(echo "${ENTRY}" | cut -d: -f1)
   PORT=$(echo "${ENTRY}" | cut -d: -f2)
-  route_jsonpath() { oc get route "${ROUTE}" -n "${WANAKU_NAMESPACE}" -o jsonpath="$1"; }
-  [ -n "$(route_jsonpath '{.spec.host}')" ] && echo "PASS: Route ${ROUTE} has a host" \
-    || { echo "FAIL: Route ${ROUTE} has no host"; FAIL=1; }
-  check "Route ${ROUTE} service" "$(route_jsonpath '{.spec.to.name}')" "server-${WANAKU_ROUTER_NAME}"
-  check "Route ${ROUTE} targetPort" "$(route_jsonpath '{.spec.port.targetPort}')" "${PORT}"
-  check "Route ${ROUTE} path" "$(route_jsonpath '{.spec.path}')" "/"
-  check "Route ${ROUTE} TLS" "$(route_jsonpath '{.spec.tls.termination}')" "edge"
-  check "Route ${ROUTE} admitted" "$(route_jsonpath '{.status.ingress[0].conditions[?(@.type=="Admitted")].status}')" "True"
+  HOST_PREFIX=$(echo "${ENTRY}" | cut -d: -f3)
+  INGRESS="${WANAKU_ROUTER_NAME}-${LISTENER}"
+  ingress_jsonpath() { oc get ingress "${INGRESS}" -n "${WANAKU_NAMESPACE}" -o jsonpath="$1"; }
+  HOST=$(ingress_jsonpath '{.spec.rules[0].host}')
+  check "Ingress ${INGRESS} host" "${HOST}" "${HOST_PREFIX}-${WANAKU_NAMESPACE}.${OPENSHIFT_APPS_DOMAIN}"
+  check "Ingress ${INGRESS} service" "$(ingress_jsonpath '{.spec.rules[0].http.paths[0].backend.service.name}')" "server-${WANAKU_ROUTER_NAME}"
+  check "Ingress ${INGRESS} port" "$(ingress_jsonpath '{.spec.rules[0].http.paths[0].backend.service.port.number}')" "${PORT}"
+  check "Ingress ${INGRESS} path" "$(ingress_jsonpath '{.spec.rules[0].http.paths[0].path}')" "/"
+  route_jsonpath() { oc get routes -n "${WANAKU_NAMESPACE}" -o jsonpath="{.items[?(@.spec.host==\"${HOST}\")]$1}"; }
+  check "Route for ${INGRESS} TLS" "$(route_jsonpath '.spec.tls.termination')" "edge"
+  check "Route for ${INGRESS} admitted" "$(route_jsonpath '.status.ingress[0].conditions[?(@.type=="Admitted")].status')" "True"
 done
+oc get routes "${WANAKU_ROUTER_NAME}" "${WANAKU_ROUTER_NAME}-mcp" -n "${WANAKU_NAMESPACE}" > /dev/null 2>&1 \
+  && { echo "FAIL: the operator created the Routes ${WANAKU_ROUTER_NAME} and ${WANAKU_ROUTER_NAME}-mcp"; FAIL=1; } \
+  || echo "PASS: the operator created no Routes"
 [ "${FAIL}" -eq 0 ] || return 1
 
-export WANAKU_ROUTER_URL="https://$(oc get route "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.host}')"
-export WANAKU_ROUTER_MCP_URL="https://$(oc get route "${WANAKU_ROUTER_NAME}-mcp" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.host}')"
+export WANAKU_ROUTER_URL="https://$(oc get ingress "${WANAKU_ROUTER_NAME}-management" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.rules[0].host}')"
+export WANAKU_ROUTER_MCP_URL="https://$(oc get ingress "${WANAKU_ROUTER_NAME}-mcp" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.rules[0].host}')"
 echo "management: ${WANAKU_ROUTER_URL}"
 echo "mcp:        ${WANAKU_ROUTER_MCP_URL}"
 ```
 
 **Expected result:**
 
-- The output includes `PASS: Route <WANAKU_ROUTER_NAME> has a host`.
-- The output includes `PASS: Route <WANAKU_ROUTER_NAME> service =`.
-- The output includes `PASS: Route <WANAKU_ROUTER_NAME> targetPort =`.
-- The output includes `PASS: Route <WANAKU_ROUTER_NAME> path =`.
-- The output includes `PASS: Route <WANAKU_ROUTER_NAME> TLS =`.
-- The output includes `PASS: Route <WANAKU_ROUTER_NAME> admitted =`.
-- The output includes `PASS: Route <WANAKU_ROUTER_NAME>-mcp has a host`.
-- The output includes `PASS: Route <WANAKU_ROUTER_NAME>-mcp service =`.
-- The output includes `PASS: Route <WANAKU_ROUTER_NAME>-mcp targetPort =`.
-- The output includes `PASS: Route <WANAKU_ROUTER_NAME>-mcp path =`.
-- The output includes `PASS: Route <WANAKU_ROUTER_NAME>-mcp TLS =`.
-- The output includes `PASS: Route <WANAKU_ROUTER_NAME>-mcp admitted =`.
+- For each Ingress `<WANAKU_ROUTER_NAME>-management` and `<WANAKU_ROUTER_NAME>-mcp`, the output includes
+  `PASS: Ingress <name> host =`, `PASS: Ingress <name> service =`, `PASS: Ingress <name> port =` and
+  `PASS: Ingress <name> path =`.
+- For each Ingress, the output includes `PASS: Route for <name> TLS =` and `PASS: Route for <name> admitted =`.
+- The output includes `PASS: the operator created no Routes`.
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
@@ -934,7 +939,7 @@ wait_cr_condition wanakurouter "${WANAKU_ROUTER_NAME}" AuthConfigured False Inva
 ### Test 6.4: Enable authentication with a valid Secret
 
 **Description:** With the Secret from [common/keycloak-setup.md](common/keycloak-setup.md) step 9, the operator
-deploys the two oauth2-proxy containers and points both Routes at the proxy Service.
+deploys the two oauth2-proxy containers and points both Ingresses at the proxy Service.
 
 Run this block in the shared Bash session.
 
@@ -966,10 +971,10 @@ check "proxy issuer" "$(oc get deployment "${PROXY}" -n "${WANAKU_NAMESPACE}" \
 PORTS=$(oc get service "oauth2-proxy-${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.ports[*].port}')
 check "proxy Service ports" "${PORTS}" "4180 4181"
 
-check "management Route service" "$(oc get route "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.to.name}')" "oauth2-proxy-${WANAKU_ROUTER_NAME}"
-check "management Route port" "$(oc get route "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.port.targetPort}')" "4181"
-check "MCP Route service" "$(oc get route "${WANAKU_ROUTER_NAME}-mcp" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.to.name}')" "oauth2-proxy-${WANAKU_ROUTER_NAME}"
-check "MCP Route port" "$(oc get route "${WANAKU_ROUTER_NAME}-mcp" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.port.targetPort}')" "4180"
+check "management Ingress service" "$(oc get ingress "${WANAKU_ROUTER_NAME}-management" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.rules[0].http.paths[0].backend.service.name}')" "oauth2-proxy-${WANAKU_ROUTER_NAME}"
+check "management Ingress port" "$(oc get ingress "${WANAKU_ROUTER_NAME}-management" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.rules[0].http.paths[0].backend.service.port.number}')" "4181"
+check "MCP Ingress service" "$(oc get ingress "${WANAKU_ROUTER_NAME}-mcp" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.rules[0].http.paths[0].backend.service.name}')" "oauth2-proxy-${WANAKU_ROUTER_NAME}"
+check "MCP Ingress port" "$(oc get ingress "${WANAKU_ROUTER_NAME}-mcp" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.rules[0].http.paths[0].backend.service.port.number}')" "4180"
 
 # The Server advertises the issuer to MCP clients
 SERVER_ENV='{.spec.template.spec.containers[0].env[?(@.name=="%s")].value}'
@@ -983,10 +988,10 @@ check "WANAKU_AUTH_UPSTREAM_ISSUER" "$(oc get deployment "${WANAKU_ROUTER_NAME}-
 - The output includes `PASS: proxy client id =`.
 - The output includes `PASS: proxy issuer =`.
 - The output includes `PASS: proxy Service ports =`.
-- The output includes `PASS: management Route service =`.
-- The output includes `PASS: management Route port =`.
-- The output includes `PASS: MCP Route service =`.
-- The output includes `PASS: MCP Route port =`.
+- The output includes `PASS: management Ingress service =`.
+- The output includes `PASS: management Ingress port =`.
+- The output includes `PASS: MCP Ingress service =`.
+- The output includes `PASS: MCP Ingress port =`.
 - The output includes `PASS: WANAKU_AUTH_ISSUER =`.
 - The output includes `PASS: WANAKU_AUTH_UPSTREAM_ISSUER =`.
 - The output includes `PASS: wanakurouter/<WANAKU_ROUTER_NAME> condition AuthConfigured=True (reason Configured)`.
@@ -1159,7 +1164,7 @@ oc rollout status "deployment/${WANAKU_ROUTER_NAME}-server" --timeout=100s -n "$
 
 ### Test 7.2: Negative tests - invalid spec values
 
-**Description:** An invalid `spec.server.variant` or `spec.exposure.type` sets `Reconciled=False` with the reason
+**Description:** An invalid `spec.server.variant` or an exposed listener without a host sets `Reconciled=False` with the reason
 `ValidationError`. The operator does not change the workloads.
 
 Run this block in the shared Bash session.
@@ -1172,9 +1177,14 @@ router_jsonpath '{.status.conditions[?(@.type=="Reconciled")].message}' | grep -
 oc patch wanakurouter "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" --type=json -p '[{"op":"remove","path":"/spec/server/variant"}]'
 wait_cr_condition wanakurouter "${WANAKU_ROUTER_NAME}" Ready True || return 1
 
-oc patch wanakurouter "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" --type=merge -p '{"spec":{"exposure":{"type":"Bogus"}}}'
+oc patch wanakurouter "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" --type=merge \
+  -p '{"spec":{"exposure":{"listeners":{"inference":{"enabled":true}}}}}'
 wait_cr_condition wanakurouter "${WANAKU_ROUTER_NAME}" Reconciled False ValidationError || return 1
-oc patch wanakurouter "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" --type=json -p '[{"op":"remove","path":"/spec/exposure"}]'
+router_jsonpath '{.status.conditions[?(@.type=="Reconciled")].message}' \
+  | grep -q "spec.exposure.listeners.inference.host is required" \
+  && echo "PASS: listener host validation message" || echo "FAIL: unexpected validation message"
+oc patch wanakurouter "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" --type=json \
+  -p '[{"op":"remove","path":"/spec/exposure/listeners/inference"}]'
 wait_cr_condition wanakurouter "${WANAKU_ROUTER_NAME}" Ready True || return 1
 ```
 
@@ -1183,8 +1193,9 @@ wait_cr_condition wanakurouter "${WANAKU_ROUTER_NAME}" Ready True || return 1
 - The output includes `PASS: variant validation message`.
 - For the invalid `spec.server.variant`, the output includes `PASS: wanakurouter/<WANAKU_ROUTER_NAME> condition Reconciled=False (reason ValidationError)`.
 - After restoring `spec.server.variant`, the output includes `PASS: wanakurouter/<WANAKU_ROUTER_NAME> condition Ready=True`.
-- For the invalid `spec.exposure.type`, the output includes `PASS: wanakurouter/<WANAKU_ROUTER_NAME> condition Reconciled=False (reason ValidationError)`.
-- After restoring `spec.exposure`, the output includes `PASS: wanakurouter/<WANAKU_ROUTER_NAME> condition Ready=True`.
+- For the inference listener without a host, the output includes `PASS: wanakurouter/<WANAKU_ROUTER_NAME> condition Reconciled=False (reason ValidationError)`.
+- The output includes `PASS: listener host validation message`.
+- After removing the inference listener, the output includes `PASS: wanakurouter/<WANAKU_ROUTER_NAME> condition Ready=True`.
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
@@ -1406,7 +1417,7 @@ RESTARTS=$(oc get pod "${OPERATOR_POD}" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.
 ### Test 9.1: Delete the router and verify the managed resources are removed
 
 Run these blocks in the shared Bash session. The first block deletes the router and waits for the workloads, Services
-and Routes. The second waits for the PVC, which Kubernetes removes after its pod has stopped.
+and Ingresses. The second waits for the PVC, which Kubernetes removes after its pod has stopped.
 
 ```bash run
 oc delete wanakurouter "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}"
@@ -1416,8 +1427,8 @@ wait_for_deletion deployment "${WANAKU_ROUTER_NAME}-server" "${WANAKU_NAMESPACE}
 wait_for_deletion deployment "${WANAKU_ROUTER_NAME}-oauth2-proxy" "${WANAKU_NAMESPACE}" 90 || FAIL=1
 wait_for_deletion service "server-${WANAKU_ROUTER_NAME}" "${WANAKU_NAMESPACE}" 60 || FAIL=1
 wait_for_deletion service "oauth2-proxy-${WANAKU_ROUTER_NAME}" "${WANAKU_NAMESPACE}" 60 || FAIL=1
-wait_for_deletion route "${WANAKU_ROUTER_NAME}" "${WANAKU_NAMESPACE}" 60 || FAIL=1
-wait_for_deletion route "${WANAKU_ROUTER_NAME}-mcp" "${WANAKU_NAMESPACE}" 60 || FAIL=1
+wait_for_deletion ingress "${WANAKU_ROUTER_NAME}-management" "${WANAKU_NAMESPACE}" 60 || FAIL=1
+wait_for_deletion ingress "${WANAKU_ROUTER_NAME}-mcp" "${WANAKU_NAMESPACE}" 60 || FAIL=1
 [ "${FAIL}" -eq 0 ] || return 1
 ```
 
@@ -1433,8 +1444,8 @@ wait_for_deletion pvc "${WANAKU_ROUTER_NAME}-server-data" "${WANAKU_NAMESPACE}" 
 - The output includes `PASS: deployment/<WANAKU_ROUTER_NAME>-oauth2-proxy deleted`.
 - The output includes `PASS: service/server-<WANAKU_ROUTER_NAME> deleted`.
 - The output includes `PASS: service/oauth2-proxy-<WANAKU_ROUTER_NAME> deleted`.
-- The output includes `PASS: route/<WANAKU_ROUTER_NAME> deleted`.
-- The output includes `PASS: route/<WANAKU_ROUTER_NAME>-mcp deleted`.
+- The output includes `PASS: ingress/<WANAKU_ROUTER_NAME>-management deleted`.
+- The output includes `PASS: ingress/<WANAKU_ROUTER_NAME>-mcp deleted`.
 - The output includes `PASS: pvc/<WANAKU_ROUTER_NAME>-server-data deleted`.
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
@@ -1483,7 +1494,7 @@ echo "PASS: downloaded source assets removed or no download was owned"
 | 2     | —       | Operator installation, CRDs, RBAC and health                           | Critical |
 | 3     | 3.1-3.2 | WanakuRouter Ready and conditions                                      | Critical |
 | 3     | 3.3-3.6 | Server Deployment, Service and PVC                                     | Critical |
-| 3     | 3.8-3.9 | Routes and status endpoints                                            | Critical |
+| 3     | 3.8-3.9 | Ingresses, generated Routes and status endpoints                       | Critical |
 | 3     | 3.10    | Owner references and managed-by labels                                 | High     |
 | 4     | 4.1-4.2 | Health endpoints and management API through the Route                  | Critical |
 | 4     | 4.3     | Namespace creation and DNS-label validation                            | High     |

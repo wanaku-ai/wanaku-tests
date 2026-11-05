@@ -14,7 +14,7 @@ The operator deploys Wanaku Server from a `WanakuRouter` resource (`spec.server`
 
 - the `<router>-server` Deployment and the `server-<router>` Service (ports 8080 management, 8081 MCP, 8083, 8084)
 - the `<router>-oauth2-proxy` Deployment (4180 MCP proxy, 4181 management proxy)
-- the Route `<router>` for the management API and the Route `<router>-mcp` for the MCP listener (edge TLS)
+- the Ingress `<router>-management` for the management API and the Ingress `<router>-mcp` for the MCP listener. OpenShift creates an edge-terminated Route from each Ingress.
 
 The plan deploys the MCP test fixture in the cluster and registers it as a forward with the CLI. This replaces
 the removed `WanakuCapability` resource. The operator also offers `WanakuIntegration` for the Camel Integration
@@ -302,6 +302,12 @@ kind: WanakuRouter
 metadata:
   name: ${WANAKU_ROUTER_NAME}
 spec:
+  exposure:
+    listeners:
+      management:
+        host: ${WANAKU_ROUTER_NAME}-${WANAKU_NAMESPACE}.${OPENSHIFT_APPS_DOMAIN}
+      mcp:
+        host: ${WANAKU_ROUTER_NAME}-mcp-${WANAKU_NAMESPACE}.${OPENSHIFT_APPS_DOMAIN}
   server:
     image: ${WANAKU_SERVER_IMAGE}
     imagePullPolicy: Always
@@ -340,9 +346,9 @@ for PORT in 8080 8081; do
     || echo "FAIL [11.6]: server-${R} ports are '${PORTS}'"
 done
 
-for ROUTE in "${R}" "${R}-mcp"; do
-  oc get route "${ROUTE}" -n "${WANAKU_NAMESPACE}" > /dev/null 2>&1 \
-    && echo "PASS [11.6]: route ${ROUTE} exists" || echo "FAIL [11.6]: route ${ROUTE} missing"
+for INGRESS in "${R}-management" "${R}-mcp"; do
+  oc get ingress "${INGRESS}" -n "${WANAKU_NAMESPACE}" > /dev/null 2>&1 \
+    && echo "PASS [11.6]: ingress ${INGRESS} exists" || echo "FAIL [11.6]: ingress ${INGRESS} missing"
 done
 
 oc get deployment "${R}-barn" -n "${WANAKU_NAMESPACE}" > /dev/null 2>&1 \
@@ -360,8 +366,8 @@ REASON=$(oc get wanakurouter "${R}" -n "${WANAKU_NAMESPACE}" \
 - The output includes `PASS [11.6]: deployment <R>-oauth2-proxy available`.
 - The output includes `PASS [11.6]: server-<R> exposes 8080`.
 - The output includes `PASS [11.6]: server-<R> exposes 8081`.
-- The output includes `PASS [11.6]: route <R> exists`.
-- The output includes `PASS [11.6]: route <R>-mcp exists`.
+- The output includes `PASS [11.6]: ingress <R>-management exists`.
+- The output includes `PASS [11.6]: ingress <R>-mcp exists`.
 - The output includes `PASS [11.6]: Barn not deployed`.
 - The output includes `PASS [11.6]: AuthConfigured=Configured`.
 - The output contains no line starting with `FAIL`.
@@ -369,8 +375,8 @@ REASON=$(oc get wanakurouter "${R}" -n "${WANAKU_NAMESPACE}" \
 ### Step 11.7: Set the URL variables
 
 ```bash run
-export WANAKU_SERVER_URL="https://$(oc get route "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.host}')"
-export WANAKU_MCP_BASE_URL="https://$(oc get route "${WANAKU_ROUTER_NAME}-mcp" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.host}')"
+export WANAKU_SERVER_URL="https://$(oc get ingress "${WANAKU_ROUTER_NAME}-management" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.rules[0].host}')"
+export WANAKU_MCP_BASE_URL="https://$(oc get ingress "${WANAKU_ROUTER_NAME}-mcp" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.rules[0].host}')"
 # common/oidc-login-verification.md uses WANAKU_ROUTER_URL
 export WANAKU_ROUTER_URL="${WANAKU_SERVER_URL}"
 export MCP_URI="${WANAKU_MCP_BASE_URL}/default/mcp"

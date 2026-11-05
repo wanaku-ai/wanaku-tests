@@ -7,6 +7,7 @@ Reusable steps for logging in to an OpenShift cluster using a service account to
 - `oc` CLI installed
 - `OPENSHIFT_API_URL` environment variable set (e.g. `https://api.cluster.example.com:6443`)
 - `OPENSHIFT_SA_TOKEN` environment variable set (service account token)
+- Optional: `OPENSHIFT_APPS_DOMAIN` environment variable (e.g. `apps.cluster.example.com`). The default comes from the console URL.
 
 ## Phase 1: OpenShift Login
 
@@ -44,12 +45,28 @@ oc version
 oc api-resources --api-group=route.openshift.io -o name | grep -q "^routes"
 echo "route-api-available=$?"
 # Expected: route-api-available=0
+
+# The operator plans expose the router through Ingresses with hosts on the cluster apps domain.
+# Set OPENSHIFT_APPS_DOMAIN to override the value from the console URL.
+if [ -z "${OPENSHIFT_APPS_DOMAIN:-}" ]; then
+  CONSOLE_HOST=$(oc whoami --show-console 2>/dev/null | sed -E 's#^https?://##; s#/.*$##')
+  case "${CONSOLE_HOST}" in
+    console-openshift-console.*) OPENSHIFT_APPS_DOMAIN="${CONSOLE_HOST#console-openshift-console.}" ;;
+  esac
+fi
+if [ -z "${OPENSHIFT_APPS_DOMAIN:-}" ]; then
+  echo "FAIL: cannot find the apps domain. Set OPENSHIFT_APPS_DOMAIN."
+  return 1
+fi
+export OPENSHIFT_APPS_DOMAIN
+echo "PASS: apps domain is ${OPENSHIFT_APPS_DOMAIN}"
 ```
 
 **Expected result:**
 
 - The output includes `PASS: logged in as <OC_USER>`.
 - The output includes `route-api-available=0`.
+- The output includes `PASS: apps domain is <OPENSHIFT_APPS_DOMAIN>`.
 - The output contains no line starting with `FAIL`.
 - The commands exit with code 0.
 - `oc whoami` prints the service account name.
