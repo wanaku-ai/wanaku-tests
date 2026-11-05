@@ -4,8 +4,8 @@ Reusable steps for verifying OIDC authentication end to end: log in against Keyc
 the oauth2-proxy that protects its management API.
 
 Wanaku Server has no built-in authentication. When `WanakuRouter.spec.auth.enabled` is `true`, the operator deploys
-oauth2-proxy (Deployment `<router>-oauth2-proxy`, Service `oauth2-proxy-<router>`) and points the `<router>` and
-`<router>-mcp` Routes at it. The proxies validate the tokens.
+oauth2-proxy (Deployment `<router>-oauth2-proxy`, Service `oauth2-proxy-<router>`) and points the
+`<router>-management` and `<router>-mcp` Ingresses at it. The proxies validate the tokens.
 
 The `wanaku auth login` command authenticates directly against Keycloak (`<auth-server>/realms/<realm>`, realm
 `wanaku` by default) using the confidential `wanaku-mcp-router` client. oauth2-proxy accepts only tokens carrying that
@@ -16,8 +16,8 @@ client's audience, so the client secret must be available in `WANAKU_CLIENT_SECR
 
 - Keycloak deployed and configured (see [keycloak-setup.md](keycloak-setup.md))
 - WanakuRouter CR created with `spec.auth.enabled: true`, and Ready
-- `WANAKU_ROUTER_URL` environment variable set to the management Route URL (e.g. `https://<host of Route <router>>`).
-  The operator creates edge-terminated Routes, so use `https`.
+- `WANAKU_ROUTER_URL` environment variable set to the management URL (e.g. `https://<host of Ingress <router>-management>`).
+  OpenShift creates edge-terminated Routes from the Ingresses, so use `https`.
 - Optional: `WANAKU_CLI_TLS_OPTS` set to `--insecure` when the cluster ingress certificate is not trusted
   (default: empty)
 - `WANAKU_TEST_USER` and `WANAKU_TEST_PASS` environment variables set

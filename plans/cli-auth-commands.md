@@ -319,6 +319,12 @@ kind: WanakuRouter
 metadata:
   name: ${WANAKU_ROUTER_NAME}
 spec:
+  exposure:
+    listeners:
+      management:
+        host: ${WANAKU_ROUTER_NAME}-${WANAKU_NAMESPACE}.${OPENSHIFT_APPS_DOMAIN}
+      mcp:
+        host: ${WANAKU_ROUTER_NAME}-mcp-${WANAKU_NAMESPACE}.${OPENSHIFT_APPS_DOMAIN}
   auth:
     enabled: true
     issuerUrl: "${WANAKU_AUTH_ISSUER_URL}"
@@ -334,10 +340,10 @@ AUTH_COND=$(oc get "wanakurouter/${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}"
 [ "${AUTH_COND}" = "Configured" ] && echo "PASS: AuthConfigured reason is Configured" \
   || echo "FAIL: AuthConfigured reason is '${AUTH_COND}'"
 
-# The operator creates the Route <router> for the management API and <router>-mcp for MCP. Both are
-# edge-terminated and redirect HTTP to HTTPS.
-export WANAKU_SERVER_URL="https://$(oc get route "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.host}')"
-export WANAKU_MCP_BASE_URL="https://$(oc get route "${WANAKU_ROUTER_NAME}-mcp" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.host}')"
+# The operator creates the Ingress <router>-management for the management API and <router>-mcp for MCP.
+# OpenShift creates an edge-terminated Route from each Ingress.
+export WANAKU_SERVER_URL="https://$(oc get ingress "${WANAKU_ROUTER_NAME}-management" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.rules[0].host}')"
+export WANAKU_MCP_BASE_URL="https://$(oc get ingress "${WANAKU_ROUTER_NAME}-mcp" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.rules[0].host}')"
 # deploy/auth/wanaku-config.json enables direct access grants for mcp-client
 export EXPECT_PUBLIC_CLIENT_LOGIN="pass"
 ```

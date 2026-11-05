@@ -14,7 +14,7 @@ deployed catalogs and the deletion of the Barn resources.
 | Component       | How the plan uses it                                                                                                                                      |
 |-----------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Wanaku operator | Installed with Helm. Reconciles `WanakuRouter` and `WanakuServiceCatalog`.                                                                                |
-| Wanaku Server   | Deployed by the operator (`spec.server`). The management Route `<router>` serves the Barn plugin proxy. Authentication is disabled.                        |
+| Wanaku Server   | Deployed by the operator (`spec.server`). The management Ingress `<router>-management` serves the Barn plugin proxy. Authentication is disabled.                        |
 | Wanaku Barn     | Deployed by the operator because `spec.barn.enabled` is `true`. Deployment `<router>-barn`, Service `barn-<router>` (port 8080 to container port 8180). |
 
 Barn is not exposed outside the cluster. The `wanaku service` commands reach Barn through the plugin proxy path of
@@ -246,7 +246,7 @@ export WANAKU_BARN_IMAGE="${WANAKU_BARN_IMAGE:-quay.io/wanaku/wanaku-barn-backen
 export WANAKU_ROUTER_NAME="${WANAKU_ROUTER_NAME:-wanaku-test-router}"
 # Wanaku CLI: an installed binary, or "java -jar ${WANAKU_REPO_ROOT}/apps/wanaku-cli/target/quarkus-app/quarkus-run.jar"
 export WANAKU_CLI="${WANAKU_CLI:-wanaku}"
-# The operator creates edge-terminated Routes. Set these to empty values when the ingress certificate is trusted.
+# OpenShift creates edge-terminated Routes from the operator Ingresses. Set these to empty values when the ingress certificate is trusted.
 export WANAKU_CLI_TLS_OPTS="${WANAKU_CLI_TLS_OPTS---insecure}"
 export CURL_TLS_OPTS="${CURL_TLS_OPTS--k}"
 # Local port for "oc port-forward" to the Barn Service
@@ -384,6 +384,12 @@ kind: WanakuRouter
 metadata:
   name: ${WANAKU_ROUTER_NAME}
 spec:
+  exposure:
+    listeners:
+      management:
+        host: ${WANAKU_ROUTER_NAME}-${WANAKU_NAMESPACE}.${OPENSHIFT_APPS_DOMAIN}
+      mcp:
+        host: ${WANAKU_ROUTER_NAME}-mcp-${WANAKU_NAMESPACE}.${OPENSHIFT_APPS_DOMAIN}
   imagePullPolicy: Always
   server:
     image: ${WANAKU_SERVER_IMAGE}
@@ -420,20 +426,20 @@ wait_cr_condition wanakurouter "${WANAKU_ROUTER_NAME}" BarnAvailable True Availa
 - The output reports the `WanakuRouter` condition is met.
 - The output includes `PASS: wanakurouter/<WANAKU_ROUTER_NAME> condition BarnAvailable=True (reason Available)`.
 
-### Step 3.2: Read the management Route URL
+### Step 3.2: Read the management URL
 
-The operator creates the `<router>` Route for the management API. The plugin proxy test and the negative test of
+The operator creates the `<router>-management` Ingress for the management API. The plugin proxy test and the negative test of
 the service catalog API use it. Run this block in the shared Bash session.
 
 ```bash run
-export WANAKU_ROUTER_URL="https://$(oc get route "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.host}')"
-[ "${WANAKU_ROUTER_URL}" != "https://" ] && echo "PASS: management Route URL is ${WANAKU_ROUTER_URL}" \
-  || { echo "FAIL: the management Route has no host"; return 1; }
+export WANAKU_ROUTER_URL="https://$(oc get ingress "${WANAKU_ROUTER_NAME}-management" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.rules[0].host}')"
+[ "${WANAKU_ROUTER_URL}" != "https://" ] && echo "PASS: management URL is ${WANAKU_ROUTER_URL}" \
+  || { echo "FAIL: the management Ingress has no host"; return 1; }
 ```
 
 **Expected result:**
 
-- The output includes `PASS: management Route URL is`.
+- The output includes `PASS: management URL is`.
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
@@ -1702,7 +1708,7 @@ echo "PASS: downloaded source assets removed or no download was owned"
 | 0     | 0.1       | Log in to OpenShift                                                         | Critical |
 | 1     | 1.1       | Create the namespace                                                        | Critical |
 | 2     | 2.1       | Install the operator                                                        | Critical |
-| 3     | 3.1-3.2   | WanakuRouter with Barn Ready, management Route                              | Critical |
+| 3     | 3.1-3.2   | WanakuRouter with Barn Ready, management Ingress                            | Critical |
 | 3     | 3.3-3.6   | Barn Deployment, Service and PVC, Server configuration, owner references    | Critical |
 | 3     | 3.7-3.8   | Barn plugin proxy, Barn CLI access                                          | High     |
 | 4     | 4.1-4.3   | WanakuServiceCatalog deploys a packaged catalog to Barn                     | High     |

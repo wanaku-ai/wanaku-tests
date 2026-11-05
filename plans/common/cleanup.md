@@ -69,7 +69,7 @@ echo "routers-deleted=$?"
 
 ### Step 4: Wait for the operator-managed resources to be removed
 
-The managed Deployments, Services, ConfigMaps, Routes and PVCs have an owner reference to their custom resource.
+The managed Deployments, Services, ConfigMaps, Ingresses and PVCs have an owner reference to their custom resource.
 Kubernetes garbage collection removes them. The operator labels its Deployments with
 `app.kubernetes.io/managed-by=wanaku-operator`.
 
