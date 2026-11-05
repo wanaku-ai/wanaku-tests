@@ -220,12 +220,13 @@ oc get serviceaccount wanaku-operator -n "${WANAKU_NAMESPACE}" > /dev/null 2>&1
 echo "service-account-exists=$?"
 # Expected: service-account-exists=0
 
-# The operator must be able to set Route hosts (needed for spec.exposure.host).
+# The operator must be able to create Ingresses (needed for spec.exposure.host).
+# The operator does not create Routes. On OpenShift, the Ingress controller creates them.
 # This check needs impersonation rights. If your user cannot impersonate, record SKIP for this line.
-oc auth can-i create routes/custom-host -n "${WANAKU_NAMESPACE}" \
+oc auth can-i create ingresses.networking.k8s.io -n "${WANAKU_NAMESPACE}" \
   --as="system:serviceaccount:${WANAKU_NAMESPACE}:wanaku-operator" | grep -q "yes"
-echo "can-create-custom-host=$?"
-# Expected: can-create-custom-host=0
+echo "can-create-ingress=$?"
+# Expected: can-create-ingress=0
 ```
 
 **Expected result:**
@@ -246,7 +247,7 @@ echo "can-create-custom-host=$?"
 - The output includes `PASS: RoleBinding wanaku-semantic-router-role-binding exists`.
 - The output includes `PASS: RoleBinding wanaku-integration-role-binding exists`.
 - The output includes `service-account-exists=0`.
-- The output includes `can-create-custom-host=0`, or this impersonation check is recorded as SKIP when the user cannot impersonate.
+- The output includes `can-create-ingress=0`, or this impersonation check is recorded as SKIP when the user cannot impersonate.
 - The output contains no line starting with `FAIL`.
 - The commands exit with code 0.
 
