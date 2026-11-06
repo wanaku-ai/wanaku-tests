@@ -11,7 +11,7 @@ directory of each module.
 | `wanaku.test.server.binary` | none | Path of the `wanaku-server` binary. Without it, the tests that need a managed server skip. |
 | `wanaku.test.cli.path` | `wanaku` | The `wanaku` CLI: a binary, a JAR, or a Quarkus `quarkus-run.jar`. |
 | `wanaku.test.camel-capability.jar` | first JAR in `artifacts/camel-integration-capability*/` | Camel Integration Capability JAR with dependencies. |
-| `wanaku.test.semantic-router.jar` | first `wanaku-semantic-router*.jar` in the artifacts directory | Semantic Router executable JAR. Keep its `lib/` next to it. |
+| `wanaku.test.semantic-router.jar` | first `wanaku-semantic-router*.jar` in the artifacts directory | Semantic Router JAR with dependencies. |
 | `wanaku.test.evaluator.wasm` | `actions/dist/safety_review_action.wasm` of the server checkout | Safety review WASM action for the evaluator tests. |
 | `wanaku.test.opa.wasm` | `actions/dist/opa_allow_action.wasm` of the server checkout | OPA WASM action for the OPA tests. |
 | `wanaku.test.opa.binary` | none | Native OPA binary for `OpaPolicyITCase`. |
