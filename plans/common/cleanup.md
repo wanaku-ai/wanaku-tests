@@ -166,7 +166,14 @@ Run this step also when an earlier step of the plan failed. The deletion removes
 
 ```bash run
 if [ "${WANAKU_NAMESPACE_CREATED:-false}" = "true" ]; then
-  oc delete project "${WANAKU_NAMESPACE}" --ignore-not-found=true --wait=false
+  if ! oc delete project "${WANAKU_NAMESPACE}" --ignore-not-found=true --wait=false; then
+    echo "FAIL: cannot delete namespace ${WANAKU_NAMESPACE}"
+    return 1
+  fi
+  if ! oc wait --for=delete "namespace/${WANAKU_NAMESPACE}" --timeout=180s 2>/dev/null; then
+    echo "FAIL: namespace ${WANAKU_NAMESPACE} still exists after 180s"
+    return 1
+  fi
   echo "PASS: namespace ${WANAKU_NAMESPACE} deleted"
 else
   echo "SKIP: namespace ${WANAKU_NAMESPACE} was not created by this run"

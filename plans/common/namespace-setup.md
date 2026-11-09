@@ -33,7 +33,8 @@ This keeps each test run isolated by default while still allowing callers to ove
 if oc new-project "${WANAKU_NAMESPACE}" --display-name="Wanaku Operator Test" 2>/dev/null; then
   export WANAKU_NAMESPACE_CREATED=true
 else
-  export WANAKU_NAMESPACE_CREATED=false
+  # A repeated run of this step keeps the value of the first run
+  export WANAKU_NAMESPACE_CREATED="${WANAKU_NAMESPACE_CREATED:-false}"
   oc project "${WANAKU_NAMESPACE}"
 fi
 echo "namespace-created=${WANAKU_NAMESPACE_CREATED}"
@@ -41,7 +42,8 @@ echo "namespace-created=${WANAKU_NAMESPACE_CREATED}"
 
 `WANAKU_NAMESPACE_CREATED` records if this run created the project. The cleanup procedure deletes the project only
 when the value is `true`. A namespace that already exists, for example a shared namespace that the caller sets in
-`WANAKU_NAMESPACE`, is not deleted.
+`WANAKU_NAMESPACE`, is not deleted. When you run this step again in the same session, the value of the first run
+stays.
 
 Verify that the current project is the new namespace:
 
