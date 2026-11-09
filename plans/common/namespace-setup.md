@@ -30,9 +30,18 @@ This keeps each test run isolated by default while still allowing callers to ove
 ### Step 2: Create the namespace (project)
 
 ```bash run
-oc new-project "${WANAKU_NAMESPACE}" --display-name="Wanaku Operator Test" 2>/dev/null \
-  || oc project "${WANAKU_NAMESPACE}"
+if oc new-project "${WANAKU_NAMESPACE}" --display-name="Wanaku Operator Test" 2>/dev/null; then
+  export WANAKU_NAMESPACE_CREATED=true
+else
+  export WANAKU_NAMESPACE_CREATED=false
+  oc project "${WANAKU_NAMESPACE}"
+fi
+echo "namespace-created=${WANAKU_NAMESPACE_CREATED}"
 ```
+
+`WANAKU_NAMESPACE_CREATED` records if this run created the project. The cleanup procedure deletes the project only
+when the value is `true`. A namespace that already exists, for example a shared namespace that the caller sets in
+`WANAKU_NAMESPACE`, is not deleted.
 
 Verify that the current project is the new namespace:
 
@@ -44,6 +53,7 @@ echo "exit_code=$?"
 
 **Expected result:**
 
+- The output includes `namespace-created=true` or `namespace-created=false`.
 - The output includes `exit_code=0`.
 
 ### Step 3: Verify current context targets the correct namespace
@@ -105,3 +115,4 @@ echo "can-create-secrets=$?"
 |----------------------|--------------------------------------------------------------------------------------|
 | `WANAKU_NAMESPACE`   | The namespace (OpenShift project) for this run. The current `oc` context targets it. |
 | `WANAKU_TEST_RUN_ID` | The unique suffix of this run                                                        |
+| `WANAKU_NAMESPACE_CREATED` | `true` when this run created the namespace. The cleanup deletes it only in that case. |

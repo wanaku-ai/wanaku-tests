@@ -155,23 +155,28 @@ echo "SKIP: CRD deletion (uncomment to enable)"
 
 - The output includes `SKIP: CRD deletion (uncomment to enable)`.
 
-### Step 9: Delete the namespace (optional)
+### Step 9: Delete the namespace
 
-The test service account lives in `wanaku-test-infra`, not in `${WANAKU_NAMESPACE}`, so deleting the test namespace does not affect the shared test infrastructure. Only delete the namespace when it was created for this specific run. If you intentionally reuse a shared namespace, leave the deletion commented out and skip namespace cleanup for that shared environment.
+Delete the namespace when this run created it. [namespace-setup.md](namespace-setup.md) sets
+`WANAKU_NAMESPACE_CREATED=true` in that case. A namespace that existed before the run, for example a shared namespace
+that the caller sets in `WANAKU_NAMESPACE`, is kept. The test service account lives in `wanaku-test-infra`, so this
+step does not affect the shared test infrastructure.
+
+Run this step also when an earlier step of the plan failed. The deletion removes all the resources in the namespace.
 
 ```bash run
-# WARNING: This deletes everything in the namespace.
-# Uncomment the following line for a full cleanup:
-#
-# oc delete project "${WANAKU_NAMESPACE}" --ignore-not-found=true
-# echo "PASS: namespace ${WANAKU_NAMESPACE} deleted"
-
-echo "SKIP: namespace deletion (uncomment to enable)"
+if [ "${WANAKU_NAMESPACE_CREATED:-false}" = "true" ]; then
+  oc delete project "${WANAKU_NAMESPACE}" --ignore-not-found=true --wait=false
+  echo "PASS: namespace ${WANAKU_NAMESPACE} deleted"
+else
+  echo "SKIP: namespace ${WANAKU_NAMESPACE} was not created by this run"
+fi
 ```
 
 **Expected result:**
 
-- The output includes `SKIP: namespace deletion (uncomment to enable)`.
+- The output includes `PASS: namespace <WANAKU_NAMESPACE> deleted` or `SKIP: namespace <WANAKU_NAMESPACE> was not created by this run`.
+- The output contains no line starting with `FAIL`.
 
 ### Step 10: Verify cleanup
 
