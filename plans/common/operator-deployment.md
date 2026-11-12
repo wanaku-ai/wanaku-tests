@@ -221,7 +221,6 @@ echo "service-account-exists=$?"
 # Expected: service-account-exists=0
 
 # The operator must be able to create Ingresses (needed for spec.exposure.host).
-# The operator does not create Routes. On OpenShift, the Ingress controller creates them.
 # This check needs impersonation rights. If your user cannot impersonate, record SKIP for this line.
 oc auth can-i create ingresses.networking.k8s.io -n "${WANAKU_NAMESPACE}" \
   --as="system:serviceaccount:${WANAKU_NAMESPACE}:wanaku-operator" | grep -q "yes"

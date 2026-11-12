@@ -341,7 +341,6 @@ AUTH_COND=$(oc get "wanakurouter/${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}"
   || echo "FAIL: AuthConfigured reason is '${AUTH_COND}'"
 
 # The operator creates the Ingress <router>-management for the management API and <router>-mcp for MCP.
-# OpenShift creates an edge-terminated Route from each Ingress.
 export WANAKU_SERVER_URL="https://$(oc get ingress "${WANAKU_ROUTER_NAME}-management" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.rules[0].host}')"
 export WANAKU_MCP_BASE_URL="https://$(oc get ingress "${WANAKU_ROUTER_NAME}-mcp" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.rules[0].host}')"
 # deploy/auth/wanaku-config.json enables direct access grants for mcp-client
@@ -945,7 +944,7 @@ echo "${META}" | jq -e --arg r "${MCP_DOCUMENT_ORIGIN}/auth-test-ns/mcp" '.resou
 `{"resource":"<mcp-origin>/auth-test-ns/mcp","authorization_servers":["<mcp-origin>"],"bearer_methods_supported":["header"]}`.
 For the `default` namespace, the server reports the resource `<mcp-origin>/mcp`, not `<mcp-origin>/default/mcp`.
 
-The metadata uses `http://` and the `Host` header of the request. Behind a TLS-terminating Route, the scheme in the
+The metadata uses `http://` and the `Host` header of the request. Behind a TLS-terminating Ingress, the scheme in the
 document can differ from the public scheme.
 
 **Expected result:**

@@ -25,18 +25,20 @@ Each iteration opens a new Streamable HTTP client, so the results include the MC
 
 ## Run the tests
 
-1. Build and start the test MCP server (it listens on port 8181):
+1. Deploy the [test MCP server fixture](../fixtures/test-mcp-server.md) to OpenShift. Set its Ingress host:
 
    ```shell
-   cd fixtures/test-mcp-server
-   ./mvnw clean install -B
-   java -jar target/quarkus-app/quarkus-run.jar
+   export WANAKU_NAMESPACE="$(oc project -q)"
+   [ -n "${OPENSHIFT_APPS_DOMAIN:-}" ] || { echo "Set OPENSHIFT_APPS_DOMAIN to the cluster apps domain."; exit 1; }
+   export TEST_MCP_SERVER_HOST="test-mcp-server-${WANAKU_NAMESPACE}.${OPENSHIFT_APPS_DOMAIN}"
+   export TEST_MCP_URL="https://${TEST_MCP_SERVER_HOST}/mcp"
+   export K6_INSECURE_SKIP_TLS_VERIFY=true
    ```
 
 2. Add it to Wanaku as a forward:
 
    ```shell
-   wanaku forwards add --name perf --service http://localhost:8181/mcp --namespace default --no-auth
+   wanaku forwards add --name perf --insecure --service "${TEST_MCP_URL}" --namespace default --no-auth
    ```
 
 3. Run the scripts:
@@ -46,8 +48,13 @@ Each iteration opens a new Streamable HTTP client, so the results include the MC
    ./k6 run --vus 10 --duration 30s load/mcp-resources-read.js
    ```
 
-To measure the overhead of Wanaku, run the same script against the upstream server directly
-(`WANAKU_MCP_URL=http://localhost:8181/mcp`) and compare the results.
+To measure the overhead of Wanaku, run the same script against the upstream server directly. The cluster ingress
+certificate might not be trusted, so skip its validation:
+
+```shell
+./k6 run -e WANAKU_MCP_URL="${TEST_MCP_URL}" \
+  --vus 10 --duration 30s load/mcp-tools-invoke.js
+```
 
 ## Configuration
 

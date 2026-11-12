@@ -44,20 +44,45 @@ Run this command from the repository root:
 docker build -f saci/Containerfile -t localhost/wanaku-saci-worker:latest saci
 ```
 
-You can use `podman` instead of `docker`. The build does not use files from
-the build context.
+You can use `podman` instead of `docker`. The default build does not use files
+from the build context.
 
 | Build argument | Default | Description |
 | --- | --- | --- |
 | `SACI_IMAGE` | `quay.io/orpiske/saci-worker:latest` | The Saci worker image to extend. Set it to `localhost/saci-worker:latest` to use a local `make image` build of Midnight Saci. |
 | `WANAKU_IMAGE` | `quay.io/wanaku/wanaku-server:early-access` | The image that supplies `wanaku-server`. |
-| `WANAKU_CLI_RELEASE` | `early-access` | The wanaku-barn release that supplies the CLI and `wanaku-keycloak-admin`. |
-| `WANAKU_CLI_VERSION` | `0.3.0-SNAPSHOT` | The version in the release archive names of the CLI and `wanaku-keycloak-admin`. |
+| `WANAKU_CLI_RELEASE` | `early-access` | The wanaku-barn release that supplies the CLI and `wanaku-keycloak-admin` when `WANAKU_BARN_SOURCE` is `github-barn-tools`. |
+| `WANAKU_CLI_VERSION` | `0.3.0-SNAPSHOT` | The version in the release archive names when `WANAKU_BARN_SOURCE` is `github-barn-tools`. |
+| `WANAKU_BARN_SOURCE` | `github-barn-tools` | The Containerfile stage that supplies the CLI tools. Set it to `local-barn-tools` with the `wanaku-project` build context to use local distributions. |
 | `FIXTURE_IMAGE` | `quay.io/wanaku/test-mcp-server:latest` | The image that supplies the test MCP server. |
 | `OC_VERSION` | `stable` | The OpenShift client version directory, for example `stable-4.19` or `4.19.10`. |
 | `HELM_VERSION` | `v3.19.0` | The Helm version. |
 
-The build verifies the SHA-256 checksums of the Wanaku CLI, `wanaku-keycloak-admin`, OpenShift client and Helm archives.
+The default release build verifies the SHA-256 checksums of the Wanaku CLI,
+`wanaku-keycloak-admin`, OpenShift client and Helm archives.
+
+### Build with local Wanaku-barn CLI distributions
+
+Build `wanaku-cli` and `wanaku-keycloak-admin` in a Wanaku-barn checkout
+first. The checkout must contain exactly one archive at each of these paths:
+
+- `apps/wanaku-cli/target/distributions/wanaku-cli-<version>.zip`
+- `apps/wanaku-keycloak-admin/target/distributions/wanaku-keycloak-admin-<version>.zip`
+
+Set `WANAKU_PROJECT` to the checkout. Then add it as Podman's named build
+context and select the local source:
+
+```sh
+WANAKU_PROJECT=/tmp/my-wanaku-barn
+podman build -f saci/Containerfile \
+  --build-context wanaku-project="$WANAKU_PROJECT" \
+  --build-arg WANAKU_BARN_SOURCE=local-barn-tools \
+  -t localhost/wanaku-saci-worker:local saci
+```
+
+The local archives do not use `WANAKU_CLI_VERSION`. The Containerfile checks
+that one archive exists for each tool before it installs the tool. The local
+path uses JVM distributions, so it works on every supported architecture.
 
 To test a server that you built from source, build the server image in your
 Wanaku checkout first. Then give that image to the build:

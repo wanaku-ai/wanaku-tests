@@ -204,7 +204,7 @@ export WSR_TOOL="route_support"
 export WSR_FORWARD_NAMESPACE="default"
 # Wanaku CLI: an installed binary, or "java -jar <wanaku-barn>/apps/wanaku-cli/target/quarkus-app/quarkus-run.jar"
 export WANAKU_CLI="${WANAKU_CLI:-wanaku}"
-# OpenShift creates edge-terminated Routes from the operator Ingresses. Set these to empty values when the ingress certificate is trusted.
+# The operator Ingresses use the TLS certificate of the cluster ingress controller. Set these to empty values when that certificate is trusted.
 export WANAKU_CLI_TLS_OPTS="${WANAKU_CLI_TLS_OPTS---insecure}"
 export CURL_TLS_OPTS="${CURL_TLS_OPTS--k}"
 # Phases 7 and 8 call the expert provider only when a credential is set
@@ -395,7 +395,7 @@ INGESTION=$(oc get deployment "${WANAKU_ROUTER_NAME}-server" -n "${WANAKU_NAMESP
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
-### Test 3.2: Read the Route URLs and verify the Server is reachable
+### Test 3.2: Read the Ingress URLs and verify the Server is reachable
 
 ```bash run
 export WANAKU_ROUTER_URL="https://$(oc get ingress "${WANAKU_ROUTER_NAME}-management" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.rules[0].host}')"
@@ -916,7 +916,7 @@ echo "${OUTPUT}" | grep -q "${WSR_TOOL}" && echo "PASS: ${WSR_TOOL} is listed at
 
 ### Test 6.1: Verify status.wanakuEndpoint for the default namespace
 
-**Description:** The router publishes `status.endpoints.mcp` as `https://<mcp-route-host>/default/mcp`, the endpoint
+**Description:** The router publishes `status.endpoints.mcp` as `https://<mcp-ingress-host>/default/mcp`, the endpoint
 of the `default` Wanaku namespace. The operator sets `status.wanakuEndpoint` of the `WanakuSemanticRouter` to the
 endpoint of its forward namespace: it replaces the path of the router endpoint with `/<namespace>/mcp`. For the
 forward namespace `default`, the two values are equal. MCP clients can list the tool at that endpoint.
@@ -1044,7 +1044,7 @@ wait_cr_condition wanakusemanticrouter "${WSR_NAME}" Registered True Registered 
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
-### Test 7.3: Route billing, technical and unclassified requests through the MCP Route
+### Test 7.3: Route billing, technical and unclassified requests through the MCP Ingress
 
 **Description:** The test uses the three cases of `SemanticRouterITCase`. Each message starts with the case word, so
 the deterministic fixture provider of the local test (it selects the label from the start of the text) and a real model
@@ -1391,7 +1391,7 @@ echo "PASS: downloaded source assets removed or no download was owned"
 | 0 | — | OpenShift login | Critical |
 | 1 | — | Namespace setup | Critical |
 | 2 | — | Operator installation | Critical |
-| 3 | 3.1-3.2 | WanakuRouter with Barn and audit ingestion, Routes reachable | Critical |
+| 3 | 3.1-3.2 | WanakuRouter with Barn and audit ingestion, Ingresses reachable | Critical |
 | 4 | 4.1-4.3 | WanakuSemanticRouter from a ConfigMap becomes Ready (Registered) | Critical |
 | 4 | 4.4 | Runtime Deployment and Service | High |
 | 4 | 4.5 | Resource status and runtime status endpoint | High |

@@ -41,11 +41,6 @@ oc whoami --show-server
 oc version
 # Expected: prints client and server version info
 
-# The operator plans use OpenShift Routes
-oc api-resources --api-group=route.openshift.io -o name | grep -q "^routes"
-echo "route-api-available=$?"
-# Expected: route-api-available=0
-
 # The operator plans expose the router through Ingresses with hosts on the cluster apps domain.
 # Set OPENSHIFT_APPS_DOMAIN to override the value from the console URL.
 if [ -z "${OPENSHIFT_APPS_DOMAIN:-}" ]; then
@@ -65,7 +60,6 @@ echo "PASS: apps domain is ${OPENSHIFT_APPS_DOMAIN}"
 **Expected result:**
 
 - The output includes `PASS: logged in as <OC_USER>`.
-- The output includes `route-api-available=0`.
 - The output includes `PASS: apps domain is <OPENSHIFT_APPS_DOMAIN>`.
 - The output contains no line starting with `FAIL`.
 - The commands exit with code 0.
