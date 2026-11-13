@@ -90,8 +90,8 @@ echo "can-create-services=$?"
 oc auth can-i create persistentvolumeclaims -n "${WANAKU_NAMESPACE}" | grep -q "yes"
 echo "can-create-pvcs=$?"
 
-oc auth can-i create routes -n "${WANAKU_NAMESPACE}" | grep -q "yes"
-echo "can-create-routes=$?"
+oc auth can-i create ingresses.networking.k8s.io -n "${WANAKU_NAMESPACE}" | grep -q "yes"
+echo "can-create-ingresses=$?"
 
 oc auth can-i create configmaps -n "${WANAKU_NAMESPACE}" | grep -q "yes"
 echo "can-create-configmaps=$?"
@@ -107,7 +107,7 @@ echo "can-create-secrets=$?"
 - The output includes `can-create-deployments=0`.
 - The output includes `can-create-services=0`.
 - The output includes `can-create-pvcs=0`.
-- The output includes `can-create-routes=0`.
+- The output includes `can-create-ingresses=0`.
 - The output includes `can-create-configmaps=0`.
 - The output includes `can-create-secrets=0`.
 

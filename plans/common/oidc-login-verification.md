@@ -17,7 +17,7 @@ client's audience, so the client secret must be available in `WANAKU_CLIENT_SECR
 - Keycloak deployed and configured (see [keycloak-setup.md](keycloak-setup.md))
 - WanakuRouter CR created with `spec.auth.enabled: true`, and Ready
 - `WANAKU_ROUTER_URL` environment variable set to the management URL (e.g. `https://<host of Ingress <router>-management>`).
-  OpenShift creates edge-terminated Routes from the Ingresses, so use `https`.
+  The Ingresses serve TLS, so use `https`.
 - Optional: `WANAKU_CLI_TLS_OPTS` set to `--insecure` when the cluster ingress certificate is not trusted
   (default: empty)
 - `WANAKU_TEST_USER` and `WANAKU_TEST_PASS` environment variables set

@@ -66,18 +66,23 @@ spec:
       port: 8181
       targetPort: http
 ---
-apiVersion: route.openshift.io/v1
-kind: Route
+apiVersion: networking.k8s.io/v1
+kind: Ingress
 metadata:
   name: test-mcp-server
   labels:
     app: test-mcp-server
 spec:
-  to:
-    kind: Service
-    name: test-mcp-server
-  port:
-    targetPort: http
+  rules:
+    - host: __TEST_MCP_SERVER_HOST__
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: test-mcp-server
+                port:
+                  number: 8181
   tls:
-    termination: edge
-    insecureEdgeTerminationPolicy: Redirect
+    - {}

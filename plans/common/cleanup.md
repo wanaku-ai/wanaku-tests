@@ -115,7 +115,7 @@ echo "PASS: test ConfigMaps and Secrets cleaned up"
 ```bash run
 oc delete deployment keycloak -n "${WANAKU_NAMESPACE}" --ignore-not-found=true
 oc delete service keycloak -n "${WANAKU_NAMESPACE}" --ignore-not-found=true
-oc delete route keycloak -n "${WANAKU_NAMESPACE}" --ignore-not-found=true
+oc delete ingress keycloak -n "${WANAKU_NAMESPACE}" --ignore-not-found=true
 oc delete pvc keycloak-data-pvc -n "${WANAKU_NAMESPACE}" --ignore-not-found=true
 echo "PASS: Keycloak resources deleted"
 ```

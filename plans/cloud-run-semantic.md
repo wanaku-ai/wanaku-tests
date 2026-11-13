@@ -292,7 +292,7 @@ export WSR_NAME="support"
 export WSR_TOOL="route_support"
 # Wanaku CLI: an installed binary, or "java -jar ${WANAKU_REPO_ROOT}/apps/wanaku-cli/target/quarkus-app/quarkus-run.jar"
 export WANAKU_CLI="${WANAKU_CLI:-wanaku}"
-# OpenShift creates edge-terminated Routes from the operator Ingresses. Set these to empty values when the ingress certificate is trusted.
+# The operator Ingresses use the TLS certificate of the cluster ingress controller. Set these to empty values when that certificate is trusted.
 export WANAKU_CLI_TLS_OPTS="${WANAKU_CLI_TLS_OPTS---insecure}"
 export CURL_TLS_OPTS="${CURL_TLS_OPTS--k}"
 # The local files of this run: the semantic route tree and WANAKU_HOME
@@ -462,7 +462,7 @@ echo "PASS: the WanakuRouter ${WANAKU_ROUTER_NAME} is Ready"
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
-### Test 3.2: Read the Route URLs and verify the Server is reachable
+### Test 3.2: Read the Ingress URLs and verify the Server is reachable
 
 Run this block in the shared Bash session so that the exported `WANAKU_ROUTER_URL` and `WANAKU_ROUTER_MCP_URL`
 variables are available to all later steps.
@@ -1550,7 +1550,7 @@ esac
 | 1 | — | Namespace setup | Critical |
 | 2 | 2.1 | Operator installation | Critical |
 | 2 | 2.2 | CRD with `configMapRef.items` | Critical |
-| 3 | 3.1-3.2 | WanakuRouter, Routes reachable | Critical |
+| 3 | 3.1-3.2 | WanakuRouter, Ingresses reachable | Critical |
 | 4 | 4.1 | Route files in the local-files layout | Critical |
 | 4 | 4.2 | Stored cloud target | High |
 | 5 | 5.1 | Missing manifest: exit code 2 | High |

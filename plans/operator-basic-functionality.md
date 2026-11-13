@@ -4,7 +4,7 @@
 
 This test plan verifies the basic functionality of the Wanaku Kubernetes operator on OpenShift. It covers operator
 installation, the `WanakuRouter` lifecycle, the resources that the operator creates, Wanaku Server behavior through
-the generated Routes, authentication through oauth2-proxy, update reconciliation, and the deletion cascade. Wanaku Barn
+the Ingresses, authentication through oauth2-proxy, update reconciliation, and the deletion cascade. Wanaku Barn
 and `WanakuServiceCatalog` are covered by [operator-service-catalog.md](operator-service-catalog.md).
 
 **Components under test:**
@@ -256,7 +256,7 @@ export WANAKU_SERVER_IMAGE="${WANAKU_SERVER_IMAGE:-quay.io/wanaku/wanaku-server:
 export WANAKU_ROUTER_NAME="${WANAKU_ROUTER_NAME:-wanaku-test-router}"
 # Wanaku CLI: an installed binary, or "java -jar ${WANAKU_REPO_ROOT}/apps/wanaku-cli/target/quarkus-app/quarkus-run.jar"
 export WANAKU_CLI="${WANAKU_CLI:-wanaku}"
-# OpenShift creates edge-terminated Routes from the operator Ingresses. Set these to empty values when the ingress certificate is trusted.
+# The operator Ingresses use the TLS certificate of the cluster ingress controller. Set these to empty values when that certificate is trusted.
 export WANAKU_CLI_TLS_OPTS="${WANAKU_CLI_TLS_OPTS---insecure}"
 export CURL_TLS_OPTS="${CURL_TLS_OPTS--k}"
 # Isolate credentials per test run to avoid contention (see #1697)
@@ -556,11 +556,11 @@ done
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
-### Test 3.8: Verify the Ingresses and the generated Routes
+### Test 3.8: Verify the Ingresses
 
 **Description:** With `spec.exposure.listeners`, the operator creates one Ingress for each listener. The
 `<router>-management` Ingress sends `/` to the management port 8080. The `<router>-mcp` Ingress sends `/` to the MCP
-port 8081. The operator does not create Routes. OpenShift creates an edge-terminated Route from each Ingress.
+port 8081.
 
 Run this block in the shared Bash session.
 
@@ -577,13 +577,7 @@ for ENTRY in "management:8080:${WANAKU_ROUTER_NAME}" "mcp:8081:${WANAKU_ROUTER_N
   check "Ingress ${INGRESS} service" "$(ingress_jsonpath '{.spec.rules[0].http.paths[0].backend.service.name}')" "server-${WANAKU_ROUTER_NAME}"
   check "Ingress ${INGRESS} port" "$(ingress_jsonpath '{.spec.rules[0].http.paths[0].backend.service.port.number}')" "${PORT}"
   check "Ingress ${INGRESS} path" "$(ingress_jsonpath '{.spec.rules[0].http.paths[0].path}')" "/"
-  route_jsonpath() { oc get routes -n "${WANAKU_NAMESPACE}" -o jsonpath="{.items[?(@.spec.host==\"${HOST}\")]$1}"; }
-  check "Route for ${INGRESS} TLS" "$(route_jsonpath '.spec.tls.termination')" "edge"
-  check "Route for ${INGRESS} admitted" "$(route_jsonpath '.status.ingress[0].conditions[?(@.type=="Admitted")].status')" "True"
 done
-oc get routes "${WANAKU_ROUTER_NAME}" "${WANAKU_ROUTER_NAME}-mcp" -n "${WANAKU_NAMESPACE}" > /dev/null 2>&1 \
-  && { echo "FAIL: the operator created the Routes ${WANAKU_ROUTER_NAME} and ${WANAKU_ROUTER_NAME}-mcp"; FAIL=1; } \
-  || echo "PASS: the operator created no Routes"
 [ "${FAIL}" -eq 0 ] || return 1
 
 export WANAKU_ROUTER_URL="https://$(oc get ingress "${WANAKU_ROUTER_NAME}-management" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.rules[0].host}')"
@@ -597,8 +591,6 @@ echo "mcp:        ${WANAKU_ROUTER_MCP_URL}"
 - For each Ingress `<WANAKU_ROUTER_NAME>-management` and `<WANAKU_ROUTER_NAME>-mcp`, the output includes
   `PASS: Ingress <name> host =`, `PASS: Ingress <name> service =`, `PASS: Ingress <name> port =` and
   `PASS: Ingress <name> path =`.
-- For each Ingress, the output includes `PASS: Route for <name> TLS =` and `PASS: Route for <name> admitted =`.
-- The output includes `PASS: the operator created no Routes`.
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
@@ -652,7 +644,7 @@ ROUTER_UID=$(router_jsonpath '{.metadata.uid}')
 FAIL=0
 for RESOURCE in "deployment/${WANAKU_ROUTER_NAME}-server" "service/server-${WANAKU_ROUTER_NAME}" \
     "pvc/${WANAKU_ROUTER_NAME}-server-data" \
-    "route.route.openshift.io/${WANAKU_ROUTER_NAME}" "route.route.openshift.io/${WANAKU_ROUTER_NAME}-mcp"; do
+    "ingress.networking.k8s.io/${WANAKU_ROUTER_NAME}-management" "ingress.networking.k8s.io/${WANAKU_ROUTER_NAME}-mcp"; do
   OWNER_UID=$(oc get "${RESOURCE}" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.metadata.ownerReferences[0].uid}' 2>/dev/null)
   check "${RESOURCE} owner" "${OWNER_UID}" "${ROUTER_UID}"
 done
@@ -671,8 +663,8 @@ done
 - The output includes `PASS: deployment/<WANAKU_ROUTER_NAME>-server owner =`.
 - The output includes `PASS: service/server-<WANAKU_ROUTER_NAME> owner =`.
 - The output includes `PASS: pvc/<WANAKU_ROUTER_NAME>-server-data owner =`.
-- The output includes `PASS: route.route.openshift.io/<WANAKU_ROUTER_NAME> owner =`.
-- The output includes `PASS: route.route.openshift.io/<WANAKU_ROUTER_NAME>-mcp owner =`.
+- The output includes `PASS: ingress.networking.k8s.io/<WANAKU_ROUTER_NAME>-management owner =`.
+- The output includes `PASS: ingress.networking.k8s.io/<WANAKU_ROUTER_NAME>-mcp owner =`.
 - The output includes `PASS: <WANAKU_ROUTER_NAME>-server managed-by label = wanaku-operator`.
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
@@ -680,7 +672,7 @@ done
 
 ---
 
-## Phase 4: Wanaku Server Through the Routes
+## Phase 4: Wanaku Server Through the Ingresses
 
 Authentication is disabled in this phase. Use `--no-auth` for the CLI.
 
@@ -714,7 +706,7 @@ done
 
 ### Test 4.2: Verify the management API with the CLI
 
-**Description:** The CLI lists the namespaces through the management Route. The `default` namespace always exists.
+**Description:** The CLI lists the namespaces through the management Ingress. The `default` namespace always exists.
 
 Run this block in the shared Bash session.
 
@@ -770,9 +762,9 @@ fi
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
-### Test 4.4: Verify the MCP endpoint through the MCP Route
+### Test 4.4: Verify the MCP endpoint through the MCP Ingress
 
-**Description:** The MCP endpoint is `<mcp-route>/<namespace>/mcp` (Streamable HTTP). No forward exists, so the tool
+**Description:** The MCP endpoint is `<mcp-ingress-url>/<namespace>/mcp` (Streamable HTTP). No forward exists, so the tool
 list is empty. The bare `/mcp` path is rejected with the JSON-RPC error `-32600`.
 
 Run this block in the shared Bash session.
@@ -1046,9 +1038,9 @@ echo "${BODY}" | jq -e '.authorization_servers | length > 0' > /dev/null \
 echo "${BODY}" | jq -r '.authorization_servers[0]' | grep -q "${MCP_HOST}" \
   && echo "PASS: authorization server is the MCP host" \
   || echo "FAIL: authorization server is not ${MCP_HOST}"
-# The Server builds the URLs from the Host header with the http scheme, also behind the TLS Route
+# The Server builds the URLs from the Host header with the http scheme, also behind the TLS Ingress
 echo "${BODY}" | jq -r '.authorization_servers[0]' | grep -q '^https://' \
-  || echo "WARN: authorization_servers uses http:// behind an edge-terminated Route (report if still open)"
+  || echo "WARN: authorization_servers uses http:// behind a TLS-terminating Ingress (report if still open)"
 ```
 
 **Expected result:**
@@ -1494,9 +1486,9 @@ echo "PASS: downloaded source assets removed or no download was owned"
 | 2     | —       | Operator installation, CRDs, RBAC and health                           | Critical |
 | 3     | 3.1-3.2 | WanakuRouter Ready and conditions                                      | Critical |
 | 3     | 3.3-3.6 | Server Deployment, Service and PVC                                     | Critical |
-| 3     | 3.8-3.9 | Ingresses, generated Routes and status endpoints                       | Critical |
+| 3     | 3.8-3.9 | Ingresses and status endpoints                                         | Critical |
 | 3     | 3.10    | Owner references and managed-by labels                                 | High     |
-| 4     | 4.1-4.2 | Health endpoints and management API through the Route                  | Critical |
+| 4     | 4.1-4.2 | Health endpoints and management API through the Ingress                | Critical |
 | 4     | 4.3     | Namespace creation and DNS-label validation                            | High     |
 | 4     | 4.4     | MCP endpoint `/<namespace>/mcp`, bare `/mcp` rejected                  | Critical |
 | 4     | 4.5     | Admin UI                                                               | High     |
