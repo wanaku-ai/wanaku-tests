@@ -20,6 +20,11 @@ The tool and resource names with `*`, `?` and `%64` test that the policy selecto
 `GET /capture/counts` returns the counters as JSON: `toolCalls`, `resourceReads` and `promptGets`. The REST endpoint
 does not use MCP, so a test can read the counters also when Wanaku denied the request.
 
+`GET /capture/authorization` returns the last `Authorization` header received by `capture_tool` and
+`capture_prompt`, as `tool` and `prompt`. An empty string means that no header was recorded. These operations also
+echo a received header in their MCP result. Credential tests use this behavior to check injection and response
+redaction. Use synthetic credentials with this fixture.
+
 ## Build and run
 
 ```bash

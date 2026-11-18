@@ -27,4 +27,12 @@ public class CaptureResource {
                 "resourceReads", state.getResourceReads(),
                 "promptGets", state.getPromptGets());
     }
+
+    /** Test-only observation endpoint. Send synthetic credentials to this fixture only. */
+    @GET
+    @Path("/authorization")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Map<String, String> authorization() {
+        return Map.of("tool", state.getToolAuthorization(), "prompt", state.getPromptAuthorization());
+    }
 }
