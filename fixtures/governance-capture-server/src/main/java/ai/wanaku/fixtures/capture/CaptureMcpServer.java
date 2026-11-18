@@ -16,6 +16,7 @@ import io.quarkiverse.mcp.server.Tool;
 import io.quarkiverse.mcp.server.ToolArg;
 import io.quarkiverse.mcp.server.ToolFilter;
 import io.quarkiverse.mcp.server.ToolManager.ToolInfo;
+import io.vertx.core.http.HttpServerRequest;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -35,6 +36,9 @@ public class CaptureMcpServer implements ToolFilter, ResourceFilter, PromptFilte
 
     @Inject
     ObjectMapper mapper;
+
+    @Inject
+    HttpServerRequest request;
 
     private static boolean isolatedCatalog() {
         return Boolean.getBoolean("capture.isolated-catalog");
@@ -62,8 +66,11 @@ public class CaptureMcpServer implements ToolFilter, ResourceFilter, PromptFilte
 
     @Tool(name = "capture_tool", description = "Records the invocation and echoes the payload")
     String captureTool(@ToolArg(description = "Arbitrary payload echoed back") String payload) {
+        String authorization = request.getHeader("Authorization");
+        state.recordToolAuthorization(authorization);
         int count = state.incrementToolCalls();
-        return "capture_tool invoked (count=" + count + ") payload=" + payload;
+        return "capture_tool invoked (count=" + count + ") payload=" + payload
+                + (authorization == null ? "" : " authorization=" + authorization);
     }
 
     @Tool(name = "capture_typed_tool", description = "Records arbitrary JSON arguments")
@@ -101,8 +108,11 @@ public class CaptureMcpServer implements ToolFilter, ResourceFilter, PromptFilte
 
     @Prompt(name = "capture_prompt", description = "Records the invocation and returns a message")
     PromptMessage capturePrompt(@PromptArg(description = "Arbitrary topic") String topic) {
+        String authorization = request.getHeader("Authorization");
+        state.recordPromptAuthorization(authorization);
         int count = state.incrementPromptGets();
-        return PromptMessage.withUserRole("capture_prompt invoked (count=" + count + ") topic=" + topic);
+        return PromptMessage.withUserRole("capture_prompt invoked (count=" + count + ") topic=" + topic
+                + (authorization == null ? "" : " authorization=" + authorization));
     }
 
     @Prompt(name = "capture_optional_prompt", description = "Records a prompt with optional arguments")

@@ -19,6 +19,7 @@ pull request.
 - [A2A proxy tests](a2a.md): the managed A2A JSON-RPC proxy.
 - [Camel Integration Capability tests](camel-integration-capability.md): CIC tools through MCP and the CLI.
 - [Resources tests](resources.md): resources and resource templates through MCP.
+- [Virtual namespace tests](virtual-namespaces.md): confirmed contracts and pending acceptance decisions.
 - [Troubleshooting](troubleshooting.md): skipped tests, missing artifacts and leftover processes.
 
 ## Next steps
