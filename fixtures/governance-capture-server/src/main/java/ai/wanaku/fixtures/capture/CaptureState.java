@@ -16,15 +16,66 @@ public class CaptureState {
     private final AtomicInteger toolCalls = new AtomicInteger();
     private final AtomicInteger resourceReads = new AtomicInteger();
     private final AtomicInteger promptGets = new AtomicInteger();
-    private final AtomicReference<String> toolAuthorization = new AtomicReference<>("");
-    private final AtomicReference<String> promptAuthorization = new AtomicReference<>("");
+    private final AtomicReference<String> toolAuthorization = new AtomicReference<>("absent");
+    private final AtomicReference<String> promptAuthorization = new AtomicReference<>("absent");
+    private final boolean syntheticAuthorizationEnabled;
+    private final String primaryToken;
+    private final String secondaryToken;
 
-    public void recordToolAuthorization(String authorization) {
-        toolAuthorization.set(authorization == null ? "" : authorization);
+    public CaptureState() {
+        this(Boolean.getBoolean("capture.synthetic-authorization"),
+                System.getenv("CAPTURE_SYNTHETIC_PRIMARY_TOKEN"),
+                System.getenv("CAPTURE_SYNTHETIC_SECONDARY_TOKEN"));
     }
 
-    public void recordPromptAuthorization(String authorization) {
-        promptAuthorization.set(authorization == null ? "" : authorization);
+    CaptureState(boolean syntheticAuthorizationEnabled, String primaryToken, String secondaryToken) {
+        this.syntheticAuthorizationEnabled = syntheticAuthorizationEnabled;
+        this.primaryToken = primaryToken;
+        this.secondaryToken = secondaryToken;
+    }
+
+    public String recordToolAuthorization(String authorization, boolean loopback) {
+        String observation = identifyAuthorization(authorization, loopback);
+        toolAuthorization.set(observation);
+        return syntheticEcho(observation);
+    }
+
+    public String recordPromptAuthorization(String authorization, boolean loopback) {
+        String observation = identifyAuthorization(authorization, loopback);
+        promptAuthorization.set(observation);
+        return syntheticEcho(observation);
+    }
+
+    private String identifyAuthorization(String authorization, boolean loopback) {
+        if (!syntheticAuthorizationEnabled) {
+            return "disabled";
+        }
+        if (!loopback) {
+            return "remote";
+        }
+        if (authorization == null) {
+            return "absent";
+        }
+        if (matchesSyntheticToken(authorization, primaryToken)) {
+            return "primary";
+        }
+        if (matchesSyntheticToken(authorization, secondaryToken)) {
+            return "secondary";
+        }
+        return "unmatched";
+    }
+
+    private boolean matchesSyntheticToken(String authorization, String expectedToken) {
+        return expectedToken != null && expectedToken.startsWith("synthetic-")
+                && authorization.equals("Bearer " + expectedToken);
+    }
+
+    private String syntheticEcho(String observation) {
+        return switch (observation) {
+            case "primary" -> " authorization=Bearer " + primaryToken;
+            case "secondary" -> " authorization=Bearer " + secondaryToken;
+            default -> "";
+        };
     }
 
     public String getToolAuthorization() {

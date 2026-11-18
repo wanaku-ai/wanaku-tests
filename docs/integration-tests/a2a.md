@@ -10,6 +10,12 @@ The tests cover Agent Card rewriting, message forwarding, task lookup, upstream 
 rejection, unsupported operations and options, required fields, live address updates, namespace isolation, route
 removal, task-not-found errors, registration validation, and invalid protocol envelopes and versions.
 
+`VirtualNamespaceA2aITCase` uses three independent upstream processes with the same agent name and task ID.
+It checks virtual catalogs and qualified Agent Card URLs, owner routing for messages and task operations,
+nonmember rejection, live membership changes, and agent registration, removal, and address changes.
+Upstream RPC counters prove which process received each request. Denied and nonmember requests must not reach
+an upstream. Correlated policy audit events must record both evaluation scopes and both namespace identities.
+
 ## Run the tests
 
 You need a Wanaku Server with the A2A listener and a CIC fat JAR:
@@ -40,8 +46,15 @@ The suite does not test interoperability with the native Camel A2A 1.0 component
 - A cancel request returns the A2A `TaskNotCancelable` error.
 - The task IDs of the two upstreams are the same on purpose, to test the namespace routing.
 - The test message text is a fixed JSON-safe string.
+- `GET /capture/counts` returns the number of RPC requests received by that upstream. It does not count Agent Card
+  discovery or counter reads. The fixture uses the Camel bean component to read an atomic counter.
 - The unsupported-version checks request version 2.0. They accept the legacy Invalid Request error and the newer
   `VersionNotSupportedError`.
+
+Virtual discovery uses `GET /virtual-ns/{group}/a2a`. Each catalog entry names a concrete owner and an agent.
+Protocol requests use `/virtual-ns/{group}/a2a/{owner}/{agent}`. Append `/.well-known/agent-card.json` for the Agent
+Card. These tests use A2A 0.3. They do not establish A2A 1.0 interoperability or mixed virtual/concrete policy
+outcomes. The allowed and denied scenarios apply the same module policy to both scopes.
 
 ## Use an external server
 

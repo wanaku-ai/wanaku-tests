@@ -196,7 +196,7 @@ class VirtualNamespaceMembershipITCase {
                         members: [%s]
                     """
                             .formatted(invalidMember));
-            assertInvalidDefinitionNotExposed(expectedMembershipError("rejected-aggregate", invalidMember));
+            assertInvalidDefinitionNotExposed(expectedMembershipError("rejected-aggregate", invalidMember), false);
             server.stop();
         }
     }
@@ -215,7 +215,7 @@ class VirtualNamespaceMembershipITCase {
                                     Map.of("name", "member-a"),
                                     Map.of("name", "other-virtual", "members", List.of("member-a")),
                                     Map.of("name", "rejected-aggregate", "members", List.of(invalidMember))))));
-            assertInvalidDefinitionNotExposed(expectedMembershipError("rejected-aggregate", invalidMember));
+            assertInvalidDefinitionNotExposed(expectedMembershipError("rejected-aggregate", invalidMember), true);
             server.stop();
         }
     }
@@ -241,7 +241,7 @@ class VirtualNamespaceMembershipITCase {
                 : "member must be an existing concrete namespace: " + invalidMember;
     }
 
-    private void assertInvalidDefinitionNotExposed(String expectedError) throws Exception {
+    private void assertInvalidDefinitionNotExposed(String expectedError, boolean restoredSnapshot) throws Exception {
         try {
             server.start("virtual-namespace-invalid-definition");
         } catch (IllegalStateException rejectedStartup) {
@@ -255,6 +255,25 @@ class VirtualNamespaceMembershipITCase {
         }
         assertThat(request("GET", NAMESPACES + "/rejected-aggregate", null).statusCode())
                 .isEqualTo(404);
+        String diagnostic = Files.readString(server.getLogFile().toPath());
+        if (restoredSnapshot && diagnostic.contains("invalid persisted namespace graph; snapshot was not loaded")) {
+            // Rejecting the whole snapshot is intentional: no seeded row may leak into the live registry.
+            assertThat(diagnostic).contains(expectedError);
+            HttpResponse<String> listed = request("GET", NAMESPACES, null);
+            assertThat(listed.statusCode()).as(listed.body()).isEqualTo(200);
+            assertThat(data(listed))
+                    .extracting(entry -> entry.path("name").asText())
+                    .containsExactly("default");
+            HttpResponse<String> baseline = request("GET", NAMESPACES + "/default", null);
+            assertThat(baseline.statusCode()).as(baseline.body()).isEqualTo(200);
+            assertThat(data(baseline).hasNonNull("members")).isFalse();
+        } else {
+            // A loader that excludes only the invalid definition must retain the valid input rows.
+            HttpResponse<String> concrete = request("GET", NAMESPACES + "/member-a", null);
+            assertThat(concrete.statusCode()).as(concrete.body()).isEqualTo(200);
+            assertThat(data(concrete).hasNonNull("members")).isFalse();
+            assertMembers("other-virtual", "member-a");
+        }
     }
 
     private void startServer(String namespaceConfig) throws Exception {

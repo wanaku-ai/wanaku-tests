@@ -104,6 +104,12 @@ class VirtualNamespacePolicyITCase extends GovernanceTestBase {
             if ("wanaku_action_policy".equals(event.path("filter").asText())
                     && operation.equals(event.path("operation").asText())) {
                 AuditRequests.assertMetadata(event, correlation, "decision", operation);
+                assertThat(event.path("attributes").path("virtual_namespace").asText())
+                        .as("Virtual request namespace in audit event %s", event)
+                        .isEqualTo(VIRTUAL);
+                assertThat(event.path("attributes").path("concrete_namespace").asText())
+                        .as("Concrete owner namespace in audit event %s", event)
+                        .isEqualTo(OWNER);
                 matchedRuleIds.addAll(
                         AuditRequests.textValues(event.path("attributes").path("matched_rule_ids")));
             }

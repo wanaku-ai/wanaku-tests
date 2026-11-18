@@ -66,11 +66,9 @@ public class CaptureMcpServer implements ToolFilter, ResourceFilter, PromptFilte
 
     @Tool(name = "capture_tool", description = "Records the invocation and echoes the payload")
     String captureTool(@ToolArg(description = "Arbitrary payload echoed back") String payload) {
-        String authorization = request.getHeader("Authorization");
-        state.recordToolAuthorization(authorization);
+        String authorizationEcho = state.recordToolAuthorization(request.getHeader("Authorization"), isLoopbackRequest());
         int count = state.incrementToolCalls();
-        return "capture_tool invoked (count=" + count + ") payload=" + payload
-                + (authorization == null ? "" : " authorization=" + authorization);
+        return "capture_tool invoked (count=" + count + ") payload=" + payload + authorizationEcho;
     }
 
     @Tool(name = "capture_typed_tool", description = "Records arbitrary JSON arguments")
@@ -108,11 +106,15 @@ public class CaptureMcpServer implements ToolFilter, ResourceFilter, PromptFilte
 
     @Prompt(name = "capture_prompt", description = "Records the invocation and returns a message")
     PromptMessage capturePrompt(@PromptArg(description = "Arbitrary topic") String topic) {
-        String authorization = request.getHeader("Authorization");
-        state.recordPromptAuthorization(authorization);
+        String authorizationEcho = state.recordPromptAuthorization(request.getHeader("Authorization"), isLoopbackRequest());
         int count = state.incrementPromptGets();
         return PromptMessage.withUserRole("capture_prompt invoked (count=" + count + ") topic=" + topic
-                + (authorization == null ? "" : " authorization=" + authorization));
+                + authorizationEcho);
+    }
+
+    private boolean isLoopbackRequest() {
+        String remote = request.remoteAddress().hostAddress();
+        return "127.0.0.1".equals(remote) || "::1".equals(remote) || "0:0:0:0:0:0:0:1".equals(remote);
     }
 
     @Prompt(name = "capture_optional_prompt", description = "Records a prompt with optional arguments")

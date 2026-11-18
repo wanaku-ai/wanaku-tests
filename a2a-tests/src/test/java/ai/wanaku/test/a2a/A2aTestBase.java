@@ -36,6 +36,7 @@ public abstract class A2aTestBase extends BaseIntegrationTest {
 
     private final List<CamelCapabilityManager> capabilities = new ArrayList<>();
     private final List<String> registeredAgentPaths = new ArrayList<>();
+    private final List<String> registeredNamespaces = new ArrayList<>();
 
     @BeforeEach
     void setupA2aInfrastructure() {
@@ -61,6 +62,14 @@ public abstract class A2aTestBase extends BaseIntegrationTest {
                 HttpResponse<String> response = request("DELETE", getServerBaseUrl() + path, null);
                 assertThat(response.statusCode())
                         .as("Remove agent %s: %s", path, response.body())
+                        .isIn(200, 204, 404);
+            }
+            for (int index = registeredNamespaces.size() - 1; index >= 0; index--) {
+                String namespace = registeredNamespaces.get(index);
+                HttpResponse<String> response =
+                        request("DELETE", getServerBaseUrl() + "/api/v1/namespaces/" + namespace, null);
+                assertThat(response.statusCode())
+                        .as("Remove namespace %s: %s", namespace, response.body())
                         .isIn(200, 204, 404);
             }
         } finally {
@@ -116,6 +125,16 @@ public abstract class A2aTestBase extends BaseIntegrationTest {
                 .as("Register agent: %s", response.body())
                 .isIn(200, 201);
         return json(response).path("data");
+    }
+
+    protected void registerNamespace(String namespace, List<String> members) throws Exception {
+        registeredNamespaces.add(namespace);
+        Map<String, Object> definition =
+                members == null ? Map.of("name", namespace) : Map.of("name", namespace, "members", members);
+        HttpResponse<String> response = request("POST", getServerBaseUrl() + "/api/v1/namespaces", definition);
+        assertThat(response.statusCode())
+                .as("Register namespace %s: %s", namespace, response.body())
+                .isIn(200, 201);
     }
 
     protected Map<String, Object> entry(String namespace, String address) {
