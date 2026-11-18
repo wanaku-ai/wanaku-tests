@@ -785,7 +785,7 @@ fi
 The enable and disable routes have no CLI command, so this test uses `curl`.
 
 ```bash run
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT "${WANAKU_SERVER_URL}/api/v1/tools/restartService/disable")
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT "${WANAKU_SERVER_URL}/api/v1/tools/restartService/disable?namespace=${MCP_NAMESPACE}")
 [ "${HTTP_CODE}" = "200" ] && echo "PASS [5.4]: restartService disabled" || echo "FAIL [5.4]: disable returned HTTP ${HTTP_CODE}"
 
 wanaku mcp tool list --uri "${MCP_URI}" --no-auth --plain 2>/dev/null | grep -q "^restartService " \
@@ -811,7 +811,7 @@ wanaku tools list --host "${WANAKU_SERVER_URL}" --no-auth --plain | grep -q "^re
 ### Test 5.5: An enabled tool is visible again
 
 ```bash run
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT "${WANAKU_SERVER_URL}/api/v1/tools/restartService/enable")
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT "${WANAKU_SERVER_URL}/api/v1/tools/restartService/enable?namespace=${MCP_NAMESPACE}")
 [ "${HTTP_CODE}" = "200" ] && echo "PASS [5.5]: restartService enabled" || echo "FAIL [5.5]: enable returned HTTP ${HTTP_CODE}"
 
 OUTPUT=$(wanaku mcp tool --uri "${MCP_URI}" --no-auth --name restartService --param serverId=test-server --param service=nginx --plain 2>/dev/null)

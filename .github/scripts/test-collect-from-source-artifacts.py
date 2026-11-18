@@ -1,10 +1,9 @@
 """Regression checks for artifact collection from source builds."""
 
-import shutil
+import os
 import subprocess
 import tempfile
 import unittest
-import zipfile
 from pathlib import Path
 
 
@@ -21,23 +20,28 @@ class SourceArtifactCollectionTest(unittest.TestCase):
         (source / "camel-integration-capability").mkdir()
         self.target = source / "wanaku-semantic-router" / "target"
         self.target.mkdir(parents=True)
-        self.jar = self.target / "wanaku-semantic-router-0.4.0-SNAPSHOT.jar"
-        self.write_jar(self.jar)
-        libraries = self.target / "lib"
-        libraries.mkdir()
-        self.dependency = libraries / "dependency.jar"
-        self.dependency.write_bytes(b"dependency contents")
-
-    def write_jar(self, path):
-        with zipfile.ZipFile(path, "w") as archive:
-            archive.writestr(
-                "META-INF/MANIFEST.MF",
-                "Manifest-Version: 1.0\nMain-Class: org.wanaku.wsr.Application\n\n",
-            )
+        (self.target.parent / "pom.xml").write_text(
+            "<project><version>0.4.0-SNAPSHOT</version></project>"
+        )
+        self.jar = self.target / "wanaku-semantic-router-0.4.0-SNAPSHOT-jar-with-dependencies.jar"
+        self.jar.write_bytes(b"current fat jar contents")
+        binary_directory = self.root / "bin"
+        binary_directory.mkdir()
+        maven = binary_directory / "mvn"
+        maven.write_text(
+            '#!/bin/sh\n'
+            '[ "$1" = "-q" ] && [ "$2" = "-f" ] && [ -f "$3" ] || exit 1\n'
+            '[ "$4" = "help:evaluate" ] && [ "$5" = "-Dexpression=project.version" ] || exit 1\n'
+            '[ "$6" = "-DforceStdout" ] || exit 1\n'
+            'printf "0.4.0-SNAPSHOT"\n'
+        )
+        maven.chmod(0o755)
+        self.environment = {**os.environ, "PATH": str(binary_directory) + os.pathsep + os.environ["PATH"]}
 
     def collect(self):
         return subprocess.run(
-            ["bash", str(SCRIPT)], cwd=self.root, capture_output=True, text=True, timeout=15
+            ["bash", str(SCRIPT)], cwd=self.root, env=self.environment,
+            capture_output=True, text=True, timeout=15
         )
 
     def assert_distribution(self):
@@ -45,39 +49,33 @@ class SourceArtifactCollectionTest(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         destination = self.root / "artifacts" / "wanaku-semantic-router"
         self.assertEqual(self.jar.read_bytes(), (destination / "wanaku-semantic-router.jar").read_bytes())
-        self.assertEqual(self.dependency.read_bytes(), (destination / "lib" / "dependency.jar").read_bytes())
+        self.assertFalse((destination / "lib").exists())
 
-    def test_collects_thin_jar_and_libraries(self):
+    def test_collects_fat_jar_without_libraries(self):
         self.assert_distribution()
 
-    def test_collects_thin_distribution_when_fat_jar_also_exists(self):
-        fat = self.target / "wanaku-semantic-router-0.4.0-SNAPSHOT-jar-with-dependencies.jar"
-        self.write_jar(fat)
-        with zipfile.ZipFile(fat, "a") as archive:
-            archive.writestr("fat-only.class", b"fat jar contents")
+    def test_collects_fat_jar_when_thin_jar_also_exists(self):
+        (self.target / "wanaku-semantic-router-0.4.0-SNAPSHOT.jar").write_bytes(b"thin jar contents")
         self.assert_distribution()
 
-    def test_rejects_fat_jar_without_thin_jar(self):
-        self.jar.rename(self.target / "wanaku-semantic-router-0.4.0-SNAPSHOT-jar-with-dependencies.jar")
+    def test_ignores_stale_version_fat_jar(self):
+        (self.target / "wanaku-semantic-router-0.3.0-jar-with-dependencies.jar").write_bytes(b"stale jar")
+        self.assert_distribution()
+
+    def test_does_not_copy_thin_distribution_libraries(self):
+        libraries = self.target / "lib"
+        libraries.mkdir()
+        (libraries / "dependency.jar").write_bytes(b"thin distribution dependency")
+        self.assert_distribution()
+
+    def test_rejects_missing_current_fat_jar_even_when_other_artifacts_exist(self):
+        self.jar.unlink()
+        (self.target / "wanaku-semantic-router-0.4.0-SNAPSHOT.jar").write_bytes(b"thin jar")
+        (self.target / "wanaku-semantic-router-0.3.0-jar-with-dependencies.jar").write_bytes(b"stale jar")
         result = self.collect()
         self.assertNotEqual(0, result.returncode)
-        self.assertIn("Expected one WSR thin executable JAR, found 0", result.stderr)
-
-    def test_rejects_multiple_thin_executables(self):
-        self.write_jar(self.target / "wanaku-semantic-router-older.jar")
-        result = self.collect()
-        self.assertNotEqual(0, result.returncode)
-        self.assertIn("Expected one WSR thin executable JAR, found 2", result.stderr)
-
-    def test_rejects_missing_or_empty_libraries(self):
-        self.dependency.unlink()
-        for missing in (False, True):
-            with self.subTest(missing=missing):
-                if missing:
-                    shutil.rmtree(self.target / "lib")
-                result = self.collect()
-                self.assertNotEqual(0, result.returncode)
-                self.assertIn("WSR dependency distribution missing", result.stderr)
+        self.assertIn("Could not find WSR fat JAR", result.stdout)
+        self.assertIn(self.jar.name, result.stdout)
 
 
 if __name__ == "__main__":

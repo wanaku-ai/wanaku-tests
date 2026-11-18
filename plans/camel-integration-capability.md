@@ -26,7 +26,7 @@ The removed `WanakuCamelRoute` and `WanakuCapability` CRDs are not tested. `Wana
 | Component | How the plan uses it |
 |-----------|----------------------|
 | Wanaku operator | Reconciles `WanakuRouter`, `WanakuServiceCatalog` and `WanakuIntegration` |
-| Wanaku Server | Deployment `<router>-server`. Management API through the `<router>` Route, MCP through the `<router>-mcp` Route. The runtimes register with `http://server-<router>:8080`. |
+| Wanaku Server | Deployment `<router>-server`. Management API through the `<router>-management` Ingress, MCP through the `<router>-mcp` Ingress. The runtimes register with `http://server-<router>:8080`. |
 | Wanaku Barn | Required: `spec.barn.enabled: true`. Stores the service catalog. The runtimes use `http://barn-<router>:8080` (`REGISTRATION_URL`). |
 | CIC runtime | Image `quay.io/wanaku/camel-integration-capability`. MCP and health endpoints on port 9090. |
 
@@ -264,7 +264,7 @@ export CIC_CATALOG_NAMESPACE="${CIC_CATALOG_NAMESPACE:-cic-catalog-ns}"
 export CIC_GOVERNED_NAMESPACES="${CIC_GOVERNED_NAMESPACES:-default,${CIC_CATALOG_NAMESPACE}}"
 # Wanaku CLI: an installed binary, or "java -jar ${WANAKU_REPO_ROOT}/apps/wanaku-cli/target/quarkus-app/quarkus-run.jar"
 export WANAKU_CLI="${WANAKU_CLI:-wanaku}"
-# The operator creates edge-terminated Routes. Set these to empty values when the ingress certificate is trusted.
+# The operator Ingresses use the TLS certificate of the cluster ingress controller. Set these to empty values when that certificate is trusted.
 export WANAKU_CLI_TLS_OPTS="${WANAKU_CLI_TLS_OPTS---insecure}"
 export CURL_TLS_OPTS="${CURL_TLS_OPTS--k}"
 # Isolate credentials per test run to avoid contention
@@ -376,6 +376,12 @@ kind: WanakuRouter
 metadata:
   name: ${WANAKU_ROUTER_NAME}
 spec:
+  exposure:
+    listeners:
+      management:
+        host: ${WANAKU_ROUTER_NAME}-${WANAKU_NAMESPACE}.${OPENSHIFT_APPS_DOMAIN}
+      mcp:
+        host: ${WANAKU_ROUTER_NAME}-mcp-${WANAKU_NAMESPACE}.${OPENSHIFT_APPS_DOMAIN}
   imagePullPolicy: Always
   server:
     image: ${WANAKU_SERVER_IMAGE}
@@ -398,14 +404,14 @@ wait_cr_condition wanakurouter "${WANAKU_ROUTER_NAME}" BarnAvailable True Availa
 
 - The commands exit with code 0.
 
-### Test 3.2: Read the Route URLs and verify the Server is reachable
+### Test 3.2: Read the Ingress URLs and verify the Server is reachable
 
 Run this block in the shared Bash session so that the exported `WANAKU_ROUTER_URL` and `WANAKU_ROUTER_MCP_URL`
 variables are available to all later steps.
 
 ```bash run
-export WANAKU_ROUTER_URL="https://$(oc get route "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.host}')"
-export WANAKU_ROUTER_MCP_URL="https://$(oc get route "${WANAKU_ROUTER_NAME}-mcp" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.host}')"
+export WANAKU_ROUTER_URL="https://$(oc get ingress "${WANAKU_ROUTER_NAME}-management" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.rules[0].host}')"
+export WANAKU_ROUTER_MCP_URL="https://$(oc get ingress "${WANAKU_ROUTER_NAME}-mcp" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.rules[0].host}')"
 echo "management: ${WANAKU_ROUTER_URL}"
 echo "mcp:        ${WANAKU_ROUTER_MCP_URL}"
 
@@ -778,7 +784,7 @@ wait_for_tool cic-echo || return 1
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
-### Test 5.3: Invoke the tool through the MCP Route
+### Test 5.3: Invoke the tool through the MCP Ingress
 
 **Description:** The route returns the message twice with a `-` separator.
 
@@ -1638,7 +1644,7 @@ done
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
-### Test 11.6: Invoke the tool through the MCP Route
+### Test 11.6: Invoke the tool through the MCP Ingress
 
 **Description:** The route returns the message with the `cloud-` prefix.
 
@@ -1802,14 +1808,14 @@ Follow [common/cleanup.md](common/cleanup.md).
 | 0 | — | OpenShift login | Critical |
 | 1 | — | Namespace setup | Critical |
 | 2 | — | Operator installation | Critical |
-| 3 | 3.1-3.2 | WanakuRouter with Barn, Routes reachable | Critical |
+| 3 | 3.1-3.2 | WanakuRouter with Barn, Ingresses reachable | Critical |
 | 4 | 4.1-4.3 | WanakuIntegration from a ConfigMap becomes Ready (Registered) | Critical |
 | 4 | 4.4-4.5 | Runtime Deployment, Service and status | High |
 | 4 | 4.6 | Self-registered forward with `cic.*` labels | Critical |
 | 4 | 4.7 | Tool discovery, tag filter, namespace isolation | Critical |
 | 5 | 5.1 | Fail-safe governance denies the tool call | Critical |
 | 5 | 5.2 | Test governance configuration (test-only workaround) | Critical |
-| 5 | 5.3-5.4 | Tool invocation through the MCP Route, unknown tool fails | Critical |
+| 5 | 5.3-5.4 | Tool invocation through the MCP Ingress, unknown tool fails | Critical |
 | 5 | 5.5 | Audit trail | Medium |
 | 6 | 6.1 | Runtime replacement keeps the forward (ownership label) | High |
 | 7 | 7.1 | WanakuServiceCatalog deploys the catalog to Barn | High |

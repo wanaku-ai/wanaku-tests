@@ -59,17 +59,6 @@ rules:
     resources: ["deployments", "replicasets"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 
-  # OpenShift Routes
-  - apiGroups: ["route.openshift.io"]
-    resources: ["routes"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-
-  # The operator's role grants custom Route hosts; the test runner must hold
-  # these permissions before Helm can create that role.
-  - apiGroups: ["route.openshift.io"]
-    resources: ["routes/custom-host"]
-    verbs: ["create", "update"]
-
   # Ingresses
   - apiGroups: ["networking.k8s.io"]
     resources: ["ingresses"]

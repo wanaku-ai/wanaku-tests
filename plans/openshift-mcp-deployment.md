@@ -3,7 +3,7 @@
 ## Overview
 
 This plan verifies operator deployment of Wanaku Server on OpenShift and authenticated MCP operations through
-its Routes. It deploys Keycloak, oauth2-proxy and the infra-remediation MCP fixture, registers the fixture as a
+its Ingresses. It deploys Keycloak, oauth2-proxy and the infra-remediation MCP fixture, registers the fixture as a
 forward, and checks discovery, authentication, namespace isolation and governance behavior.
 
 For CLI help, option validation and tool/resource/prompt operations against a builtin or existing server, use
@@ -14,7 +14,7 @@ The operator deploys Wanaku Server from a `WanakuRouter` resource (`spec.server`
 
 - the `<router>-server` Deployment and the `server-<router>` Service (ports 8080 management, 8081 MCP, 8083, 8084)
 - the `<router>-oauth2-proxy` Deployment (4180 MCP proxy, 4181 management proxy)
-- the Route `<router>` for the management API and the Route `<router>-mcp` for the MCP listener (edge TLS)
+- the Ingress `<router>-management` for the management API and the Ingress `<router>-mcp` for the MCP listener.
 
 The plan deploys the MCP test fixture in the cluster and registers it as a forward with the CLI. This replaces
 the removed `WanakuCapability` resource. The operator also offers `WanakuIntegration` for the Camel Integration
@@ -214,7 +214,7 @@ export WANAKU_SERVER_IMAGE="${WANAKU_SERVER_IMAGE:-quay.io/wanaku/wanaku-server:
 export WANAKU_OAUTH2_PROXY_IMAGE="${WANAKU_OAUTH2_PROXY_IMAGE:-}"   # empty: operator default
 export TEST_MCP_IMAGE="${TEST_MCP_IMAGE:-quay.io/wanaku/test-mcp-server:latest}"
 export MCP_E2E_NAMESPACE="${MCP_E2E_NAMESPACE:-mcp-e2e}"
-# Set to "--insecure" when the cluster Route certificates are not trusted
+# Set to "--insecure" when the cluster Ingress certificates are not trusted
 export WANAKU_TLS_FLAG="${WANAKU_TLS_FLAG:-}"
 # Isolate CLI credentials per test run (see #1697)
 export WANAKU_CREDENTIALS="${WANAKU_CREDENTIALS:-/tmp/wanaku-creds-${WANAKU_NAMESPACE}}"
@@ -302,6 +302,12 @@ kind: WanakuRouter
 metadata:
   name: ${WANAKU_ROUTER_NAME}
 spec:
+  exposure:
+    listeners:
+      management:
+        host: ${WANAKU_ROUTER_NAME}-${WANAKU_NAMESPACE}.${OPENSHIFT_APPS_DOMAIN}
+      mcp:
+        host: ${WANAKU_ROUTER_NAME}-mcp-${WANAKU_NAMESPACE}.${OPENSHIFT_APPS_DOMAIN}
   server:
     image: ${WANAKU_SERVER_IMAGE}
     imagePullPolicy: Always
@@ -340,9 +346,9 @@ for PORT in 8080 8081; do
     || echo "FAIL [11.6]: server-${R} ports are '${PORTS}'"
 done
 
-for ROUTE in "${R}" "${R}-mcp"; do
-  oc get route "${ROUTE}" -n "${WANAKU_NAMESPACE}" > /dev/null 2>&1 \
-    && echo "PASS [11.6]: route ${ROUTE} exists" || echo "FAIL [11.6]: route ${ROUTE} missing"
+for INGRESS in "${R}-management" "${R}-mcp"; do
+  oc get ingress "${INGRESS}" -n "${WANAKU_NAMESPACE}" > /dev/null 2>&1 \
+    && echo "PASS [11.6]: ingress ${INGRESS} exists" || echo "FAIL [11.6]: ingress ${INGRESS} missing"
 done
 
 oc get deployment "${R}-barn" -n "${WANAKU_NAMESPACE}" > /dev/null 2>&1 \
@@ -360,8 +366,8 @@ REASON=$(oc get wanakurouter "${R}" -n "${WANAKU_NAMESPACE}" \
 - The output includes `PASS [11.6]: deployment <R>-oauth2-proxy available`.
 - The output includes `PASS [11.6]: server-<R> exposes 8080`.
 - The output includes `PASS [11.6]: server-<R> exposes 8081`.
-- The output includes `PASS [11.6]: route <R> exists`.
-- The output includes `PASS [11.6]: route <R>-mcp exists`.
+- The output includes `PASS [11.6]: ingress <R>-management exists`.
+- The output includes `PASS [11.6]: ingress <R>-mcp exists`.
 - The output includes `PASS [11.6]: Barn not deployed`.
 - The output includes `PASS [11.6]: AuthConfigured=Configured`.
 - The output contains no line starting with `FAIL`.
@@ -369,8 +375,8 @@ REASON=$(oc get wanakurouter "${R}" -n "${WANAKU_NAMESPACE}" \
 ### Step 11.7: Set the URL variables
 
 ```bash run
-export WANAKU_SERVER_URL="https://$(oc get route "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.host}')"
-export WANAKU_MCP_BASE_URL="https://$(oc get route "${WANAKU_ROUTER_NAME}-mcp" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.host}')"
+export WANAKU_SERVER_URL="https://$(oc get ingress "${WANAKU_ROUTER_NAME}-management" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.rules[0].host}')"
+export WANAKU_MCP_BASE_URL="https://$(oc get ingress "${WANAKU_ROUTER_NAME}-mcp" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.rules[0].host}')"
 # common/oidc-login-verification.md uses WANAKU_ROUTER_URL
 export WANAKU_ROUTER_URL="${WANAKU_SERVER_URL}"
 export MCP_URI="${WANAKU_MCP_BASE_URL}/default/mcp"
@@ -565,13 +571,13 @@ wanaku namespaces create "${MCP_E2E_NAMESPACE}" --host "${WANAKU_SERVER_URL}" ${
 
 ---
 
-## Phase 13: MCP CLI Through the MCP Route
+## Phase 13: MCP CLI Through the MCP Ingress
 
 ### Test 13.1: List tools, resources and prompts with a token
 
 ```bash run
 OUTPUT=$(wanaku mcp tool list --uri "${MCP_URI}" --token "${MCP_TOKEN}" ${WANAKU_TLS_FLAG} --plain 2>/dev/null)
-echo "${OUTPUT}" | grep -q "^restartService " && echo "PASS [13.1]: restartService listed through the Route" || echo "FAIL [13.1]: ${OUTPUT}"
+echo "${OUTPUT}" | grep -q "^restartService " && echo "PASS [13.1]: restartService listed through the Ingress" || echo "FAIL [13.1]: ${OUTPUT}"
 
 OUTPUT=$(wanaku mcp resource list --uri "${MCP_URI}" --token "${MCP_TOKEN}" ${WANAKU_TLS_FLAG} --plain 2>/dev/null)
 echo "${OUTPUT}" | grep -q "^safetyLimits " && echo "PASS [13.1]: safetyLimits listed" || echo "FAIL [13.1]: ${OUTPUT}"
@@ -582,12 +588,12 @@ echo "${OUTPUT}" | grep -q "^summarizeIncident " && echo "PASS [13.1]: summarize
 
 **Expected result:**
 
-- The output includes `PASS [13.1]: restartService listed through the Route`.
+- The output includes `PASS [13.1]: restartService listed through the Ingress`.
 - The output includes `PASS [13.1]: safetyLimits listed`.
 - The output includes `PASS [13.1]: summarizeIncident listed`.
 - The output contains no line starting with `FAIL`.
 
-### Test 13.2: The MCP Route rejects a request without a token
+### Test 13.2: The MCP Ingress rejects a request without a token
 
 ```bash run
 wanaku mcp tool list --uri "${MCP_URI}" ${WANAKU_TLS_FLAG} --plain > /dev/null 2>&1
@@ -601,7 +607,7 @@ EXIT_CODE=$?
 - The output includes `PASS [13.2]: request without token rejected`.
 - The output contains no line starting with `FAIL`.
 
-### Test 13.3: Namespace isolation through the Route
+### Test 13.3: Namespace isolation through the Ingress
 
 ```bash run
 OUTPUT=$(wanaku mcp tool list --uri "${WANAKU_MCP_BASE_URL}/${MCP_E2E_NAMESPACE}/mcp" \
@@ -617,7 +623,7 @@ echo "${OUTPUT}" | grep -q "^No tools found" && echo "PASS [13.3]: ${MCP_E2E_NAM
 
 ### Test 13.4: The bare `/mcp` path is rejected
 
-The MCP Route sends all paths to the MCP proxy. Wanaku Server rejects `/mcp` without a namespace.
+The MCP Ingress sends all paths to the MCP proxy. Wanaku Server rejects `/mcp` without a namespace.
 
 ```bash run
 OUTPUT=$(wanaku mcp tool list --uri "${WANAKU_MCP_BASE_URL}/mcp" --token "${MCP_TOKEN}" ${WANAKU_TLS_FLAG} --plain 2>&1)
@@ -725,7 +731,7 @@ done
 OUTPUT=$(wanaku mcp tool --uri "${MCP_URI}" --token "${MCP_TOKEN}" ${WANAKU_TLS_FLAG} \
   --name restartService --param serverId=test-server --param service=nginx --plain 2>&1)
 echo "${OUTPUT}" | grep -qxF "SUCCESS: Service 'nginx' restarted on server 'test-server'." \
-  && echo "PASS [14.3]: restartService called through the Route" || echo "FAIL [14.3]: '${OUTPUT}'"
+  && echo "PASS [14.3]: restartService called through the Ingress" || echo "FAIL [14.3]: '${OUTPUT}'"
 OUTPUT=$(wanaku mcp prompt --uri "${MCP_URI}" --token "${MCP_TOKEN}" ${WANAKU_TLS_FLAG} \
   --name draftEscalation --arg urgency=high --arg reason=memory-pressure --plain 2>&1)
 echo "${OUTPUT}" | grep -q "urgency=high" && echo "PASS [14.3]: draftEscalation rendered" || echo "FAIL [14.3]: '${OUTPUT}'"
@@ -741,7 +747,7 @@ fi
 
 **Expected result:**
 
-- The output includes `PASS [14.3]: restartService called through the Route`.
+- The output includes `PASS [14.3]: restartService called through the Ingress`.
 - The output includes `PASS [14.3]: draftEscalation rendered`.
 - The output includes `PASS [14.3]: resources/read allowed`.
 - The output contains no line starting with `FAIL`.
@@ -794,7 +800,7 @@ Follow [common/cleanup.md](common/cleanup.md).
 | 10 | 10.1 | OpenShift login (MANUAL) | Critical |
 | 11 | 11.1 | Create the namespace | Critical |
 | T | S.3-S.4 | OpenShift environment and deletion helper | High |
-| 11b | 11.2-11.10 | Keycloak, operator, authenticated WanakuRouter, Routes and login | Critical |
+| 11b | 11.2-11.10 | Keycloak, operator, authenticated WanakuRouter, Ingresses and login | Critical |
 | 12 | 12.1-12.4 | In-cluster MCP fixture registered as a forward | Critical |
 | 13 | 13.1-13.4 | MCP discovery, token requirement, isolation and bare `/mcp` rejection | Critical |
 | 14 | 14.1-14.3 | Fail-safe denial; custom wanaku.yaml through `spec.server.configMapRef`; governed success path | High |

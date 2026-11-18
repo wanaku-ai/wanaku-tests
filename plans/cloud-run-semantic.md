@@ -23,7 +23,7 @@ runtime.
 |-----------|----------------------|
 | Wanaku CLI | `wanaku cloud target`, `wanaku cloud run semantic`, `wanaku cloud status semantic` and `wanaku cloud delete semantic`. The `semantic` commands need wanaku-ai/wanaku-barn#271. The commands use the current kubeconfig context, which Phase 0 sets. |
 | Wanaku operator | Reconciles `WanakuRouter` and `WanakuSemanticRouter`. The operator image and the CRD need `configMapRef.items` (wanaku-ai/wanaku-barn#271). |
-| Wanaku Server | Deployment `<router>-server`. Management API through the `<router>` Route, MCP through the `<router>-mcp` Route. The runtime registers with `http://server-<router>:8080` (`WSR_REGISTRATION_URL`). |
+| Wanaku Server | Deployment `<router>-server`. Management API through the `<router>-management` Ingress, MCP through the `<router>-mcp` Ingress. The runtime registers with `http://server-<router>:8080` (`WSR_REGISTRATION_URL`). |
 | WSR runtime | Image `${WSR_IMAGE}`. Deployment and Service `<name>-wsr`. MCP on port 8090, status and health endpoints on port 8091. The operator probes need the health endpoints of wanaku-ai/wanaku-semantic-router#17. |
 
 Authentication is disabled in this plan. The runtime reads its files from the ConfigMap, so the plan does not enable
@@ -292,7 +292,7 @@ export WSR_NAME="support"
 export WSR_TOOL="route_support"
 # Wanaku CLI: an installed binary, or "java -jar ${WANAKU_REPO_ROOT}/apps/wanaku-cli/target/quarkus-app/quarkus-run.jar"
 export WANAKU_CLI="${WANAKU_CLI:-wanaku}"
-# The operator creates edge-terminated Routes. Set these to empty values when the ingress certificate is trusted.
+# The operator Ingresses use the TLS certificate of the cluster ingress controller. Set these to empty values when that certificate is trusted.
 export WANAKU_CLI_TLS_OPTS="${WANAKU_CLI_TLS_OPTS---insecure}"
 export CURL_TLS_OPTS="${CURL_TLS_OPTS--k}"
 # The local files of this run: the semantic route tree and WANAKU_HOME
@@ -440,6 +440,12 @@ kind: WanakuRouter
 metadata:
   name: ${WANAKU_ROUTER_NAME}
 spec:
+  exposure:
+    listeners:
+      management:
+        host: ${WANAKU_ROUTER_NAME}-${WANAKU_NAMESPACE}.${OPENSHIFT_APPS_DOMAIN}
+      mcp:
+        host: ${WANAKU_ROUTER_NAME}-mcp-${WANAKU_NAMESPACE}.${OPENSHIFT_APPS_DOMAIN}
   imagePullPolicy: Always
   server:
     image: ${WANAKU_SERVER_IMAGE}
@@ -456,14 +462,14 @@ echo "PASS: the WanakuRouter ${WANAKU_ROUTER_NAME} is Ready"
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
-### Test 3.2: Read the Route URLs and verify the Server is reachable
+### Test 3.2: Read the Ingress URLs and verify the Server is reachable
 
 Run this block in the shared Bash session so that the exported `WANAKU_ROUTER_URL` and `WANAKU_ROUTER_MCP_URL`
 variables are available to all later steps.
 
 ```bash run
-export WANAKU_ROUTER_URL="https://$(oc get route "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.host}')"
-export WANAKU_ROUTER_MCP_URL="https://$(oc get route "${WANAKU_ROUTER_NAME}-mcp" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.host}')"
+export WANAKU_ROUTER_URL="https://$(oc get ingress "${WANAKU_ROUTER_NAME}-management" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.rules[0].host}')"
+export WANAKU_ROUTER_MCP_URL="https://$(oc get ingress "${WANAKU_ROUTER_NAME}-mcp" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.rules[0].host}')"
 echo "management: ${WANAKU_ROUTER_URL}"
 echo "mcp:        ${WANAKU_ROUTER_MCP_URL}"
 
@@ -1001,7 +1007,8 @@ The rollout keeps the pod of Phase 6, which has no expert settings and restarts,
 (`maxUnavailable: 0`). Until then, `Ready` can report the `CrashLoopBackOff` of that old pod.
 
 Run these blocks in the shared Bash session. The first block waits up to 100 seconds and prints the state. The second
-block continues the wait. When the resource is not ready, it prints the log and the events of the newest pod.
+block continues the wait. When the resource is not ready, it prints the log, the log of the previous run, the last
+termination message (the WSR startup failure) and the events of the newest pod.
 
 ```bash run
 if wait_cr_condition wanakusemanticrouter "${WSR_NAME}" Ready True > /dev/null; then
@@ -1018,6 +1025,10 @@ wait_cr_condition wanakusemanticrouter "${WSR_NAME}" Ready True || {
   NEW_POD=$(oc get pods -l "app=${WSR_NAME}-wsr" -n "${WANAKU_NAMESPACE}" --sort-by=.metadata.creationTimestamp \
     -o jsonpath='{.items[-1:].metadata.name}')
   oc logs "${NEW_POD}" -n "${WANAKU_NAMESPACE}" --tail=40
+  # A crash-looping container restarts: show the log and the startup failure of the last terminated run
+  oc logs "${NEW_POD}" -n "${WANAKU_NAMESPACE}" --previous --tail=40 2>/dev/null
+  echo "last termination message: $(oc get pod "${NEW_POD}" -n "${WANAKU_NAMESPACE}" \
+    -o jsonpath='{.status.containerStatuses[0].lastState.terminated.message}')"
   oc get events -n "${WANAKU_NAMESPACE}" --field-selector "involvedObject.name=${NEW_POD}" | tail -10
   return 1
 }
@@ -1148,7 +1159,7 @@ Run this block in the shared Bash session.
 OUTPUT=$(${WANAKU_CLI} forwards list --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth --plain 2>&1)
 echo "${OUTPUT}"
 FAIL=0
-echo "${OUTPUT}" | grep -q "^${WSR_TOOL}[[:space:]]*http://${WSR_NAME}-wsr.${WANAKU_NAMESPACE}.svc:8090/mcp" \
+echo "${OUTPUT}" | grep -Eq "^${WSR_TOOL}[[:space:]]+http://[0-9.]+:8090/mcp" \
   && echo "PASS: forward ${WSR_TOOL} is listed with the runtime address" \
   || { echo "FAIL: forward ${WSR_TOOL} is not listed with the runtime address"; FAIL=1; }
 
@@ -1539,7 +1550,7 @@ esac
 | 1 | — | Namespace setup | Critical |
 | 2 | 2.1 | Operator installation | Critical |
 | 2 | 2.2 | CRD with `configMapRef.items` | Critical |
-| 3 | 3.1-3.2 | WanakuRouter, Routes reachable | Critical |
+| 3 | 3.1-3.2 | WanakuRouter, Ingresses reachable | Critical |
 | 4 | 4.1 | Route files in the local-files layout | Critical |
 | 4 | 4.2 | Stored cloud target | High |
 | 5 | 5.1 | Missing manifest: exit code 2 | High |

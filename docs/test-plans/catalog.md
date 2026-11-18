@@ -8,7 +8,7 @@ The test plans in [`plans/`](../../plans) and the environment that each one need
 | CLI | [mcp-cli-commands.md](../../plans/mcp-cli-commands.md) | `builtin` or `wanaku-local-existing` | MCP operations, governance and forwards across a restart, against a builtin or existing server. |
 | Keycloak Admin CLI and auth | [cli-auth-commands.md](../../plans/cli-auth-commands.md) | `openshift` | `wanaku-keycloak-admin` round trips and `wanaku auth` login through oauth2-proxy. |
 | OpenShift | [operator-basic-functionality.md](../../plans/operator-basic-functionality.md) | `openshift` | Operator installation, `WanakuRouter` lifecycle, authentication and deletion. |
-| OpenShift | [openshift-mcp-deployment.md](../../plans/openshift-mcp-deployment.md) | `openshift` | Authenticated MCP operations through the Routes. |
+| OpenShift | [openshift-mcp-deployment.md](../../plans/openshift-mcp-deployment.md) | `openshift` | Authenticated MCP operations through the Ingresses. |
 | Barn on OpenShift | [operator-service-catalog.md](../../plans/operator-service-catalog.md) | `openshift` | Barn deployed by the operator, `WanakuServiceCatalog`, and the CLI service catalog lifecycle from `init` to deploy, remove and restore, templates and negative tests. |
 | CIC on OpenShift | [camel-integration-capability.md](../../plans/camel-integration-capability.md) | `openshift` | `WanakuIntegration`, self-registration, catalog source and plain Deployment. |
 | Semantic Router on OpenShift | [semantic-router-openshift.md](../../plans/semantic-router-openshift.md) | `openshift` | `WanakuSemanticRouter` deployment, routing, audit and deletion. |

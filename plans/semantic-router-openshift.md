@@ -20,7 +20,7 @@ not test the publication flow.
 | Component | How the plan uses it |
 |-----------|----------------------|
 | Wanaku operator | Reconciles `WanakuRouter` and `WanakuSemanticRouter` |
-| Wanaku Server | Deployment `<router>-server`. Management API through the `<router>` Route, MCP through the `<router>-mcp` Route. The runtime registers with `http://server-<router>:8080` (`WSR_REGISTRATION_URL`). |
+| Wanaku Server | Deployment `<router>-server`. Management API through the `<router>-management` Ingress, MCP through the `<router>-mcp` Ingress. The runtime registers with `http://server-<router>:8080` (`WSR_REGISTRATION_URL`). |
 | Wanaku Barn | Enabled (`spec.barn.enabled: true`). The `configMapRef` source does not read from Barn. Barn is enabled because the operator creates the `<router>-server-config` ConfigMap (`wanaku.yaml`) only when Barn is enabled, and Phase 7 changes that file. The operator then also sets `WSR_BARN_URL`. |
 | WSR runtime | Image `quay.io/wanaku/wanaku-semantic-router`. Deployment and Service `<name>-wsr`. MCP on port 8090, status and health endpoints on port 8091. |
 | Expert provider | A TypeSafe AI compatible endpoint. Phases 7 and 8 call it. They are skipped when `TYPESAFE_API_KEY` is not set. |
@@ -204,7 +204,7 @@ export WSR_TOOL="route_support"
 export WSR_FORWARD_NAMESPACE="default"
 # Wanaku CLI: an installed binary, or "java -jar <wanaku-barn>/apps/wanaku-cli/target/quarkus-app/quarkus-run.jar"
 export WANAKU_CLI="${WANAKU_CLI:-wanaku}"
-# The operator creates edge-terminated Routes. Set these to empty values when the ingress certificate is trusted.
+# The operator Ingresses use the TLS certificate of the cluster ingress controller. Set these to empty values when that certificate is trusted.
 export WANAKU_CLI_TLS_OPTS="${WANAKU_CLI_TLS_OPTS---insecure}"
 export CURL_TLS_OPTS="${CURL_TLS_OPTS--k}"
 # Phases 7 and 8 call the expert provider only when a credential is set
@@ -352,6 +352,12 @@ kind: WanakuRouter
 metadata:
   name: ${WANAKU_ROUTER_NAME}
 spec:
+  exposure:
+    listeners:
+      management:
+        host: ${WANAKU_ROUTER_NAME}-${WANAKU_NAMESPACE}.${OPENSHIFT_APPS_DOMAIN}
+      mcp:
+        host: ${WANAKU_ROUTER_NAME}-mcp-${WANAKU_NAMESPACE}.${OPENSHIFT_APPS_DOMAIN}
   imagePullPolicy: Always
   server:
     image: ${WANAKU_SERVER_IMAGE}
@@ -389,11 +395,11 @@ INGESTION=$(oc get deployment "${WANAKU_ROUTER_NAME}-server" -n "${WANAKU_NAMESP
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
-### Test 3.2: Read the Route URLs and verify the Server is reachable
+### Test 3.2: Read the Ingress URLs and verify the Server is reachable
 
 ```bash run
-export WANAKU_ROUTER_URL="https://$(oc get route "${WANAKU_ROUTER_NAME}" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.host}')"
-export WANAKU_ROUTER_MCP_URL="https://$(oc get route "${WANAKU_ROUTER_NAME}-mcp" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.host}')"
+export WANAKU_ROUTER_URL="https://$(oc get ingress "${WANAKU_ROUTER_NAME}-management" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.rules[0].host}')"
+export WANAKU_ROUTER_MCP_URL="https://$(oc get ingress "${WANAKU_ROUTER_NAME}-mcp" -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.rules[0].host}')"
 echo "management: ${WANAKU_ROUTER_URL}"
 echo "mcp:        ${WANAKU_ROUTER_MCP_URL}"
 
@@ -721,7 +727,7 @@ check "WSR_REGISTRATION_URL" "$(wsr_env WSR_REGISTRATION_URL)" "http://server-${
 check "WSR_BARN_URL" "$(wsr_env WSR_BARN_URL)" "http://barn-${WANAKU_ROUTER_NAME}:8080"
 check "WSR_NAME" "$(wsr_env WSR_NAME)" "${WSR_NAME}"
 check "WSR_NAMESPACE" "$(wsr_env WSR_NAMESPACE)" "${WSR_FORWARD_NAMESPACE}"
-check "WSR_MCP_ADDRESS" "$(wsr_env WSR_MCP_ADDRESS)" "http://${DEPLOY}.${WANAKU_NAMESPACE}.svc:8090/mcp"
+check "WSR_MCP_ADDRESS" "$(wsr_env WSR_MCP_ADDRESS)" 'http://$(POD_IP):8090/mcp'
 check "WSR_BIND" "$(wsr_env WSR_BIND)" "0.0.0.0"
 check "WSR_MCP_PORT" "$(wsr_env WSR_MCP_PORT)" "8090"
 check "WSR_STATUS_PORT" "$(wsr_env WSR_STATUS_PORT)" "8091"
@@ -853,7 +859,7 @@ Run this block in the shared Bash session.
 ```bash run
 OUTPUT=$(${WANAKU_CLI} forwards list --host "${WANAKU_ROUTER_URL}" ${WANAKU_CLI_TLS_OPTS} --no-auth --plain 2>&1)
 echo "${OUTPUT}"
-echo "${OUTPUT}" | grep -q "^${WSR_NAME}[[:space:]]*http://${WSR_NAME}-wsr.${WANAKU_NAMESPACE}.svc:8090/mcp" \
+echo "${OUTPUT}" | grep -Eq "^${WSR_NAME}[[:space:]]+http://[0-9.]+:8090/mcp" \
   && echo "PASS: forward ${WSR_NAME} is listed with the runtime address" \
   || { echo "FAIL: forward ${WSR_NAME} not listed"; return 1; }
 
@@ -910,7 +916,7 @@ echo "${OUTPUT}" | grep -q "${WSR_TOOL}" && echo "PASS: ${WSR_TOOL} is listed at
 
 ### Test 6.1: Verify status.wanakuEndpoint for the default namespace
 
-**Description:** The router publishes `status.endpoints.mcp` as `https://<mcp-route-host>/default/mcp`, the endpoint
+**Description:** The router publishes `status.endpoints.mcp` as `https://<mcp-ingress-host>/default/mcp`, the endpoint
 of the `default` Wanaku namespace. The operator sets `status.wanakuEndpoint` of the `WanakuSemanticRouter` to the
 endpoint of its forward namespace: it replaces the path of the router endpoint with `/<namespace>/mcp`. For the
 forward namespace `default`, the two values are equal. MCP clients can list the tool at that endpoint.
@@ -1038,7 +1044,7 @@ wait_cr_condition wanakusemanticrouter "${WSR_NAME}" Registered True Registered 
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 
-### Test 7.3: Route billing, technical and unclassified requests through the MCP Route
+### Test 7.3: Route billing, technical and unclassified requests through the MCP Ingress
 
 **Description:** The test uses the three cases of `SemanticRouterITCase`. Each message starts with the case word, so
 the deterministic fixture provider of the local test (it selects the label from the start of the text) and a real model
@@ -1385,7 +1391,7 @@ echo "PASS: downloaded source assets removed or no download was owned"
 | 0 | — | OpenShift login | Critical |
 | 1 | — | Namespace setup | Critical |
 | 2 | — | Operator installation | Critical |
-| 3 | 3.1-3.2 | WanakuRouter with Barn and audit ingestion, Routes reachable | Critical |
+| 3 | 3.1-3.2 | WanakuRouter with Barn and audit ingestion, Ingresses reachable | Critical |
 | 4 | 4.1-4.3 | WanakuSemanticRouter from a ConfigMap becomes Ready (Registered) | Critical |
 | 4 | 4.4 | Runtime Deployment and Service | High |
 | 4 | 4.5 | Resource status and runtime status endpoint | High |

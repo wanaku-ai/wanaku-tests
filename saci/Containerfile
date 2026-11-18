@@ -8,8 +8,9 @@
 #   docker build -f saci/Containerfile -t localhost/wanaku-saci-worker:latest saci
 #
 # WANAKU_IMAGE supplies `wanaku-server` and FIXTURE_IMAGE supplies the test
-# MCP server. The CLI comes from a wanaku-barn release.
+# MCP server. By default, the CLI tools come from a wanaku-barn release.
 
+ARG WANAKU_BARN_SOURCE=github-barn-tools
 ARG SACI_IMAGE=quay.io/orpiske/saci-worker:latest
 ARG WANAKU_IMAGE=quay.io/wanaku/wanaku-server:early-access
 # A static busybox, used only to extract the CLI archive.
@@ -21,7 +22,7 @@ FROM ${BUSYBOX_IMAGE} AS busybox
 
 FROM ${FIXTURE_IMAGE} AS fixture
 
-FROM ${SACI_IMAGE}
+FROM ${SACI_IMAGE} AS worker-base
 ARG TARGETARCH
 ARG WANAKU_CLI_RELEASE=early-access
 ARG WANAKU_CLI_VERSION=0.3.0-SNAPSHOT
@@ -36,19 +37,26 @@ COPY --from=fixture --chown=0:0 /deployments/ /opt/test-mcp-server/
 RUN printf '#!/bin/sh\nexec java -jar /opt/test-mcp-server/quarkus-run.jar "$@"\n' >/usr/local/bin/test-mcp-server \
     && chmod 0755 /usr/local/bin/test-mcp-server
 
-# The wanaku CLI and wanaku-keycloak-admin come from the same wanaku-barn
-# release. Both have native builds for Linux x86_64 only. Other
-# architectures use the JVM builds. The JVM builds and the test MCP server
-# need Java 21 or later. The launchers find their files relative to their own
-# path, so the commands in /usr/local/bin are wrappers, not links.
-RUN --mount=type=bind,from=busybox,source=/bin/busybox,target=/tmp/busybox \
-    set -eu; \
+# The JVM builds and the test MCP server need Java 21 or later.
+RUN set -eu; \
     programs_to_install="nodejs npm java-headless openssl unzip"; \
     dnf install --assumeyes --setopt=install_weak_deps=False $programs_to_install; \
     dnf clean all; \
     node --version; \
     npx --version; \
-    java -version; \
+    java -version
+
+# The release builds of wanaku CLI and wanaku-keycloak-admin come from the same
+# wanaku-barn release. Both have native builds for Linux x86_64 only. Other
+# architectures use the JVM builds. The JVM builds and the test MCP server
+# need Java 21 or later. The launchers find their files relative to their own
+# path, so the commands in /usr/local/bin are wrappers, not links.
+FROM worker-base AS github-barn-tools
+ARG TARGETARCH
+ARG WANAKU_CLI_RELEASE=early-access
+ARG WANAKU_CLI_VERSION=0.3.0-SNAPSHOT
+RUN --mount=type=bind,from=busybox,source=/bin/busybox,target=/tmp/busybox \
+    set -eu; \
     base="https://github.com/wanaku-ai/wanaku-barn/releases/download/${WANAKU_CLI_RELEASE}"; \
     tmp=$(mktemp -d); \
     curl -fsSL -o "$tmp/checksums_sha256.txt" "$base/checksums_sha256.txt"; \
@@ -72,8 +80,41 @@ RUN --mount=type=bind,from=busybox,source=/bin/busybox,target=/tmp/busybox \
     install_barn_tool wanaku-keycloak-admin wanaku-keycloak-admin; \
     rm -rf "$tmp"
 
+FROM worker-base AS local-barn-tools
+COPY --from=wanaku-project apps/wanaku-cli/target/distributions/wanaku-cli-*.zip /tmp/barn-artifacts/
+COPY --from=wanaku-project apps/wanaku-keycloak-admin/target/distributions/wanaku-keycloak-admin-*.zip /tmp/barn-artifacts/
+RUN set -eu; \
+    install_barn_tool() { \
+        dist="$1"; command="$2"; \
+        set -- "/tmp/barn-artifacts/$dist"-*.zip; \
+        if [ "$#" -ne 1 ] || [ ! -f "$1" ]; then \
+            echo "expected exactly one $dist distribution archive" >&2; \
+            exit 1; \
+        fi; \
+        tmp=$(mktemp -d); \
+        unzip -q "$1" -d "$tmp/$dist"; \
+        set -- "$tmp/$dist"/*; \
+        if [ "$#" -eq 1 ] && [ -d "$1" ]; then extracted="$1"; else extracted="$tmp/$dist"; fi; \
+        mkdir -p "/opt/$dist"; \
+        mv "$extracted"/* "/opt/$dist"; \
+        chmod -R a+rX,go-w "/opt/$dist"; \
+        if [ -d "/opt/$dist/bin" ]; then chmod 0755 "/opt/$dist"/bin/*; launcher="bin/$command"; else launcher="$command"; fi; \
+        chmod 0755 "/opt/$dist/$launcher"; \
+        printf '#!/bin/sh\nexec /opt/%s/%s "$@"\n' "$dist" "$launcher" >"/usr/local/bin/$command"; \
+        chmod 0755 "/usr/local/bin/$command"; \
+        rm -rf "$tmp"; \
+    }; \
+    install_barn_tool wanaku-cli wanaku; \
+    install_barn_tool wanaku-keycloak-admin wanaku-keycloak-admin; \
+    rm -rf /tmp/barn-artifacts
+
+FROM ${WANAKU_BARN_SOURCE}
+ARG TARGETARCH
+
 # The OpenShift and Helm clients, for plans that deploy to a cluster. The
 # OpenShift archive also contains kubectl.
+ARG OC_VERSION=stable
+ARG HELM_VERSION=v3.19.0
 RUN set -eu; \
     case "${TARGETARCH:-$(uname -m)}" in \
         amd64|x86_64) oc_arch=x86_64; helm_arch=amd64 ;; \

@@ -6,6 +6,7 @@ Reusable steps for deploying and configuring Keycloak as the OIDC provider for W
 
 - Namespace created (see [namespace-setup.md](namespace-setup.md))
 - `WANAKU_NAMESPACE` environment variable set
+- `OPENSHIFT_APPS_DOMAIN` environment variable set (see [openshift-login.md](openshift-login.md))
 - `WANAKU_REPO_ROOT` points to the Wanaku Barn checkout containing `deploy/auth/wanaku-config.json`
 - `jq` available
 - `openssl` available (generates passwords that are not set)
@@ -57,12 +58,9 @@ export WANAKU_KEYCLOAK_ADMIN_CLI="${WANAKU_KEYCLOAK_ADMIN_CLI:-wanaku-keycloak-a
 ### Step 2: Deploy Keycloak
 
 ```bash run
-# Let OpenShift assign the hostname using only namespaced Route permissions.
-oc create route edge keycloak --service=keycloak --port=8080-tcp \
-  --insecure-policy=Redirect -n "${WANAKU_NAMESPACE}" --dry-run=client -o yaml \
-  | oc apply -n "${WANAKU_NAMESPACE}" -f - || return 1
-KC_HOST=$(oc get route keycloak -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.host}') || return 1
-[ -n "${KC_HOST}" ] || { echo "FAIL: OpenShift did not assign a Keycloak Route host"; return 1; }
+# The Keycloak Ingress uses a host on the cluster apps domain (see openshift-login.md).
+[ -n "${OPENSHIFT_APPS_DOMAIN:-}" ] || { echo "FAIL: OPENSHIFT_APPS_DOMAIN is not set"; return 1; }
+KC_HOST="keycloak-${WANAKU_NAMESPACE}.${OPENSHIFT_APPS_DOMAIN}"
 cat <<'KEYCLOAK_EOF' | sed "s|__KEYCLOAK_IMAGE__|${KEYCLOAK_IMAGE}|g; s|__ADMIN_USER__|${KEYCLOAK_ADMIN_USER}|g; s|__ADMIN_PASS__|${KEYCLOAK_ADMIN_PASS}|g; s|__KEYCLOAK_HOST__|${KC_HOST}|g" | oc apply -n "${WANAKU_NAMESPACE}" -f -
 apiVersion: apps/v1
 kind: Deployment
@@ -135,6 +133,28 @@ spec:
     app: keycloak
   sessionAffinity: None
   type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  labels:
+    app: keycloak
+  name: keycloak
+spec:
+  rules:
+    - host: __KEYCLOAK_HOST__
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  number: 8080
+  tls:
+    # Use the default cluster ingress certificate and redirect HTTP to HTTPS.
+    - {}
 KEYCLOAK_EOF
 ```
 
@@ -159,7 +179,7 @@ oc wait --for=condition=ready pod -l app=keycloak \
 ### Step 4: Retrieve the Keycloak external host
 
 ```bash run
-KEYCLOAK_HOST=$(oc get route keycloak -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.host}') || return 1
+KEYCLOAK_HOST=$(oc get ingress keycloak -n "${WANAKU_NAMESPACE}" -o jsonpath='{.spec.rules[0].host}') || return 1
 export KEYCLOAK_HOST
 export KEYCLOAK_URL="https://${KEYCLOAK_HOST}"
 echo "Keycloak URL: ${KEYCLOAK_URL}"
@@ -170,7 +190,7 @@ A failing block uses `return 1` to preserve the session for diagnostics and clea
 
 ```bash run
 if [ -z "${KEYCLOAK_HOST}" ]; then
-  echo "FAIL: could not retrieve Keycloak Route host"
+  echo "FAIL: could not retrieve Keycloak Ingress host"
   return 1
 fi
 echo "PASS: Keycloak host is ${KEYCLOAK_HOST}"
@@ -444,7 +464,7 @@ After completing this procedure, the following variables are set and available f
 
 | Variable                          | Description                                                                                                  |
 |-----------------------------------|--------------------------------------------------------------------------------------------------------------|
-| `KEYCLOAK_HOST`                   | External hostname of Keycloak (assigned by the OpenShift Route)                                              |
+| `KEYCLOAK_HOST`                   | External hostname of Keycloak (set in the Keycloak Ingress)                                                  |
 | `KEYCLOAK_URL`                    | Full URL (`https://<host>`)                                                                                  |
 | `WANAKU_OIDC_SECRET`              | Client secret for the `wanaku-service` client                                                                |
 | `WANAKU_SERVICE_SECRET`           | Generated client secret for the `wanaku-service` client, used for the realm import                           |

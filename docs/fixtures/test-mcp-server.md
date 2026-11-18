@@ -99,13 +99,26 @@ Select the target project with `oc project <project>`, then deploy from
 `fixtures/test-mcp-server`:
 
 ```shell
-oc apply -f deploy/openshift.yaml
+export WANAKU_NAMESPACE="$(oc project -q)"
+[ -n "${OPENSHIFT_APPS_DOMAIN:-}" ] || { echo "Set OPENSHIFT_APPS_DOMAIN to the cluster apps domain."; exit 1; }
+export TEST_MCP_SERVER_HOST="test-mcp-server-${WANAKU_NAMESPACE}.${OPENSHIFT_APPS_DOMAIN}"
+sed "s|__TEST_MCP_SERVER_HOST__|${TEST_MCP_SERVER_HOST}|g" deploy/openshift.yaml | oc apply -f -
 oc rollout status deployment/test-mcp-server
-oc port-forward service/test-mcp-server 8181:8181
 ```
 
-Keep the port-forward command running while using the server. The MCP endpoint
-is available locally at `http://localhost:8181/mcp`.
+The Ingress exposes the MCP endpoint at `https://${TEST_MCP_SERVER_HOST}/mcp`.
+OpenShift uses the cluster ingress certificate and redirects HTTP to HTTPS. Use
+`--insecure` with an HTTP client when the certificate is not trusted. For
+example, this command sends an MCP initialize request:
+
+```shell
+curl --insecure --silent --show-error --request POST \
+  --header 'Content-Type: application/json' \
+  --header 'Accept: application/json, text/event-stream' \
+  --header 'Mcp-Protocol-Version: 2025-03-26' \
+  --data '{"jsonrpc":"2.0","id":"fixture-init","method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"curl","version":"1.0"}}}' \
+  "https://${TEST_MCP_SERVER_HOST}/mcp"
+```
 
 The Deployment uses `quay.io/wanaku/test-mcp-server:latest`. To use a specific
 image tag or a different registry, change the `image` field in
@@ -130,31 +143,14 @@ oc rollout status deployment/test-mcp-server
 
 ## Use it from an MCP client
 
-### Claude Desktop configuration
-
-Add to your `claude_desktop_config.json`:
+Add to your `claude_desktop_config.json` or `.claude/settings.json`:
 
 ```json
 {
   "mcpServers": {
     "infra-remediation": {
       "type": "streamable-http",
-      "url": "http://localhost:8181/mcp"
-    }
-  }
-}
-```
-
-### Claude Code configuration
-
-Add to `.claude/settings.json`:
-
-```json
-{
-  "mcpServers": {
-    "infra-remediation": {
-      "type": "streamable-http",
-      "url": "http://localhost:8181/mcp"
+      "url": "https://<test-mcp-server-host>/mcp"
     }
   }
 }

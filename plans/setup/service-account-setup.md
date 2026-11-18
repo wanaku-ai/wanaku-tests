@@ -48,16 +48,15 @@ oc whoami
 |---|---|
 | Create/delete test namespaces | Manage nodes or machines |
 | Install/uninstall the operator Helm chart | Manage PVs or StorageClasses |
-| CRUD on deployments, services, routes, PVCs | Manage SecurityContextConstraints |
+| CRUD on deployments, services, ingresses, PVCs | Manage SecurityContextConstraints |
 | CRUD on Wanaku custom resources (CRDs) | Manage OLM operators |
 | Read pod logs, exec into pods | Impersonate other users |
 | Manage ClusterRoles/Bindings (for Helm) | Access cluster infrastructure |
 
 The runner needs the permissions delegated by the operator chart, including `WanakuIntegration`,
-`WanakuSemanticRouter` and their status/finalizer subresources, and `create`/`update` on
-`routes/custom-host`. Otherwise Helm cannot create the operator's ClusterRoles. After updating this
-setup script, an administrator must rerun `./plans/setup/create-service-account.sh` to apply the updated
-role to an existing test service account. Existing tokens continue to use that role; do not run the
+`WanakuSemanticRouter` and their status/finalizer subresources. Otherwise Helm cannot create the
+operator's ClusterRoles. After updating this setup script, an administrator must rerun
+`./plans/setup/create-service-account.sh` to apply the updated role to an existing test service account. Existing tokens continue to use that role; do not run the
 bootstrap from the service-account test session.
 
 ## Token Management
