@@ -7,9 +7,7 @@ import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.time.Duration;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ai.wanaku.test.config.TestConfiguration;
@@ -80,7 +78,8 @@ class VirtualNamespaceMembershipITCase {
             assertThat(entry.path("members")).isEqualTo(mapper.valueToTree(List.of("member-a", "member-b")));
         });
 
-        assertSuccess(request("PUT", NAMESPACES + "/aggregate", Map.of("members", List.of("member-b"))));
+        assertSuccess(
+                request("PUT", NAMESPACES + "/aggregate", Map.of("name", "aggregate", "members", List.of("member-b"))));
         assertMembers("aggregate", "member-b");
         assertThat(request("GET", NAMESPACES + "/member-a", null).statusCode()).isEqualTo(200);
     }
@@ -96,6 +95,8 @@ class VirtualNamespaceMembershipITCase {
             HttpResponse<String> rejected = request(
                     "POST", NAMESPACES, Map.of("name", "rejected", "members", List.of("member-a", invalidMember)));
             assertRejected(rejected);
+            assertThat(mapper.readTree(rejected.body()).path("error").asText())
+                    .isEqualTo(expectedMembershipError("rejected", invalidMember));
             assertThat(request("GET", NAMESPACES + "/rejected", null).statusCode())
                     .isEqualTo(404);
         }
@@ -112,8 +113,13 @@ class VirtualNamespaceMembershipITCase {
         createVirtual("aggregate", List.of("member-a"));
 
         for (String invalidMember : List.of("unknown-member", "other-virtual", "aggregate")) {
-            assertRejected(
-                    request("PUT", NAMESPACES + "/aggregate", Map.of("members", List.of("member-b", invalidMember))));
+            HttpResponse<String> rejected = request(
+                    "PUT",
+                    NAMESPACES + "/aggregate",
+                    Map.of("name", "aggregate", "members", List.of("member-b", invalidMember)));
+            assertRejected(rejected);
+            assertThat(mapper.readTree(rejected.body()).path("error").asText())
+                    .isEqualTo(expectedMembershipError("aggregate", invalidMember));
             assertMembers("aggregate", "member-a");
         }
     }
@@ -163,7 +169,10 @@ class VirtualNamespaceMembershipITCase {
         createConcrete("member-a");
         createConcrete("member-b");
         createVirtual("aggregate", List.of("member-a"));
-        assertSuccess(request("PUT", NAMESPACES + "/aggregate", Map.of("members", List.of("member-a", "member-b"))));
+        assertSuccess(request(
+                "PUT",
+                NAMESPACES + "/aggregate",
+                Map.of("name", "aggregate", "members", List.of("member-a", "member-b"))));
         server.stopPreservingState();
         server.start("virtual-namespace-membership-restart");
 
@@ -187,7 +196,7 @@ class VirtualNamespaceMembershipITCase {
                         members: [%s]
                     """
                             .formatted(invalidMember));
-            assertInvalidDefinitionNotExposed();
+            assertInvalidDefinitionNotExposed(expectedMembershipError("rejected-aggregate", invalidMember));
             server.stop();
         }
     }
@@ -206,7 +215,7 @@ class VirtualNamespaceMembershipITCase {
                                     Map.of("name", "member-a"),
                                     Map.of("name", "other-virtual", "members", List.of("member-a")),
                                     Map.of("name", "rejected-aggregate", "members", List.of(invalidMember))))));
-            assertInvalidDefinitionNotExposed();
+            assertInvalidDefinitionNotExposed(expectedMembershipError("rejected-aggregate", invalidMember));
             server.stop();
         }
     }
@@ -226,25 +235,22 @@ class VirtualNamespaceMembershipITCase {
         assertMembers("aggregate", "legacy-member");
     }
 
-    private void assertInvalidDefinitionNotExposed() throws Exception {
+    private String expectedMembershipError(String namespace, String invalidMember) {
+        return namespace.equals(invalidMember)
+                ? "a virtual namespace cannot include itself"
+                : "member must be an existing concrete namespace: " + invalidMember;
+    }
+
+    private void assertInvalidDefinitionNotExposed(String expectedError) throws Exception {
         try {
             server.start("virtual-namespace-invalid-definition");
         } catch (IllegalStateException rejectedStartup) {
             // Rejecting the whole load or excluding the invalid definition are both valid.
             // Require a relevant diagnostic so an unrelated startup failure cannot pass.
-            String diagnostic = Files.readString(server.getLogFile().toPath()).toLowerCase(Locale.ROOT);
-            String validation = diagnostic
-                    .lines()
-                    .filter(line -> line.contains("rejected-aggregate"))
-                    .map(line -> line.replace("rejected-aggregate", "")
-                            .replace("unknown-member", "")
-                            .replace("other-virtual", "")
-                            .replace("member-a", ""))
-                    .collect(Collectors.joining("\n"));
-            assertThat(validation)
-                    .as("Startup must identify the invalid namespace: %s", rejectedStartup.getMessage())
-                    .containsPattern("\\b(member|members|membership)\\b")
-                    .containsPattern("\\b(invalid|reject|rejected|unknown|cannot|must)\\b|not found|does not exist");
+            String diagnostic = Files.readString(server.getLogFile().toPath());
+            assertThat(diagnostic)
+                    .as("Startup must report the membership validation failure: %s", rejectedStartup.getMessage())
+                    .contains(expectedError);
             return;
         }
         assertThat(request("GET", NAMESPACES + "/rejected-aggregate", null).statusCode())
