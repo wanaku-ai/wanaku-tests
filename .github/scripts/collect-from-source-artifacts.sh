@@ -51,7 +51,7 @@ else
     echo "::warning::Could not find CIC fat JAR"
 fi
 
-# WSR ships a thin executable JAR. Preserve the manifest's relative lib/ classpath.
+# WSR also builds a fat JAR. Select the thin JAR and preserve its relative lib/ classpath.
 python3 - "$SOURCE_DIR/wanaku-semantic-router" "$ARTIFACTS_DIR/wanaku-semantic-router" <<'PYTHON'
 import shutil
 import sys
@@ -61,6 +61,8 @@ from pathlib import Path
 source, destination = map(Path, sys.argv[1:])
 candidates = []
 for jar in source.glob("**/target/*.jar"):
+    if jar.name.endswith("-jar-with-dependencies.jar"):
+        continue
     with zipfile.ZipFile(jar) as archive:
         try:
             manifest = archive.read("META-INF/MANIFEST.MF").decode("utf-8")
@@ -69,7 +71,7 @@ for jar in source.glob("**/target/*.jar"):
     if any(line.startswith("Main-Class:") for line in manifest.splitlines()):
         candidates.append(jar)
 if len(candidates) != 1:
-    sys.exit(f"::error::Expected one WSR executable JAR, found {len(candidates)}: {candidates}")
+    sys.exit(f"::error::Expected one WSR thin executable JAR, found {len(candidates)}: {candidates}")
 jar = candidates[0]
 libraries = jar.parent / "lib"
 if not libraries.is_dir() or not any(libraries.glob("*.jar")):
