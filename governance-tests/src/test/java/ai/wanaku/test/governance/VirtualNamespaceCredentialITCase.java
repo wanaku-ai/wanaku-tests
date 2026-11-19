@@ -174,7 +174,7 @@ class VirtualNamespaceCredentialITCase extends GovernanceTestBase {
                 bindings:
                   - id: %s
                     forward_id: %s
-                    origin: "http://localhost:%d"
+                    origin: "http://127.0.0.1:%d"
                     mechanism: {type: bearer}
                     secret_refs: ["env:%s"]
                     allowed_purposes: [invocation]
@@ -183,7 +183,7 @@ class VirtualNamespaceCredentialITCase extends GovernanceTestBase {
                     cache: {max_ttl_seconds: 60}
                   - id: %s
                     forward_id: %s
-                    origin: "http://localhost:%d"
+                    origin: "http://127.0.0.1:%d"
                     mechanism: {type: bearer}
                     secret_refs: ["env:%s"]
                     allowed_purposes: [invocation]
@@ -285,7 +285,7 @@ class VirtualNamespaceCredentialITCase extends GovernanceTestBase {
         try (HttpClient http = HttpClient.newHttpClient()) {
             HttpResponse<String> response = http.send(
                     HttpRequest.newBuilder(URI.create(
-                                    "http://localhost:" + captureServer.getHttpPort() + "/capture/authorization"))
+                                    "http://127.0.0.1:" + captureServer.getHttpPort() + "/capture/authorization"))
                             .timeout(Duration.ofSeconds(10))
                             .GET()
                             .build(),

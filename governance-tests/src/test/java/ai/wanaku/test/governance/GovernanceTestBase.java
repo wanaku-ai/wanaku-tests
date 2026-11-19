@@ -259,7 +259,7 @@ abstract class GovernanceTestBase {
 
     protected CaptureCounts captureCounts(MockMcpServerManager upstream) throws Exception {
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("http://localhost:" + upstream.getHttpPort() + "/capture/counts"))
+                .uri(URI.create("http://127.0.0.1:" + upstream.getHttpPort() + "/capture/counts"))
                 .timeout(Duration.ofSeconds(10))
                 .GET()
                 .build();

@@ -42,9 +42,8 @@ following cases. Check the implementation contract before adding assertions.
 | Membership lifecycle | Empty and duplicate members, deletion of a referenced namespace, and concrete/virtual conversion |
 | Name uniqueness | Concrete and virtual namespaces with the same name |
 
-Virtual A2A uses `GET /virtual-ns/{group}/a2a` for discovery. Each member agent has a concrete qualifier.
-Protocol requests use `/virtual-ns/{group}/a2a/{concrete}/{agent}`. The Agent Card uses that path with
-`/.well-known/agent-card.json`. See [A2A proxy tests](a2a.md) for the protocol scope and integration coverage.
+See [A2A proxy tests](a2a.md) for virtual discovery, protocol and Agent Card routes, protocol scope, and integration
+coverage.
 
 ## Coverage in Wanaku
 

@@ -63,7 +63,7 @@ public class MockMcpServerManager extends ProcessManager {
 
     @Override
     protected boolean performHealthCheck() {
-        return HealthCheckUtils.waitForPort("localhost", httpPort, config.getDefaultTimeout());
+        return HealthCheckUtils.waitForPort("127.0.0.1", httpPort, config.getDefaultTimeout());
     }
 
     public int getHttpPort() {
@@ -71,6 +71,6 @@ public class MockMcpServerManager extends ProcessManager {
     }
 
     public String getMcpUrl() {
-        return "http://localhost:" + httpPort + "/mcp";
+        return "http://127.0.0.1:" + httpPort + "/mcp";
     }
 }
