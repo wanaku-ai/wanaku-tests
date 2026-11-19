@@ -3,6 +3,8 @@ package ai.wanaku.fixtures.capture;
 import jakarta.enterprise.context.ApplicationScoped;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 
 /**
  * Shared invocation counters for the governance capture fixture. The MCP handlers increment these
@@ -16,6 +18,8 @@ public class CaptureState {
     private final AtomicInteger toolCalls = new AtomicInteger();
     private final AtomicInteger resourceReads = new AtomicInteger();
     private final AtomicInteger promptGets = new AtomicInteger();
+    private final AtomicReference<JsonNode> lastToolCall =
+            new AtomicReference<>(JsonNodeFactory.instance.objectNode());
     private final AtomicReference<String> toolAuthorization = new AtomicReference<>("absent");
     private final AtomicReference<String> promptAuthorization = new AtomicReference<>("absent");
     private final boolean syntheticAuthorizationEnabled;
@@ -84,6 +88,17 @@ public class CaptureState {
 
     public String getPromptAuthorization() {
         return promptAuthorization.get();
+    }
+
+    public void recordToolCall(String name, JsonNode arguments) {
+        var call = JsonNodeFactory.instance.objectNode();
+        call.put("name", name);
+        call.set("arguments", arguments.deepCopy());
+        lastToolCall.set(call);
+    }
+
+    public JsonNode getLastToolCall() {
+        return lastToolCall.get().deepCopy();
     }
 
     public int incrementToolCalls() {

@@ -11,7 +11,7 @@ The entity names are stable, so the action-policy rules of a test can select the
 
 | Kind | Names |
 |------|-------|
-| Tools | `capture_tool` (argument `payload`), `capture_typed_tool` (optional JSON `value`), `capture_isolated_tool`, `capture_star*tool`, `capture_question?tool` |
+| Tools | `capture_tool` (argument `payload`), `capture_typed_tool` (optional JSON `value`), `capture_structured_tool` (required JSON `value`), `capture_error_tool`, `capture_isolated_tool`, `capture_star*tool`, `capture_question?tool` |
 | Resources | `capture://resource/data`, `capture://resource/database`, `capture://resource/%64ata` |
 | Prompts | `capture_prompt` (argument `topic`), `capture_optional_prompt` (optional `topic`) |
 
@@ -33,11 +33,27 @@ Requests without a header produce `absent`. Requests outside loopback produce `r
 The fixture binds to `127.0.0.1` by default. Managed tests select a JVM loopback address and use that same address
 for the fixture bind, health checks, client URLs, and credential origins. Do not send real credentials to this fixture.
 
+`capture_structured_tool` returns the supplied `value` in `structuredContent`, with two ordered text content blocks.
+`GET /capture/last-tool-call` returns the last call to this tool as `name` and `arguments`. Before the first call,
+it returns an empty object. Use this endpoint to check the arguments that reached the target. It does not record
+request headers.
+
+`capture_error_tool` returns an MCP tool result with `isError: true` and the text `capture tool execution failed`.
+It does not return a JSON-RPC protocol error. Both tools increment `toolCalls`.
+
 ## Build and run
 
 ```bash
 mvn package -f fixtures/governance-capture-server/pom.xml
 ```
+
+To run the fixture checks, use `verify` without `skipTests`:
+
+```bash
+mvn verify -f fixtures/governance-capture-server/pom.xml
+```
+
+Failsafe runs the snapshot checks and the MCP checks. The MCP checks start the packaged fixture on a free port.
 
 The tests start the JAR at `fixtures/governance-capture-server/target/quarkus-app/quarkus-run.jar` on a free port.
 To run it by hand, run `java -jar target/quarkus-app/quarkus-run.jar` in the fixture directory. It listens on port

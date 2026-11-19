@@ -2,6 +2,8 @@ package ai.wanaku.fixtures.capture;
 
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import java.util.List;
+import java.util.Map;
 
 import io.quarkiverse.mcp.server.FilterContext;
 import io.quarkiverse.mcp.server.Prompt;
@@ -16,6 +18,8 @@ import io.quarkiverse.mcp.server.Tool;
 import io.quarkiverse.mcp.server.ToolArg;
 import io.quarkiverse.mcp.server.ToolFilter;
 import io.quarkiverse.mcp.server.ToolManager.ToolInfo;
+import io.quarkiverse.mcp.server.ToolResponse;
+import io.quarkiverse.mcp.server.TextContent;
 import io.vertx.core.http.HttpServerRequest;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -76,6 +80,25 @@ public class CaptureMcpServer implements ToolFilter, ResourceFilter, PromptFilte
             throws JsonProcessingException {
         state.incrementToolCalls();
         return mapper.writeValueAsString(value);
+    }
+
+    @Tool(name = "capture_structured_tool", description = "Records a typed value and returns a structured result")
+    ToolResponse captureStructuredTool(@ToolArg(description = "JSON value to record") Object value) {
+        var arguments = mapper.createObjectNode();
+        arguments.set("value", mapper.valueToTree(value));
+        state.recordToolCall("capture_structured_tool", arguments);
+        state.incrementToolCalls();
+        return new ToolResponse(
+                false,
+                List.of(new TextContent("capture structured result"), new TextContent("capture structured result end")),
+                arguments,
+                Map.of());
+    }
+
+    @Tool(name = "capture_error_tool", description = "Returns a deterministic tool execution error")
+    ToolResponse captureErrorTool() {
+        state.incrementToolCalls();
+        return ToolResponse.error("capture tool execution failed");
     }
 
     @Tool(name = "capture_star*tool", description = "Literal star name for matcher tests")

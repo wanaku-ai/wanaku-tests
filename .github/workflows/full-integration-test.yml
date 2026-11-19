@@ -155,6 +155,8 @@ jobs:
             echo "| Barn | \`${BARN_REPO}\` | \`${BARN_BRANCH}\` |"
             echo "| WSR | \`${WSR_REPO}\` | \`${WSR_BRANCH}\` |"
             echo "| CIC | \`${CIC_REPO}\` | \`${CIC_BRANCH}\` |"
+            echo ""
+            echo "Wanaku revision: \`$(git -C source/wanaku rev-parse HEAD)\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build SDK
@@ -209,6 +211,10 @@ jobs:
           test -n "$WASM" || { echo "::error::Evaluator WASM action missing in actions/dist"; exit 1; }
           echo "EVAL_WASM=$(pwd)/${WASM}" >> "$GITHUB_ENV"
           echo "Wanaku server binary and evaluator WASM action ready: ${WASM}"
+
+          if [ -f features/tool-handler/Cargo.toml ]; then
+            echo "WASM_HANDLERS_CAPABLE=true" >> "$GITHUB_ENV"
+          fi
 
           # Older source branches do not include the OPA evaluator action.
           if [ -f actions/opa-allow/Cargo.toml ]; then
@@ -267,7 +273,7 @@ jobs:
       - name: Build test fixtures
         run: |
           mvn -B -DskipTests package -f fixtures/test-mcp-server/pom.xml
-          mvn -B package -f fixtures/governance-capture-server/pom.xml
+          mvn -B verify -f fixtures/governance-capture-server/pom.xml
 
       - name: Run integration tests
         env:
@@ -317,6 +323,13 @@ jobs:
       - name: Require OPA test execution
         if: always() && env.OPA_CAPABLE == 'true'
         run: python3 .github/scripts/check-opa-test-results.py governance-tests/target/failsafe-reports
+
+      - name: Require WASM tool handler test execution
+        if: always() && env.WASM_HANDLERS_CAPABLE == 'true'
+        run: |
+          python3 -m pip install --quiet defusedxml==0.7.1
+          python3 .github/scripts/test-wasm-handler-test-results.py
+          python3 .github/scripts/check-wasm-handler-test-results.py governance-tests/target/failsafe-reports
 
       - name: Test summary
         if: always()

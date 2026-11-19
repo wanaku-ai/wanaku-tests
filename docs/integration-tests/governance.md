@@ -52,6 +52,31 @@ mvn verify -pl governance-tests -am -Dit.test='ActionPolicyLifecycleITCase' -Dfa
 The test restarts the server and keeps its persistence directory. The capture fixture stays alive across the restart,
 and the test registers its forward again before the last MCP requests.
 
+## Run the tool dispatch contract tests
+
+`ToolDispatchContractITCase` checks typed structured results, content order, tool execution errors, protocol errors,
+and denied calls through the ordinary forwarding pipeline. It checks the target counters and captured arguments.
+These tests provide the target behavior for [WASM handler coverage](https://github.com/wanaku-ai/wanaku-tests/issues/333).
+They do not exercise a WASM handler.
+
+```bash
+mvn verify -pl governance-tests -am -Dit.test='ToolDispatchContractITCase' -Dfailsafe.failIfNoSpecifiedTests=false \
+  -Dwanaku.test.server.binary=/path/to/wanaku/target/debug/wanaku-server
+```
+
+`WasmToolHandlerITCase` registers real WAT components through the handler management API. It checks complete MCP
+results, typed target dispatch, target policy and validation, scoped catalog identity, runtime replacement, removal,
+restart persistence, namespace grants, execution limits, and recursion. The tests use the versioned
+`wanaku:tool-handler@1.0.0` contract and need no separate WASM compiler.
+
+```bash
+mvn verify -pl governance-tests -am -Dit.test='WasmToolHandlerITCase' -Dfailsafe.failIfNoSpecifiedTests=false \
+  -Dwanaku.test.server.binary=/path/to/wanaku/target/debug/wanaku-server
+```
+
+These scenarios skip on older servers that do not expose the handler management API. On source builds with the
+handler feature, CI requires every scenario to run and pass.
+
 ## Run the OPA tests
 
 The OPA tests need a Wanaku Server with the OPA evaluator, its `opa_allow_action.wasm`, and a native OPA binary.
