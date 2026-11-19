@@ -50,6 +50,9 @@ gh workflow run full-integration-test.yml \
   -R <your github ID>/wanaku-tests
 ```
 
+To use test changes from a branch, add `--ref <test-branch>`. This selects the workflow and test sources from that
+branch of your fork. The `wanaku_branch` input selects the server sources separately.
+
 Build all components from a release branch:
 
 ```bash
@@ -104,6 +107,10 @@ A test skips, and does not fail, when the infrastructure that it needs is not av
 binary or a fixture JAR is missing. To make sure that a missing artifact does not hide a problem, the build fails
 when more than 30% of the tests in a module skip. Set `wanaku.test.skip.threshold` (0 to 100) to change the limit.
 Tests that have the `@KnownLimitation` annotation are not counted.
+
+When the Wanaku source includes `features/tool-handler/Cargo.toml`, the workflow also requires every
+`WasmToolHandlerITCase` scenario to pass. A missing report, missing scenario, skipped test, or failed test makes the
+run fail. The job summary includes the Wanaku commit ID for the run.
 
 ## Other workflows
 

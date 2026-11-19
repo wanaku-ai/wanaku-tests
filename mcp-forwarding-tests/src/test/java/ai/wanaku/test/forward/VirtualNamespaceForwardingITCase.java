@@ -47,6 +47,14 @@ class VirtualNamespaceForwardingITCase {
     private static final String SECOND_VIEW = "virtual-overlap";
     private static final String TOOL = "capture_tool";
     private static final String PROMPT = "capture_prompt";
+    private static final List<String> CAPTURE_TOOLS = List.of(
+            TOOL,
+            "capture_typed_tool",
+            "capture_structured_tool",
+            "capture_error_tool",
+            "capture_star*tool",
+            "capture_question?tool");
+    private static final List<String> CAPTURE_PROMPTS = List.of(PROMPT, "capture_optional_prompt");
     private static final Path CAPTURE_JAR = Path.of(
                     "../fixtures/governance-capture-server/target/quarkus-app/quarkus-run.jar")
             .toAbsolutePath()
@@ -143,11 +151,13 @@ class VirtualNamespaceForwardingITCase {
             McpTestClient concrete = connect(owner);
             concrete.when()
                     .toolsList(page -> assertThat(page.tools())
-                            .anyMatch(tool -> TOOL.equals(tool.name()))
-                            .noneMatch(tool -> tool.name().startsWith(owner + "/")))
+                            .extracting(tool -> tool.name())
+                            .containsExactlyInAnyOrderElementsOf(CAPTURE_TOOLS))
                     .thenAssertResults();
             concrete.when()
-                    .promptsList(page -> assertThat(page.prompts()).anyMatch(prompt -> PROMPT.equals(prompt.name())))
+                    .promptsList(page -> assertThat(page.prompts())
+                            .extracting(prompt -> prompt.name())
+                            .containsExactlyInAnyOrderElementsOf(CAPTURE_PROMPTS))
                     .thenAssertResults();
             concrete.when()
                     .toolsCall(TOOL, Map.of("payload", owner), response -> {
@@ -311,25 +321,17 @@ class VirtualNamespaceForwardingITCase {
 
     private void assertInventory(McpTestClient client, List<String> owners) {
         client.when()
-                .toolsList(
-                        page -> assertThat(page.tools())
-                                .extracting(tool -> tool.name())
-                                .containsExactlyInAnyOrderElementsOf(owners.stream()
-                                        .flatMap(owner -> List.of(
-                                                        TOOL,
-                                                        "capture_typed_tool",
-                                                        "capture_star*tool",
-                                                        "capture_question?tool")
-                                                .stream()
-                                                .map(name -> owner + "/" + name))
-                                        .toList()))
+                .toolsList(page -> assertThat(page.tools())
+                        .extracting(tool -> tool.name())
+                        .containsExactlyInAnyOrderElementsOf(owners.stream()
+                                .flatMap(owner -> CAPTURE_TOOLS.stream().map(name -> owner + "/" + name))
+                                .toList()))
                 .thenAssertResults();
         client.when()
                 .promptsList(page -> assertThat(page.prompts())
                         .extracting(prompt -> prompt.name())
                         .containsExactlyInAnyOrderElementsOf(owners.stream()
-                                .flatMap(owner -> List.of(PROMPT, "capture_optional_prompt").stream()
-                                        .map(name -> owner + "/" + name))
+                                .flatMap(owner -> CAPTURE_PROMPTS.stream().map(name -> owner + "/" + name))
                                 .toList()))
                 .thenAssertResults();
         // URI qualification and resource reads await the resource-addressing decision in #2287.
@@ -406,8 +408,9 @@ class VirtualNamespaceForwardingITCase {
                 .atMost(Duration.ofSeconds(30))
                 .pollInterval(Duration.ofMillis(250))
                 .untilAsserted(() -> {
-                    for (var catalog :
-                            Map.of("tools", 4, "prompts", 2, "resources", 3).entrySet()) {
+                    for (var catalog : Map.of(
+                                    "tools", CAPTURE_TOOLS.size(), "prompts", CAPTURE_PROMPTS.size(), "resources", 3)
+                            .entrySet()) {
                         HttpResponse<String> response = http.send(
                                 HttpRequest.newBuilder(URI.create(server.getBaseUrl() + "/api/v1/" + catalog.getKey()))
                                         .timeout(Duration.ofSeconds(10))
@@ -421,6 +424,14 @@ class VirtualNamespaceForwardingITCase {
                                         owner.equals(entry.path("namespace").asText()))
                                 .as("Discovered %s in concrete namespace %s", catalog.getKey(), owner)
                                 .hasSize(catalog.getValue());
+                        if ("tools".equals(catalog.getKey()) || "prompts".equals(catalog.getKey())) {
+                            assertThat(entries)
+                                    .filteredOn(entry ->
+                                            owner.equals(entry.path("namespace").asText()))
+                                    .extracting(entry -> entry.path("name").asText())
+                                    .containsExactlyInAnyOrderElementsOf(
+                                            "tools".equals(catalog.getKey()) ? CAPTURE_TOOLS : CAPTURE_PROMPTS);
+                        }
                         if ("resources".equals(catalog.getKey())) {
                             List<String> names = new ArrayList<>();
                             entries.forEach(entry -> {

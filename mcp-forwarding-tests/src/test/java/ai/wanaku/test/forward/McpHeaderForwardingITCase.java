@@ -144,20 +144,20 @@ class McpHeaderForwardingITCase extends McpForwardingTestBase {
                 .thenAssertResults();
     }
 
-    @DisplayName("Trying to send an authenticated request without mandatory parameters causes error")
+    @DisplayName("Missing Authorization mapping is rejected as an invalid required tool argument")
     @Test
     void shouldHandleAbsentAuthHeader() throws Exception {
         headerMcpClient = createClientWithHeaders(Map.of());
 
         headerMcpClient
                 .when()
-                .toolsCall("echoAuthHeader", Map.of("marker", "no-auth"), response -> {
-                    LOG.info(
-                            "echoAuthHeader response (no auth): isError={}, content={}",
-                            response.isError(),
-                            response.content());
-                    assertThat(response.isError()).isTrue();
+                .toolsCall("echoAuthHeader")
+                .withArguments(Map.of("marker", "no-auth"))
+                .withErrorAssert(error -> {
+                    assertThat(error.code()).isEqualTo(-32602);
+                    assertThat(error.message()).isEqualTo("tool arguments do not match the registered input schema");
                 })
+                .send()
                 .thenAssertResults();
     }
 }
