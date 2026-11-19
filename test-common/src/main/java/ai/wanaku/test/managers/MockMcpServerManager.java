@@ -1,5 +1,6 @@
 package ai.wanaku.test.managers;
 
+import java.net.InetAddress;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,6 +16,7 @@ public class MockMcpServerManager extends ProcessManager {
 
     private final Path jarPath;
     private final TestConfiguration config;
+    private final String host = InetAddress.getLoopbackAddress().getHostAddress();
     private int httpPort;
 
     public MockMcpServerManager(Path jarPath, TestConfiguration config) {
@@ -24,6 +26,7 @@ public class MockMcpServerManager extends ProcessManager {
 
     public void prepare() {
         this.httpPort = PortUtils.findAvailablePort();
+        addSystemProperty("quarkus.http.host", host);
         addSystemProperty("quarkus.http.port", String.valueOf(httpPort));
         LOG.debug("Mock MCP server prepared on port {}", httpPort);
     }
@@ -63,14 +66,19 @@ public class MockMcpServerManager extends ProcessManager {
 
     @Override
     protected boolean performHealthCheck() {
-        return HealthCheckUtils.waitForPort("127.0.0.1", httpPort, config.getDefaultTimeout());
+        return HealthCheckUtils.waitForPort(host, httpPort, config.getDefaultTimeout());
     }
 
     public int getHttpPort() {
         return httpPort;
     }
 
+    public String getBaseUrl() {
+        String authority = host.contains(":") ? "[" + host + "]" : host;
+        return "http://" + authority + ":" + httpPort;
+    }
+
     public String getMcpUrl() {
-        return "http://127.0.0.1:" + httpPort + "/mcp";
+        return getBaseUrl() + "/mcp";
     }
 }

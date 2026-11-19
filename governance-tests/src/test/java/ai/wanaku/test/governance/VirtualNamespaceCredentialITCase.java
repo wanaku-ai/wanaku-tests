@@ -174,7 +174,7 @@ class VirtualNamespaceCredentialITCase extends GovernanceTestBase {
                 bindings:
                   - id: %s
                     forward_id: %s
-                    origin: "http://127.0.0.1:%d"
+                    origin: "%s"
                     mechanism: {type: bearer}
                     secret_refs: ["env:%s"]
                     allowed_purposes: [invocation]
@@ -183,7 +183,7 @@ class VirtualNamespaceCredentialITCase extends GovernanceTestBase {
                     cache: {max_ttl_seconds: 60}
                   - id: %s
                     forward_id: %s
-                    origin: "http://127.0.0.1:%d"
+                    origin: "%s"
                     mechanism: {type: bearer}
                     secret_refs: ["env:%s"]
                     allowed_purposes: [invocation]
@@ -194,12 +194,12 @@ class VirtualNamespaceCredentialITCase extends GovernanceTestBase {
                         .formatted(
                                 BINDING,
                                 FORWARD,
-                                captureServer.getHttpPort(),
+                                captureServer.getBaseUrl(),
                                 SECRET_VARIABLE,
                                 permittedNamespace,
                                 OTHER_BINDING,
                                 OTHER_FORWARD,
-                                captureServer.getHttpPort(),
+                                captureServer.getBaseUrl(),
                                 OTHER_SECRET_VARIABLE,
                                 OTHER_OWNER);
         server = new WanakuServerManager(baseConfig.toBuilder()
@@ -284,8 +284,7 @@ class VirtualNamespaceCredentialITCase extends GovernanceTestBase {
     private JsonNode lastAuthorization() throws Exception {
         try (HttpClient http = HttpClient.newHttpClient()) {
             HttpResponse<String> response = http.send(
-                    HttpRequest.newBuilder(URI.create(
-                                    "http://127.0.0.1:" + captureServer.getHttpPort() + "/capture/authorization"))
+                    HttpRequest.newBuilder(URI.create(captureServer.getBaseUrl() + "/capture/authorization"))
                             .timeout(Duration.ofSeconds(10))
                             .GET()
                             .build(),

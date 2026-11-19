@@ -30,7 +30,8 @@ Credential tests explicitly set `-Dcapture.synthetic-authorization=true`. They s
 `secondary`. It appends only that configured synthetic token to the MCP result, so tests can check response
 redaction. It does not retain the received header. Unmatched values produce `unmatched` and are never echoed.
 Requests without a header produce `absent`. Requests outside loopback produce `remote` and cannot enable echo.
-The fixture binds to `127.0.0.1` by default. Do not send real credentials to this fixture.
+The fixture binds to `127.0.0.1` by default. Managed tests select a JVM loopback address and use that same address
+for the fixture bind, health checks, client URLs, and credential origins. Do not send real credentials to this fixture.
 
 ## Build and run
 
