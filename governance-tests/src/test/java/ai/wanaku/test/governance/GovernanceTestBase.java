@@ -94,6 +94,7 @@ abstract class GovernanceTestBase {
 
         captureServer = new MockMcpServerManager(CAPTURE_JAR, baseConfig);
         captureServer.prepare();
+        configureCaptureServer(captureServer);
         captureServer.start(getClass().getSimpleName());
     }
 
@@ -102,6 +103,9 @@ abstract class GovernanceTestBase {
      * binary and capture JAR checks but before any process is started, so a skip here costs nothing.
      */
     protected void checkAdditionalRequirements(TestConfiguration config) {}
+
+    /** Configures the capture fixture before it starts. */
+    protected void configureCaptureServer(MockMcpServerManager capture) {}
 
     @AfterEach
     void stopInfrastructure() {
@@ -255,7 +259,7 @@ abstract class GovernanceTestBase {
 
     protected CaptureCounts captureCounts(MockMcpServerManager upstream) throws Exception {
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("http://localhost:" + upstream.getHttpPort() + "/capture/counts"))
+                .uri(URI.create(upstream.getBaseUrl() + "/capture/counts"))
                 .timeout(Duration.ofSeconds(10))
                 .GET()
                 .build();

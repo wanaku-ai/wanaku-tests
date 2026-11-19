@@ -399,7 +399,7 @@ class RevisionStreamIsolationITCase {
         try (HttpClient client =
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build()) {
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create("http://localhost:" + captureServer.getHttpPort() + "/capture/counts"))
+                    .uri(URI.create(captureServer.getBaseUrl() + "/capture/counts"))
                     .timeout(Duration.ofSeconds(10))
                     .GET()
                     .build();

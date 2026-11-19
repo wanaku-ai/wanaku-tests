@@ -28,7 +28,7 @@ public class CaptureResource {
                 "promptGets", state.getPromptGets());
     }
 
-    /** Test-only observation endpoint. Send synthetic credentials to this fixture only. */
+    /** Non-secret observation labels; this endpoint never returns received headers. */
     @GET
     @Path("/authorization")
     @Produces(MediaType.APPLICATION_JSON)

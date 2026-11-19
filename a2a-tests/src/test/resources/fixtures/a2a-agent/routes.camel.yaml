@@ -1,4 +1,24 @@
 # A deterministic A2A 0.3 upstream. camel-a2a currently targets A2A 1.0.
+- beans:
+    - name: rpcRequests
+      type: java.util.concurrent.atomic.AtomicInteger
+- route:
+    id: agent-request-counts
+    from:
+      uri: platform-http:/capture/counts
+      parameters:
+        httpMethodRestrict: GET
+      steps:
+        - setHeader:
+            name: requests
+            method:
+              ref: rpcRequests
+              method: get
+        - setHeader:
+            name: Content-Type
+            constant: application/json
+        - setBody:
+            simple: '{"requests":${header.requests}}'
 - route:
     id: agent-card
     from:
@@ -19,6 +39,11 @@
       parameters:
         httpMethodRestrict: POST
       steps:
+        - setHeader:
+            name: requestCount
+            method:
+              ref: rpcRequests
+              method: incrementAndGet
         - convertBodyTo:
             type: java.lang.String
         - setHeader:

@@ -438,8 +438,7 @@ class VirtualNamespaceForwardingITCase {
 
     private void assertCounts(int upstream, int tools, int prompts) throws Exception {
         HttpResponse<String> response = http.send(
-                HttpRequest.newBuilder(URI.create(
-                                "http://localhost:" + upstreams.get(upstream).getHttpPort() + "/capture/counts"))
+                HttpRequest.newBuilder(URI.create(upstreams.get(upstream).getBaseUrl() + "/capture/counts"))
                         .timeout(Duration.ofSeconds(10))
                         .GET()
                         .build(),

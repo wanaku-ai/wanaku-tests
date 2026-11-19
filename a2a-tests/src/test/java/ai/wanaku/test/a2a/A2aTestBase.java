@@ -20,9 +20,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assumptions.assumeThat;
+import static org.junit.jupiter.api.Assertions.assertAll;
 
 public abstract class A2aTestBase extends BaseIntegrationTest {
 
@@ -36,6 +38,7 @@ public abstract class A2aTestBase extends BaseIntegrationTest {
 
     private final List<CamelCapabilityManager> capabilities = new ArrayList<>();
     private final List<String> registeredAgentPaths = new ArrayList<>();
+    private final List<String> registeredNamespaces = new ArrayList<>();
 
     @BeforeEach
     void setupA2aInfrastructure() {
@@ -54,26 +57,31 @@ public abstract class A2aTestBase extends BaseIntegrationTest {
     }
 
     @AfterEach
-    void teardownA2aInfrastructure() throws Exception {
-        // Always stop every child process, including when a management cleanup fails.
-        try {
-            for (String path : registeredAgentPaths) {
+    void teardownA2aInfrastructure() {
+        List<Executable> cleanup = new ArrayList<>();
+        for (String path : registeredAgentPaths) {
+            cleanup.add(() -> {
                 HttpResponse<String> response = request("DELETE", getServerBaseUrl() + path, null);
                 assertThat(response.statusCode())
                         .as("Remove agent %s: %s", path, response.body())
                         .isIn(200, 204, 404);
-            }
-        } finally {
-            try {
-                for (CamelCapabilityManager manager : capabilities) {
-                    manager.stop();
-                }
-            } finally {
-                if (httpClient != null) {
-                    httpClient.close();
-                }
-            }
+            });
         }
+        for (int index = registeredNamespaces.size() - 1; index >= 0; index--) {
+            String namespace = registeredNamespaces.get(index);
+            cleanup.add(() -> {
+                HttpResponse<String> response =
+                        request("DELETE", getServerBaseUrl() + "/api/v1/namespaces/" + namespace, null);
+                assertThat(response.statusCode())
+                        .as("Remove namespace %s: %s", namespace, response.body())
+                        .isIn(200, 204, 404);
+            });
+        }
+        capabilities.forEach(manager -> cleanup.add(manager::stop));
+        if (httpClient != null) {
+            cleanup.add(httpClient::close);
+        }
+        assertAll("Remove every A2A agent and namespace, then stop all fixture processes", cleanup);
     }
 
     protected String startAgent(String marker) throws Exception {
@@ -116,6 +124,16 @@ public abstract class A2aTestBase extends BaseIntegrationTest {
                 .as("Register agent: %s", response.body())
                 .isIn(200, 201);
         return json(response).path("data");
+    }
+
+    protected void registerNamespace(String namespace, List<String> members) throws Exception {
+        registeredNamespaces.add(namespace);
+        Map<String, Object> definition =
+                members == null ? Map.of("name", namespace) : Map.of("name", namespace, "members", members);
+        HttpResponse<String> response = request("POST", getServerBaseUrl() + "/api/v1/namespaces", definition);
+        assertThat(response.statusCode())
+                .as("Register namespace %s: %s", namespace, response.body())
+                .isIn(200, 201);
     }
 
     protected Map<String, Object> entry(String namespace, String address) {

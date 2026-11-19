@@ -9,6 +9,7 @@ import java.util.Map;
 import ai.wanaku.test.client.AuditClient;
 import ai.wanaku.test.client.McpTestClient;
 import ai.wanaku.test.client.NamespaceClient;
+import ai.wanaku.test.managers.MockMcpServerManager;
 import ai.wanaku.test.managers.WanakuServerManager;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -26,12 +27,19 @@ class VirtualNamespaceCredentialITCase extends GovernanceTestBase {
     private static final String FORWARD = "credential-owner-forward";
     private static final String BINDING = "credential-owner-binding";
     private static final String SECRET_VARIABLE = "WANAKU_VIRTUAL_TEST_TOKEN";
-    private static final String SECRET = "virtual-test-synthetic-token-335";
+    private static final String SECRET = "synthetic-virtual-test-token-337";
     private static final String OTHER_OWNER = "other-credential-owner";
     private static final String OTHER_FORWARD = "other-credential-forward";
     private static final String OTHER_BINDING = "other-credential-binding";
     private static final String OTHER_SECRET_VARIABLE = "WANAKU_VIRTUAL_OTHER_TOKEN";
-    private static final String OTHER_SECRET = "virtual-other-synthetic-token-335";
+    private static final String OTHER_SECRET = "synthetic-virtual-other-token-337";
+
+    @Override
+    protected void configureCaptureServer(MockMcpServerManager capture) {
+        capture.addSystemProperty("capture.synthetic-authorization", "true");
+        capture.addEnvironmentVariable("CAPTURE_SYNTHETIC_PRIMARY_TOKEN", SECRET);
+        capture.addEnvironmentVariable("CAPTURE_SYNTHETIC_SECONDARY_TOKEN", OTHER_SECRET);
+    }
 
     @Test
     @DisplayName("Concrete-scoped binding permits qualified tools and prompts through a virtual endpoint")
@@ -61,7 +69,7 @@ class VirtualNamespaceCredentialITCase extends GovernanceTestBase {
                 .thenAssertResults();
 
         assertThat(captureCounts()).isEqualTo(new CaptureCounts(1, 0, 1));
-        assertUpstreamAuthorization("Bearer " + SECRET);
+        assertUpstreamAuthorization("primary");
         assertCredentialDecisions("allow", 2);
 
         virtual.when()
@@ -84,7 +92,7 @@ class VirtualNamespaceCredentialITCase extends GovernanceTestBase {
                                         .text())
                                 .doesNotContain(SECRET, OTHER_SECRET))
                 .thenAssertResults();
-        assertUpstreamAuthorization("Bearer " + OTHER_SECRET);
+        assertUpstreamAuthorization("secondary");
 
         // The virtual view must not replace the concrete route or its credential scope.
         connect(OWNER)
@@ -95,9 +103,9 @@ class VirtualNamespaceCredentialITCase extends GovernanceTestBase {
                 .send()
                 .thenAssertResults();
         assertThat(captureCounts()).isEqualTo(new CaptureCounts(3, 0, 2));
-        assertThat(lastAuthorization().path("tool").asText().equals("Bearer " + SECRET))
+        assertThat(lastAuthorization().path("tool").asText())
                 .as("Returning to the first owner must not reuse the second owner's cached credential")
-                .isTrue();
+                .isEqualTo("primary");
         assertCredentialDecisions("allow", 3);
     }
 
@@ -140,7 +148,7 @@ class VirtualNamespaceCredentialITCase extends GovernanceTestBase {
         }
 
         assertThat(captureCounts()).isEqualTo(new CaptureCounts(0, 0, 0));
-        assertUpstreamAuthorization("");
+        assertUpstreamAuthorization("absent");
         // Broker events distinguish a credential rejection from policy or routing rejection.
         assertCredentialDecisions("block", 2);
     }
@@ -166,7 +174,7 @@ class VirtualNamespaceCredentialITCase extends GovernanceTestBase {
                 bindings:
                   - id: %s
                     forward_id: %s
-                    origin: "http://localhost:%d"
+                    origin: "%s"
                     mechanism: {type: bearer}
                     secret_refs: ["env:%s"]
                     allowed_purposes: [invocation]
@@ -175,7 +183,7 @@ class VirtualNamespaceCredentialITCase extends GovernanceTestBase {
                     cache: {max_ttl_seconds: 60}
                   - id: %s
                     forward_id: %s
-                    origin: "http://localhost:%d"
+                    origin: "%s"
                     mechanism: {type: bearer}
                     secret_refs: ["env:%s"]
                     allowed_purposes: [invocation]
@@ -186,12 +194,12 @@ class VirtualNamespaceCredentialITCase extends GovernanceTestBase {
                         .formatted(
                                 BINDING,
                                 FORWARD,
-                                captureServer.getHttpPort(),
+                                captureServer.getBaseUrl(),
                                 SECRET_VARIABLE,
                                 permittedNamespace,
                                 OTHER_BINDING,
                                 OTHER_FORWARD,
-                                captureServer.getHttpPort(),
+                                captureServer.getBaseUrl(),
                                 OTHER_SECRET_VARIABLE,
                                 OTHER_OWNER);
         server = new WanakuServerManager(baseConfig.toBuilder()
@@ -264,20 +272,19 @@ class VirtualNamespaceCredentialITCase extends GovernanceTestBase {
 
     private void assertUpstreamAuthorization(String expected) throws Exception {
         JsonNode authorization = lastAuthorization();
-        // Keep assertion diagnostics free of header values, including synthetic secrets.
-        assertThat(expected.equals(authorization.path("tool").asText()))
+        assertThat(authorization.toString()).doesNotContain(SECRET, OTHER_SECRET, "Bearer ");
+        assertThat(authorization.path("tool").asText())
                 .as("Tool Authorization matches")
-                .isTrue();
-        assertThat(expected.equals(authorization.path("prompt").asText()))
+                .isEqualTo(expected);
+        assertThat(authorization.path("prompt").asText())
                 .as("Prompt Authorization matches")
-                .isTrue();
+                .isEqualTo(expected);
     }
 
     private JsonNode lastAuthorization() throws Exception {
         try (HttpClient http = HttpClient.newHttpClient()) {
             HttpResponse<String> response = http.send(
-                    HttpRequest.newBuilder(URI.create(
-                                    "http://localhost:" + captureServer.getHttpPort() + "/capture/authorization"))
+                    HttpRequest.newBuilder(URI.create(captureServer.getBaseUrl() + "/capture/authorization"))
                             .timeout(Duration.ofSeconds(10))
                             .GET()
                             .build(),
