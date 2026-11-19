@@ -50,7 +50,7 @@ class VirtualNamespaceA2aITCase extends A2aTestBase {
             HttpResponse<String> response = request("GET", url + "/.well-known/agent-card.json", null);
             assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
             JsonNode card = json(response);
-            assertThat(card.path("name").asText()).isEqualTo(owner);
+            assertThat(card.path("name").asText()).isEqualTo(owner + "/" + agentName);
             assertThat(card.path("url").asText()).isEqualTo(url);
             assertThat(card.path("preferredTransport").asText()).isEqualTo("JSONRPC");
             assertThat(card.path("capabilities").path("streaming").asBoolean()).isFalse();
