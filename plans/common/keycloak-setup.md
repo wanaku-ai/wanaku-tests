@@ -23,7 +23,7 @@ Reusable steps for deploying and configuring Keycloak as the OIDC provider for W
 | `WANAKU_KEYCLOAK_ADMIN_CLI` | Command to invoke the Keycloak admin CLI, which provides the `realm`, `credentials` and `users` commands (see step 1) | `wanaku-keycloak-admin`          |
 | `KEYCLOAK_ADMIN_USER`       | Keycloak admin username                                                                                               | `admin`                          |
 | `KEYCLOAK_ADMIN_PASS`       | Keycloak admin password. Do not commit it.                                                                            | Generated at run time            |
-| `KEYCLOAK_IMAGE`            | Keycloak container image                                                                                              | `quay.io/keycloak/keycloak:26.7` |
+| `KEYCLOAK_IMAGE`            | Keycloak container image                                                                                              | `quay.io/keycloak/keycloak:26.8` |
 | `WANAKU_AUTH_SECRET_NAME`   | Name of the Secret that `WanakuRouter.spec.auth.secretName` references (see step 8)                                   | `wanaku-oidc`                    |
 
 The procedure generates the passwords and client secrets that are not set. The values exist only in the shell that runs
@@ -39,7 +39,7 @@ New random values do not change the accounts that exist. Alternatively, delete t
 export KEYCLOAK_ADMIN_USER="${KEYCLOAK_ADMIN_USER:-admin}"
 # The procedure deploys this Keycloak, so a random password is generated when none is set
 export KEYCLOAK_ADMIN_PASS="${KEYCLOAK_ADMIN_PASS:-$(openssl rand -hex 16)}"
-export KEYCLOAK_IMAGE="${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.7}"
+export KEYCLOAK_IMAGE="${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.8}"
 export WANAKU_REPO_ROOT="${WANAKU_REPO_ROOT:-.}"
 
 # Option A: use the installed CLIs (an existing value is kept)
