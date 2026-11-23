@@ -22,7 +22,7 @@
     <logger name="com.github.dockerjava" level="WARN"/>
     <logger name="docker" level="WARN"/>
     <logger name="testcontainers" level="WARN"/>
-    <!-- Container stdout uses loggers like tc.qua.io/keycloak:26.3.5 -->
+    <!-- Container stdout uses loggers like tc.qua.io/keycloak:26.8 -->
     <logger name="tc.qua" level="${wanaku.log.level:-WARN}"/>
     <logger name="tc.tes" level="${wanaku.log.level:-WARN}"/>
 
