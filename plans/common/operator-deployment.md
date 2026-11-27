@@ -55,15 +55,75 @@ echo "PASS: Helm chart found"
 
 ### Step 3: Install the operator via Helm
 
-The chart installs the four CRDs from its `crds/` directory. By default, every controller watches only the release
-namespace (`JOSDK_WATCH_CURRENT`).
+The chart renders the four CRDs as templates of the release. Helm creates the CRDs or updates them on each install.
+By default, every controller watches only the release namespace (`JOSDK_WATCH_CURRENT`).
+
+The CRDs are cluster-scoped. `helm uninstall` keeps them. Helm stops with `invalid ownership metadata` if a CRD exists
+and does not belong to this release. This occurs when an earlier chart installed the CRDs from its `crds/` directory,
+or when an earlier test run installed the operator in a different namespace. Adopt the CRDs that exist before the
+install.
+
+Only one Helm release can own the CRDs. If the release that owns a CRD is still installed in a different namespace,
+the block does not adopt the CRD. The install then sets `crds.install=false` and uses the CRDs of that release.
+
+Run this block in the shared Bash session so variables and helper functions remain available.
+A failing block uses `return 1` to preserve the session for diagnostics and cleanup.
 
 ```bash run
+HELM_CRD_FLAGS=()
+for CRD in wanakurouters.wanaku.ai wanakuservicecatalogs.wanaku.ai wanakusemanticrouters.wanaku.ai wanakuintegrations.wanaku.ai; do
+  if ! CRD_FOUND=$(oc get crd "${CRD}" --ignore-not-found -o name); then
+    echo "FAIL: cannot read CRD ${CRD}"
+    return 1
+  fi
+  if [ -z "${CRD_FOUND}" ]; then
+    echo "SKIP: CRD ${CRD} does not exist, Helm creates it"
+    continue
+  fi
+
+  OWNER_RELEASE=$(oc get crd "${CRD}" -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}')
+  OWNER_NAMESPACE=$(oc get crd "${CRD}" -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-namespace}')
+  if [ -n "${OWNER_RELEASE}" ] && [ -n "${OWNER_NAMESPACE}" ] && [ "${OWNER_NAMESPACE}" != "${WANAKU_NAMESPACE}" ] \
+    && helm status "${OWNER_RELEASE}" --namespace "${OWNER_NAMESPACE}" > /dev/null 2>&1; then
+    echo "SKIP: CRD ${CRD} belongs to the installed release ${OWNER_RELEASE} in ${OWNER_NAMESPACE}"
+    HELM_CRD_FLAGS=(--set crds.install=false)
+    continue
+  fi
+
+  if ! oc label crd "${CRD}" app.kubernetes.io/managed-by=Helm --overwrite; then
+    echo "FAIL: cannot label CRD ${CRD}"
+    return 1
+  fi
+  if ! oc annotate crd "${CRD}" --overwrite \
+    meta.helm.sh/release-name=wanaku-operator \
+    meta.helm.sh/release-namespace="${WANAKU_NAMESPACE}"; then
+    echo "FAIL: cannot annotate CRD ${CRD}"
+    return 1
+  fi
+  echo "PASS: CRD ${CRD} adopted by wanaku-operator in ${WANAKU_NAMESPACE}"
+done
+```
+
+**Expected result:**
+
+- The output includes a `PASS` line or a `SKIP` line for each of the four CRDs.
+- The output contains no line starting with `FAIL`.
+- The commands exit with code 0.
+
+If `oc apply` or `kubectl apply` changed the CRDs, Helm 4 stops with `conflict with "kubectl-client-side-apply"`.
+The `--force-conflicts` option makes Helm take the ownership of the CRD fields. Helm 3 does not have this option.
+
+```bash run
+if helm version --short | grep -q '^v4'; then
+  HELM_CRD_FLAGS+=(--force-conflicts)
+fi
+
 helm install wanaku-operator \
   "${WANAKU_REPO_ROOT}/apps/wanaku-operator/deploy/helm/wanaku-operator" \
   --namespace "${WANAKU_NAMESPACE}" \
   --set app.image="${WANAKU_OPERATOR_IMAGE}" \
-  --set app.imagePullPolicy="${WANAKU_OPERATOR_PULL_POLICY}"
+  --set app.imagePullPolicy="${WANAKU_OPERATOR_PULL_POLICY}" \
+  "${HELM_CRD_FLAGS[@]}"
 ```
 
 **Expected output:** Helm prints a success message containing `STATUS: deployed`.
@@ -144,10 +204,9 @@ done
 
 ### Step 6: Verify CRDs are installed
 
-Helm installs the CRDs only when they do not exist yet. It does not upgrade them. If an earlier operator release
-installed the CRDs, apply the current CRDs before you continue:
-`oc apply -f "${WANAKU_REPO_ROOT}/apps/wanaku-operator/deploy/helm/wanaku-operator/crds/"`. A CRD that does not match
-the operator causes an empty `status` on the custom resources.
+The install in Step 3 creates the CRDs or updates them to the version of the chart. If Step 3 set
+`crds.install=false`, the CRDs have the version of the release that owns them. Do not apply the CRDs with
+`oc apply`. A CRD that does not match the operator causes an empty `status` on the custom resources.
 
 Run this block in the shared Bash session so variables and helper functions remain available.
 A failing block uses `return 1` to preserve the session for diagnostics and cleanup.

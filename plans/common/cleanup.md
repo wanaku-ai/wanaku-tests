@@ -127,7 +127,8 @@ echo "PASS: Keycloak resources deleted"
 ### Step 7: Uninstall the operator Helm release
 
 Helm removes the namespace-prefixed ClusterRoles and ClusterRoleBindings of the release. Helm does not remove the
-CRDs.
+CRDs. The CRDs keep the ownership metadata of this release. The adoption in Step 3 of
+[operator-deployment.md](operator-deployment.md) changes this metadata for the next run.
 
 ```bash run
 helm uninstall wanaku-operator --namespace "${WANAKU_NAMESPACE}" 2>/dev/null || true
