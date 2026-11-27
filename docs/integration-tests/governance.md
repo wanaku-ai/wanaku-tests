@@ -101,5 +101,6 @@ run.
 
 ## Next steps
 
+- [Action-policy coverage map](action-policy-coverage.md)
 - [Fixtures and mocks](../fixtures/index.md)
 - [Run the integration tests in GitHub CI](run-in-github-ci.md)

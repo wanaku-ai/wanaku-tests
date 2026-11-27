@@ -15,6 +15,7 @@ pull request.
 - [Test framework](framework.md): how `test-common` starts and stops the processes.
 - [Write an integration test](write-an-integration-test.md): add a test class or a module.
 - [Governance tests](governance.md): action policies, evaluators, OPA and audit.
+- [Action-policy coverage map](action-policy-coverage.md): the action-policy acceptance criteria and their tests.
 - [Semantic router tests](semantic-router.md): routing and audit delivery with the Wanaku Semantic Router.
 - [A2A proxy tests](a2a.md): the managed A2A JSON-RPC proxy.
 - [Camel Integration Capability tests](camel-integration-capability.md): CIC tools through MCP and the CLI.
