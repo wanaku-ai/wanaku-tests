@@ -55,8 +55,25 @@ echo "PASS: Helm chart found"
 
 ### Step 3: Install the operator via Helm
 
-The chart installs the four CRDs from its `crds/` directory. By default, every controller watches only the release
-namespace (`JOSDK_WATCH_CURRENT`).
+The chart renders the four CRDs as regular templates, so the release owns them. By default, every controller watches
+only the release namespace (`JOSDK_WATCH_CURRENT`).
+
+The CRDs are cluster-scoped, and `helm uninstall` keeps them. CRDs that exist from an earlier chart or from an earlier
+run belong to a different release, and `helm install` fails with `invalid ownership metadata`. The first block adopts
+the existing CRDs into the release of this run. It skips a CRD that does not exist. Helm creates that CRD.
+See `Adopt the CRDs of an earlier chart` in `docs/operate/operator.md` of Wanaku Barn.
+
+Run this block in the shared Bash session.
+
+```bash run
+for CRD in wanakurouters wanakuservicecatalogs wanakusemanticrouters wanakuintegrations; do
+  oc get crd "${CRD}.wanaku.ai" > /dev/null 2>&1 || continue
+  oc label crd "${CRD}.wanaku.ai" app.kubernetes.io/managed-by=Helm --overwrite
+  oc annotate crd "${CRD}.wanaku.ai" --overwrite \
+    meta.helm.sh/release-name=wanaku-operator \
+    meta.helm.sh/release-namespace="${WANAKU_NAMESPACE}"
+done
+```
 
 ```bash run
 helm install wanaku-operator \
@@ -144,10 +161,8 @@ done
 
 ### Step 6: Verify CRDs are installed
 
-Helm installs the CRDs only when they do not exist yet. It does not upgrade them. If an earlier operator release
-installed the CRDs, apply the current CRDs before you continue:
-`oc apply -f "${WANAKU_REPO_ROOT}/apps/wanaku-operator/deploy/helm/wanaku-operator/crds/"`. A CRD that does not match
-the operator causes an empty `status` on the custom resources.
+Helm installs and upgrades the CRDs of the chart in Step 3. A CRD that does not match the operator causes an empty
+`status` on the custom resources.
 
 Run this block in the shared Bash session so variables and helper functions remain available.
 A failing block uses `return 1` to preserve the session for diagnostics and cleanup.
