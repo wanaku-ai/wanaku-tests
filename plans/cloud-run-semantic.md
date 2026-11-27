@@ -402,8 +402,8 @@ Follow [common/operator-deployment.md](common/operator-deployment.md).
 ### Test 2.2: Verify that the WanakuSemanticRouter CRD has configMapRef.items
 
 **Description:** The API server removes the fields that a CRD does not define. With an older CRD, the resource that
-the command creates loses `spec.source.configMapRef.items`, and the runtime does not find its files. Helm does not
-upgrade CRDs that exist (see Step 6 of [common/operator-deployment.md](common/operator-deployment.md)).
+the command creates loses `spec.source.configMapRef.items`, and the runtime does not find its files. Step 3 of
+[common/operator-deployment.md](common/operator-deployment.md) installs the CRDs of the chart.
 
 Run this block in the shared Bash session.
 
@@ -414,7 +414,7 @@ if [ "${ITEMS_TYPE}" = "array" ]; then
   echo "PASS: the WanakuSemanticRouter CRD has spec.source.configMapRef.items"
 else
   echo "FAIL: the WanakuSemanticRouter CRD has no spec.source.configMapRef.items"
-  echo "Apply the CRDs of the chart: oc apply -f ${WANAKU_REPO_ROOT}/apps/wanaku-operator/deploy/helm/wanaku-operator/crds/"
+  echo "Make sure that the chart at ${WANAKU_REPO_ROOT} is current and that Helm installed its CRDs"
   return 1
 fi
 ```
