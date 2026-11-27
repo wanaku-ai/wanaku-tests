@@ -1022,9 +1022,9 @@ check "/default/mcp without token" "$(curl --connect-timeout 5 --max-time 15 -s 
 ### Test 6.6: Verify the OAuth protected-resource metadata
 
 **Description:** When `WANAKU_AUTH_ISSUER` is set, the Server serves RFC 9728 metadata with a non-empty
-`authorization_servers` list. The Server names its own MCP host as the authorization server and serves the discovery
-document at `/.well-known/oauth-authorization-server`. Without `WANAKU_AUTH_ISSUER`, the list is empty. The proxy lets
-`/.well-known/*` pass without a token.
+`authorization_servers` list. The list contains the issuer (`WANAKU_AUTH_ISSUER`), and the `resource` value uses the
+public HTTPS MCP host. Without `WANAKU_AUTH_ISSUER`, the list is empty. The proxy lets `/.well-known/*` pass without a
+token.
 
 Run this block in the shared Bash session.
 
@@ -1035,18 +1035,19 @@ echo "${BODY}"
 echo "${BODY}" | jq -e '.authorization_servers | length > 0' > /dev/null \
   && echo "PASS: authorization_servers is not empty" \
   || { echo "FAIL: authorization_servers is empty (WANAKU_AUTH_ISSUER not applied?)"; return 1; }
-echo "${BODY}" | jq -r '.authorization_servers[0]' | grep -q "${MCP_HOST}" \
-  && echo "PASS: authorization server is the MCP host" \
-  || echo "FAIL: authorization server is not ${MCP_HOST}"
-# The Server builds the URLs from the Host header with the http scheme, also behind the TLS Ingress
-echo "${BODY}" | jq -r '.authorization_servers[0]' | grep -q '^https://' \
-  || echo "WARN: authorization_servers uses http:// behind a TLS-terminating Ingress (report if still open)"
+echo "${BODY}" | jq -e --arg iss "${WANAKU_AUTH_ISSUER_URL}" '.authorization_servers[0] == $iss' > /dev/null \
+  && echo "PASS: authorization server is the issuer" \
+  || echo "FAIL: authorization server is not ${WANAKU_AUTH_ISSUER_URL}"
+echo "${BODY}" | jq -e --arg r "https://${MCP_HOST}/default/mcp" '.resource == $r' > /dev/null \
+  && echo "PASS: resource is the public HTTPS MCP endpoint" \
+  || echo "FAIL: resource is not https://${MCP_HOST}/default/mcp"
 ```
 
 **Expected result:**
 
 - The output includes `PASS: authorization_servers is not empty`.
-- The output includes `PASS: authorization server is the MCP host`.
+- The output includes `PASS: authorization server is the issuer`.
+- The output includes `PASS: resource is the public HTTPS MCP endpoint`.
 - The output contains no line starting with `FAIL:`.
 - The commands exit with code 0.
 

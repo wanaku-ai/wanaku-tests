@@ -426,8 +426,8 @@ HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${MCP_URI}" \
 [ "${HTTP_CODE}" = "401" ] && echo "PASS [11.9]: MCP endpoint returns 401 without a token" \
   || echo "FAIL [11.9]: MCP endpoint returned HTTP ${HTTP_CODE}"
 
-# The OAuth protected-resource metadata is public. The operator sets WANAKU_AUTH_ISSUER. Wanaku Server names its own
-# MCP host as the authorization server and serves the issuer in its /.well-known/oauth-authorization-server document.
+# The OAuth protected-resource metadata is public. The operator sets WANAKU_AUTH_ISSUER. Wanaku Server names the
+# issuer as the authorization server and also serves the issuer in its /.well-known/oauth-authorization-server document.
 META=$(curl -s "${WANAKU_MCP_BASE_URL}/.well-known/oauth-protected-resource/default/mcp")
 echo "${META}" | jq -e '.authorization_servers | length > 0' > /dev/null 2>&1 \
   && echo "PASS [11.9]: protected-resource metadata lists an authorization server" || echo "FAIL [11.9]: metadata: ${META}"

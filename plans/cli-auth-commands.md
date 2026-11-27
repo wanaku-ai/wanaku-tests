@@ -927,39 +927,44 @@ check the HTTP metadata documents.
 ### Test 8.1: Protected-resource metadata (RFC 9728)
 
 ```bash run
-# The documents use http:// and the Host header of the request (see the note below)
-MCP_DOCUMENT_ORIGIN="http://${WANAKU_MCP_BASE_URL#*://}"
 META=$(curl -s "${WANAKU_MCP_BASE_URL}/.well-known/oauth-protected-resource/${WANAKU_MCP_NAMESPACE}/mcp")
-echo "${META}" | jq -e --arg origin "${MCP_DOCUMENT_ORIGIN}" \
-  '(.authorization_servers | length) == 1 and .authorization_servers[0] == $origin and .bearer_methods_supported == ["header"]' \
-  > /dev/null && echo "PASS: metadata names the MCP origin as authorization server" \
+echo "${META}" | jq -e --arg iss "${KEYCLOAK_URL}/realms/${WANAKU_REALM}" \
+  '(.authorization_servers | length) == 1 and .authorization_servers[0] == $iss and .bearer_methods_supported == ["header"]' \
+  > /dev/null && echo "PASS: metadata names the Keycloak issuer as authorization server" \
   || echo "FAIL: unexpected metadata: ${META}"
 
+META=$(curl -s "${WANAKU_MCP_BASE_URL}/.well-known/oauth-protected-resource/default/mcp")
+echo "${META}" | jq -e --arg r "${WANAKU_MCP_BASE_URL}/default/mcp" '.resource == $r' > /dev/null \
+  && echo "PASS: resource is the default namespace endpoint" || echo "FAIL: unexpected resource: ${META}"
+
 META=$(curl -s "${WANAKU_MCP_BASE_URL}/.well-known/oauth-protected-resource/auth-test-ns/mcp")
-echo "${META}" | jq -e --arg r "${MCP_DOCUMENT_ORIGIN}/auth-test-ns/mcp" '.resource == $r' > /dev/null \
+echo "${META}" | jq -e --arg r "${WANAKU_MCP_BASE_URL}/auth-test-ns/mcp" '.resource == $r' > /dev/null \
   && echo "PASS: resource is the namespace endpoint" || echo "FAIL: unexpected resource: ${META}"
 ```
 
-**Expected output (namespace `auth-test-ns`):**
-`{"resource":"<mcp-origin>/auth-test-ns/mcp","authorization_servers":["<mcp-origin>"],"bearer_methods_supported":["header"]}`.
-For the `default` namespace, the server reports the resource `<mcp-origin>/mcp`, not `<mcp-origin>/default/mcp`.
+In option B, the issuer is `WANAKU_AUTH_ISSUER_URL`. Replace the `--arg iss` value if it differs from
+`${KEYCLOAK_URL}/realms/${WANAKU_REALM}`.
 
-The metadata uses `http://` and the `Host` header of the request. Behind a TLS-terminating Ingress, the scheme in the
-document can differ from the public scheme.
+**Expected output (namespace `auth-test-ns`):**
+`{"resource":"<mcp-origin>/auth-test-ns/mcp","authorization_servers":["<issuer>"],"bearer_methods_supported":["header"]}`.
+For the `default` namespace, the server reports the resource `<mcp-origin>/default/mcp`.
+
+The server builds `resource` from `WANAKU_MCP_PUBLIC_URL`, then from the `X-Forwarded-Proto` and `X-Forwarded-Host`
+headers, then from `http://` and the `Host` header. Behind a TLS-terminating Ingress, `<mcp-origin>` uses `https://`.
 
 **Expected result:**
 
-- The output includes `PASS: metadata names the MCP origin as authorization server`.
+- The output includes `PASS: metadata names the Keycloak issuer as authorization server`.
+- The output includes `PASS: resource is the default namespace endpoint`.
 - The output includes `PASS: resource is the namespace endpoint`.
 - The output contains no line starting with `FAIL:`.
 
 ### Test 8.2: OpenID configuration points to the Keycloak issuer
 
 ```bash run
-# The document uses http:// and the Host header of the request, as in Test 8.1
-MCP_DOCUMENT_ORIGIN="http://${WANAKU_MCP_BASE_URL#*://}"
+# The endpoint URLs use the same base URL as the resource in Test 8.1
 DISCOVERY=$(curl -s "${WANAKU_MCP_BASE_URL}/.well-known/openid-configuration")
-echo "${DISCOVERY}" | jq -e --arg iss "${KEYCLOAK_URL}/realms/${WANAKU_REALM}" --arg origin "${MCP_DOCUMENT_ORIGIN}" \
+echo "${DISCOVERY}" | jq -e --arg iss "${KEYCLOAK_URL}/realms/${WANAKU_REALM}" --arg origin "${WANAKU_MCP_BASE_URL}" \
   '.issuer == $iss and .token_endpoint == ($origin + "/token") and .code_challenge_methods_supported == ["S256"]' \
   > /dev/null && echo "PASS: discovery document names the Keycloak issuer" \
   || echo "FAIL: unexpected discovery document: ${DISCOVERY}"
