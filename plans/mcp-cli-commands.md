@@ -957,7 +957,8 @@ No automated test restarts Wanaku Server and checks that the registry is restore
 mode. In existing mode, the plan must not restart the server, so the test prints `SKIP`.
 
 The test stops the server with `SIGTERM`, starts it again with the same `WANAKU_PERSIST_PATH`, and checks that the
-forward and its tools are restored from `registry.json`.
+forward is restored from `registry.json`. The server does not persist discovered tools. At startup, it discovers the
+tools of the forward again from the fixture, so the fixture must keep running.
 
 ```bash run
 if [ "${MCP_CREATED_SERVER:-false}" != true ]; then

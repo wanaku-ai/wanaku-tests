@@ -212,6 +212,11 @@ public class WanakuServerManager extends ProcessManager {
         return persistDir;
     }
 
+    /** Generated {@code wanaku.yaml}. A test can rewrite it between {@link #stopPreservingState()} and a restart. */
+    public Path getWanakuConfigFile() {
+        return wanakuConfigFile;
+    }
+
     private Path generatePipelineConfig() throws IOException {
         List<String> lines = new ArrayList<>(List.of(
                 "listeners:",
