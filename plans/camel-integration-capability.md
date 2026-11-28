@@ -728,8 +728,8 @@ fi
 
 **Description:** Add a `governance` section to the operator-generated `wanaku.yaml` that allows unmatched actions only
 in `${CIC_GOVERNED_NAMESPACES}`. The `plugins` section stays. The ConfigMap is mounted with `subPath`, so the running
-pod does not see the change: restart the Server. The registry (forwards and tools) is on the PVC, so it survives the
-restart.
+pod does not see the change: restart the Server. The registered forwards are on the PVC, so they survive the restart. At
+startup, the Server discovers their tools again from the CIC runtimes.
 
 Run these blocks in the shared Bash session. The first block updates the ConfigMap and restarts the Server. The
 second waits for the rollout. The third waits for the tool.

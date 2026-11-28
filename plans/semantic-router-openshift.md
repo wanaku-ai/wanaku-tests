@@ -986,8 +986,8 @@ fi
 
 **Description:** Add a `governance` section to the operator-generated `wanaku.yaml` that allows unmatched actions only
 in the Wanaku namespace `${WSR_FORWARD_NAMESPACE}`. The `plugins` section stays. The ConfigMap is mounted with
-`subPath`, so the running pod does not see the change: restart the Server. The registry (forwards and tools) is on the
-PVC, so it survives the restart. The runtime keeps running, so the `wsr.instance` label does not change.
+`subPath`, so the running pod does not see the change: restart the Server. The registered forwards are on the PVC, so they
+survive the restart. At startup, the Server discovers their tools again. The runtime keeps running, so the `wsr.instance` label does not change.
 
 Run these blocks in the shared Bash session. Each block waits for one slow operation.
 

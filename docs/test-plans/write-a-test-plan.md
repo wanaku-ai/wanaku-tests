@@ -161,6 +161,9 @@ Keep these differences from the Java router in mind:
   Register MCP servers as forwards.
 - Wanaku Server stores its registry in `registry.json` under `WANAKU_PERSIST_PATH`. Use a new directory per run so
   that runs do not share state.
+- Forwards from `wanaku.yaml` are static. The server does not persist them, and it does not persist discovered tools,
+  resources and prompts. After a restart, the server discovers the tools again, so a plan that restarts the server
+  must keep the upstream MCP servers running.
 - Wanaku Server does not export OpenTelemetry traces or Prometheus metrics. It exposes `GET /api/v1/metrics` and the
   audit trail (`GET /api/v1/audit/events`). Barn still supports OpenTelemetry.
 

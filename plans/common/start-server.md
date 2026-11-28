@@ -261,6 +261,11 @@ Some plans verify that the registry survives a restart. Stop the server with `SI
 then run steps 3 and 4 again with the same `WANAKU_SERVER_DATA_DIR`. The server writes `registry.json` on an orderly
 shutdown, so a `SIGKILL` loses the latest changes.
 
+The server does not write the forwards from `wanaku.yaml` (static forwards) or the discovered tools, resources and
+prompts to `registry.json`. At startup, it registers the static forwards again from `wanaku.yaml` and discovers the
+tools of every forward again. Keep the upstream MCP servers running across the restart. Only disabled entries keep
+their state in `registry.json`.
+
 ## Shutdown
 
 Stop the server with the PID captured at startup. Then remove the data directory of the run.

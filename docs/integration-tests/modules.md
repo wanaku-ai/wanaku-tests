@@ -7,7 +7,7 @@ Each Maven module of this repository tests one area of Wanaku. All modules need 
 
 | Module | Covers | Also needs |
 |--------|--------|------------|
-| `router-tests` | Namespaces, forwards, prompts, enable and disable of entries, evaluator revisions, MCP error responses, server info, and the CLI for namespaces, forwards and evaluators | [Test MCP server](../fixtures/test-mcp-server.md); the `wanaku` CLI for the `*CliITCase` classes |
+| `router-tests` | Namespaces, forwards (including static forwards and the registry state across a restart), prompts, enable and disable of entries, evaluator revisions, MCP error responses, server info, and the CLI for namespaces, forwards and evaluators | [Test MCP server](../fixtures/test-mcp-server.md); the `wanaku` CLI for the `*CliITCase` classes |
 | `mcp-forwarding-tests` | MCP forwarding to an upstream MCP server, upstream errors, and header forwarding | [Test MCP server](../fixtures/test-mcp-server.md). The module sets `wanaku.test.server.forward-headers=Authorization`. |
 | `resources-tests` | Resources and resource templates through MCP | [Test MCP server](../fixtures/test-mcp-server.md) |
 | `governance-tests` | Action policies, LLM and OPA evaluators, posture modes, startup validation and the audit trail | See [Governance tests](governance.md) |
