@@ -77,6 +77,18 @@ mvn verify -pl governance-tests -am -Dit.test='WasmToolHandlerITCase' -Dfailsafe
 These scenarios skip on older servers that do not expose the handler management API. On source builds with the
 handler feature, CI requires every scenario to run and pass.
 
+## Run the evaluator metadata tests
+
+`EvaluatorMetadataITCase` registers a WAT evaluator processor that calls `response.set-metadata` with one key. A
+reserved routing key, such as `wanaku.namespace` or `mcp.name`, rejects the call with JSON-RPC error `-32002`. The
+call does not reach the upstream. A custom key lets the call continue. In `audit` mode, a reserved key does not block
+the call. The test uses the `passthrough` engine and needs no LLM and no separate WASM compiler.
+
+```bash
+mvn verify -pl governance-tests -am -Dit.test='EvaluatorMetadataITCase' -Dfailsafe.failIfNoSpecifiedTests=false \
+  -Dwanaku.test.server.binary=/path/to/wanaku/target/debug/wanaku-server
+```
+
 ## Run the OPA tests
 
 The OPA tests need a Wanaku Server with the OPA evaluator, its `opa_allow_action.wasm`, and a native OPA binary.
